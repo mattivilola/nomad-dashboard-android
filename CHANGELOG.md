@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-04-07
+
+### Added
+- Added custom application launcher icons.
+- Implemented detailed Emergency Care dashboard with Places integration.
+
+### Improved
+- Move ReliefWeb app name to encrypted settings; refine Maps API key config.
+- Refined compact dashboard and visited screen UX.
+- Removed security best practices report.
+
 ## [0.1.0] - 2026-04-07
 
 ### Added
