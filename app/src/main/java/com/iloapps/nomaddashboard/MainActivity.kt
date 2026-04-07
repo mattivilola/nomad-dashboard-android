@@ -36,7 +36,7 @@ import com.iloapps.nomaddashboard.feature.about.AboutScreen
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardRoute
 import com.iloapps.nomaddashboard.feature.settings.SettingsRoute
 import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingScreen
-import com.iloapps.nomaddashboard.feature.visited.VisitedScreen
+import com.iloapps.nomaddashboard.feature.visited.VisitedRoute
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -149,7 +149,7 @@ private fun AppNavHost(
             )
         }
         composable(TopDestination.Settings.route) { SettingsRoute() }
-        composable(TopDestination.Visited.route) { VisitedScreen() }
+        composable(TopDestination.Visited.route) { VisitedRoute() }
         composable(TopDestination.TimeTracking.route) { TimeTrackingScreen() }
         composable(TopDestination.About.route) { AboutScreen() }
     }

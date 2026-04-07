@@ -124,6 +124,20 @@ Settings flow:
 3. Repository persists settings through Proto DataStore.
 4. Repository refreshes dashboard state using the updated settings.
 
+Visited history flow:
+
+1. `SettingsViewModel` persists `visitedPlacesEnabled` and
+   `useCurrentLocationForVisitedPlaces`.
+2. `DashboardViewModel` and `VisitedViewModel` trigger repository refreshes.
+3. During refresh, the repository records:
+   - public-IP geolocation observations when available
+   - device-location observations when the visited-location opt-in is enabled
+     and Android permission is granted
+4. `VisitedHistoryStore` merges places in Room and rebuilds observed plus
+   inferred country-day rows.
+5. `VisitedViewModel` combines settings, visited places, and country days into
+   UI state for the visited screen.
+
 ## State Management Rules
 
 - ViewModels own screen-level state exposure.
@@ -137,13 +151,13 @@ Settings flow:
 ### Implemented
 
 - Proto DataStore for app settings
+- Room-backed visited places with merged source provenance
+- Room-backed visited country days with observed and inferred rows
 
 ### Scaffolded
 
 - Room database and DAOs for:
   - metric points
-  - visited places
-  - visited country days
   - time-tracking entries
 
 ## Current External Integrations
@@ -165,7 +179,8 @@ Implemented now:
 Planned:
 - WorkManager for allowed periodic refresh work
 - foreground service for time tracking
-- careful opt-in policy for any location-history background work
+- careful opt-in policy for any background location-history work beyond the
+  current foreground refresh model
 
 ## Security and Configuration Rules
 
@@ -186,4 +201,3 @@ Android differs from macOS in several areas:
 
 The architecture intentionally isolates those differences in `core:data` and
 `core:network` rather than in UI modules.
-

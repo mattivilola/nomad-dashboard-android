@@ -5,9 +5,18 @@ import androidx.datastore.dataStoreFile
 import androidx.room.Room
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
+import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
+import com.iloapps.nomaddashboard.core.data.visited.DatabaseTransactionRunner
+import com.iloapps.nomaddashboard.core.data.visited.RoomDatabaseTransactionRunner
+import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
+import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
+import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
+import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsSerializer
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
@@ -80,7 +89,15 @@ object NomadInfrastructureModule {
     @Provides
     @Singleton
     fun provideNomadDatabase(@ApplicationContext context: Context): NomadDatabase =
-        Room.databaseBuilder(context, NomadDatabase::class.java, "nomad-dashboard.db").build()
+        Room.databaseBuilder(context, NomadDatabase::class.java, "nomad-dashboard.db")
+            .addMigrations(NomadDatabase.MIGRATION_1_2)
+            .build()
+
+    @Provides
+    fun provideVisitedPlaceDao(database: NomadDatabase): VisitedPlaceDao = database.visitedPlaceDao()
+
+    @Provides
+    fun provideVisitedCountryDayDao(database: NomadDatabase): VisitedCountryDayDao = database.visitedCountryDayDao()
 
     @Provides
     @Singleton
@@ -114,4 +131,28 @@ abstract class NomadRepositoryModule {
     abstract fun bindNomadDashboardRepository(
         impl: DefaultNomadDashboardRepository,
     ): NomadDashboardRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTelemetryReader(
+        impl: com.iloapps.nomaddashboard.core.data.monitor.SystemTelemetryReader,
+    ): TelemetryReader
+
+    @Binds
+    @Singleton
+    abstract fun bindVisitedHistoryStore(
+        impl: RoomVisitedHistoryStore,
+    ): VisitedHistoryStore
+
+    @Binds
+    @Singleton
+    abstract fun bindVisitedLocationProvider(
+        impl: AndroidVisitedDeviceLocationProvider,
+    ): VisitedDeviceLocationProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindDatabaseTransactionRunner(
+        impl: RoomDatabaseTransactionRunner,
+    ): DatabaseTransactionRunner
 }

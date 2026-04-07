@@ -35,9 +35,9 @@ class SystemTelemetryReader @Inject constructor(
     @ApplicationContext
     private val context: Context,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
-) {
+) : TelemetryReader {
     @SuppressLint("MissingPermission")
-    suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> = withContext(ioDispatcher) {
+    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> = withContext(ioDispatcher) {
         val connectivityManager = context.getSystemService<ConnectivityManager>()
         val wifiManager = context.applicationContext.getSystemService<WifiManager>()
         val activeNetwork = connectivityManager?.activeNetwork
@@ -86,7 +86,7 @@ class SystemTelemetryReader @Inject constructor(
         ) to currentTraffic
     }
 
-    suspend fun power(): PowerSnapshot = withContext(ioDispatcher) {
+    override suspend fun power(): PowerSnapshot = withContext(ioDispatcher) {
         val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val batteryManager = context.getSystemService<BatteryManager>()
         val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1

@@ -1,6 +1,11 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
+import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
+import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
+import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
+import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
@@ -11,13 +16,15 @@ import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
+import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedSummary
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
+import com.iloapps.nomaddashboard.core.model.visitedPlaceSummary
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoDaily
-import com.iloapps.nomaddashboard.core.data.monitor.SystemTelemetryReader
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -35,13 +42,17 @@ import javax.inject.Singleton
 @Singleton
 class DefaultNomadDashboardRepository @Inject constructor(
     private val settingsDataSource: NomadSettingsDataSource,
-    private val telemetryReader: SystemTelemetryReader,
+    private val telemetryReader: TelemetryReader,
     private val freeIpApiService: FreeIpApiService,
     private val openMeteoService: OpenMeteoService,
+    private val visitedHistoryStore: VisitedHistoryStore,
+    private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
     @ApplicationScope
     applicationScope: CoroutineScope,
 ) : NomadDashboardRepository {
     override val settings: Flow<AppSettings> = settingsDataSource.settings
+    override val visitedPlaces: Flow<List<VisitedPlace>> = visitedHistoryStore.visitedPlaces
+    override val visitedCountryDays: Flow<List<VisitedCountryDay>> = visitedHistoryStore.visitedCountryDays
 
     private val internalSnapshot = MutableStateFlow(DashboardSnapshot())
     override val snapshot: StateFlow<DashboardSnapshot> = internalSnapshot
@@ -76,6 +87,26 @@ class DefaultNomadDashboardRepository @Inject constructor(
             TravelContextSnapshot()
         }
 
+        if (currentSettings.visitedPlacesEnabled) {
+            val refreshStartedAt = Instant.now()
+
+            buildIpObservation(travelContext, refreshStartedAt)?.let { observation ->
+                runCatching { visitedHistoryStore.recordObservation(observation) }
+            }
+
+            if (currentSettings.useCurrentLocationForVisitedPlaces) {
+                runCatching {
+                    visitedDeviceLocationProvider.currentPlace()
+                }.getOrNull()?.let { place ->
+                    runCatching {
+                        visitedHistoryStore.recordObservation(
+                            place.toObservation(refreshStartedAt),
+                        )
+                    }
+                }
+            }
+        }
+
         val latitude = travelContext.latitude
         val longitude = travelContext.longitude
 
@@ -107,6 +138,9 @@ class DefaultNomadDashboardRepository @Inject constructor(
             connectivity.isOnline -> "Connected"
             else -> "Waiting"
         }
+        val visitedPlaces = visitedHistoryStore.visitedPlaces.first()
+        val visitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
+        val visitedPlaceSummary = visitedPlaces.visitedPlaceSummary()
 
         internalSnapshot.value = DashboardSnapshot(
             lastRefresh = Instant.now(),
@@ -162,10 +196,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 },
             ),
             visited = VisitedSummary(
-                citiesVisited = 0,
-                countriesVisited = 0,
-                trackedDays = 0,
-                sourceSummary = "IP + Device",
+                citiesVisited = visitedPlaceSummary.citiesVisited,
+                countriesVisited = visitedPlaceSummary.countriesVisited,
+                trackedDays = visitedCountryDays.size,
+                sourceSummary = visitedSourceSummary(currentSettings),
             ),
         )
     }
@@ -177,6 +211,46 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private fun weatherSummary(daily: OpenMeteoDaily?): String {
         val max = daily?.maxTemperatures?.firstOrNull()
         return if (max != null) "Today tops out at ${max.toInt()}°C" else "Weather unavailable"
+    }
+
+    private fun buildIpObservation(
+        travelContext: TravelContextSnapshot,
+        observedAt: Instant,
+    ): VisitedObservation? {
+        val country = travelContext.country?.trim()?.takeIf(String::isNotBlank) ?: return null
+        return VisitedObservation(
+            city = travelContext.city,
+            region = travelContext.region,
+            country = country,
+            countryCode = travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+            latitude = travelContext.latitude,
+            longitude = travelContext.longitude,
+            source = com.iloapps.nomaddashboard.core.model.VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
+            observedAt = observedAt,
+        )
+    }
+
+    private fun ResolvedVisitedPlace.toObservation(observedAt: Instant): VisitedObservation =
+        VisitedObservation(
+            city = city,
+            region = region,
+            country = country,
+            countryCode = countryCode,
+            latitude = latitude,
+            longitude = longitude,
+            source = com.iloapps.nomaddashboard.core.model.VisitedPlaceSource.DEVICE_LOCATION,
+            observedAt = observedAt,
+        )
+
+    private fun visitedSourceSummary(settings: AppSettings): String {
+        if (settings.visitedPlacesEnabled.not()) {
+            return "Disabled"
+        }
+
+        return listOfNotNull(
+            "IP".takeIf { settings.publicIpGeolocationEnabled },
+            "Device".takeIf { settings.useCurrentLocationForVisitedPlaces },
+        ).joinToString(" + ").ifBlank { "None" }
     }
 
     private fun OpenMeteoDaily.toForecast(): List<WeatherDayForecast> =

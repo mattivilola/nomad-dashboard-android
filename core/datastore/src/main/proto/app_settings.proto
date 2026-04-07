@@ -21,5 +21,5 @@ message AppSettingsProto {
   bool has_surf_spot_latitude = 15;
   bool has_surf_spot_longitude = 16;
   string tankerkonig_api_key = 17;
+  bool use_current_location_for_visited_places = 18;
 }
-

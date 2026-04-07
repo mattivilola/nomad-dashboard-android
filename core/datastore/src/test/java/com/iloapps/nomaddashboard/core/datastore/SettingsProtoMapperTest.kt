@@ -21,6 +21,7 @@ class SettingsProtoMapperTest {
             publicIpGeolocationEnabled = false,
             shareAnonymousAnalytics = false,
             useCurrentLocationForWeather = true,
+            useCurrentLocationForVisitedPlaces = true,
             weatherForecastExpanded = false,
             fuelPricesEnabled = true,
             emergencyCareEnabled = true,
@@ -40,6 +41,7 @@ class SettingsProtoMapperTest {
         assertThat(restored.dashboardCardWidthModes[DashboardCardId.WEATHER]).isEqualTo(DashboardCardWidthMode.NARROW)
         assertThat(restored.publicIpGeolocationEnabled).isFalse()
         assertThat(restored.useCurrentLocationForWeather).isTrue()
+        assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
         assertThat(restored.surfSpot.latitude).isEqualTo(36.01)
         assertThat(restored.surfSpot.longitude).isEqualTo(-5.60)
         assertThat(restored.tankerkonigApiKey).isEqualTo("demo")

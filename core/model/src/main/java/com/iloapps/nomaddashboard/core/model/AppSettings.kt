@@ -50,6 +50,7 @@ data class AppSettings(
     val publicIpGeolocationEnabled: Boolean = true,
     val shareAnonymousAnalytics: Boolean = true,
     val useCurrentLocationForWeather: Boolean = false,
+    val useCurrentLocationForVisitedPlaces: Boolean = false,
     val weatherForecastExpanded: Boolean = true,
     val fuelPricesEnabled: Boolean = false,
     val emergencyCareEnabled: Boolean = false,
@@ -58,4 +59,3 @@ data class AppSettings(
     val surfSpot: SurfSpotConfiguration = SurfSpotConfiguration(name = "Tarifa", latitude = 36.0132, longitude = -5.6069),
     val tankerkonigApiKey: String = "",
 )
-

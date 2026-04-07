@@ -19,7 +19,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Single main dashboard screen | Implemented | Adaptive Compose route is live |
 | Settings screen | Implemented | Settings persist via Proto DataStore |
 | About screen | Implemented | Minimal bootstrap content |
-| Visited screen route | Bootstrap | Route exists, map/persistence not complete |
+| Visited screen route | Implemented | Route shows local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Bootstrap | Route exists, runtime not complete |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
@@ -81,9 +81,9 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Visited screen route | Bootstrap | UI route exists |
-| Visited place persistence | Planned | Room entities scaffolded |
-| Country-day aggregation | Planned | Room entities scaffolded |
+| Visited screen route | Implemented | UI route shows saved places, permission state, and country-day summaries |
+| Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
+| Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |
 | World map rendering | Planned | Google Maps integration planned |
 
@@ -108,4 +108,3 @@ This document tracks Android parity against the macOS app at the feature level.
 | Signed AAB/APK script flow | Implemented | Requires local signing env |
 | Google Play internal publish script | Implemented | Requires local Play service account |
 | Release version bump helper | Implemented | `prepare-release.sh` |
-

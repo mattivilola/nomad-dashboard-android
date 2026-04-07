@@ -10,9 +10,11 @@ Current repository state:
 - initial Android port scaffold implemented
 - initial Android scaffold committed
 - documentation and wireless helper follow-up committed
-- build/test/lint verified locally
+- prior build/test/lint baseline verified locally
 - real-device debug install verified on Android phone via wireless debugging
-- visited places persistence and country-day aggregation work has started
+- visited places persistence and country-day aggregation implemented
+- visited screen history UI implemented
+- visited device-location opt-in and permission CTA implemented
 - Compose UI smoke test suite added for the Android shell
 
 ## Completed
@@ -35,7 +37,9 @@ Current repository state:
 - dashboard route implemented
 - settings route implemented
 - about route implemented
-- visited route placeholder implemented
+- visited route implemented
+- visited places persistence implemented
+- country-day aggregation logic implemented
 - time-tracking route placeholder implemented
 - Compose UI smoke tests added for app launch, top-level navigation, dashboard shell render, and one settings persistence flow
 - release/signing/publish helper scripts scaffolded
@@ -43,8 +47,7 @@ Current repository state:
 
 ## In Progress
 
-- visited places persistence
-- country-day aggregation logic
+- verification rerun for build/lint/full connected-device test flow after the visited slice
 
 ## Not Started
 
@@ -65,26 +68,28 @@ Verified:
 - wireless ADB pairing and reconnect flow
 - debug APK install on physical Android phone
 - app launch on physical Android phone
+- visited model/store/repository unit coverage added and passing via `testDebugUnitTest`
 
-Not yet verified in this session:
-- `make test` after smoke-test addition is currently blocked by compile errors in [VisitedModels.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/main/java/com/iloapps/nomaddashboard/core/model/VisitedModels.kt) from the active visited-data workstream
-- connected Compose smoke test execution after the current visited-data compile blocker is resolved
+Not yet fully re-verified after the visited slice in this session:
+- full `make build`
+- full `make lint`
+- full `make test` completion with connected Android tests on an attached device
 - run on emulator
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
 
 ## Immediate Next Steps
 
-1. Finish visited place persistence and visited-country-day logic.
+1. Implement local time-tracking runtime and storage.
 2. Capture first Android screenshots from the running app for parity review.
-3. Implement local time-tracking runtime and storage.
-4. Add provider-complete fuel and emergency-care slices.
+3. Add provider-complete fuel and emergency-care slices.
+4. Add visited map rendering on top of the persisted history slice.
 
 ## Parallel-Safe Workstreams
 
-Recommended secondary task while visited-data work is active:
-- rerun `make test` once the visited-data compile blocker is resolved so the new
-  Compose smoke suite can execute on a connected target
+Recommended secondary task while visited-data verification is active:
+- rerun the connected-device test flow once the attached-target instrumentation
+  path has been rechecked end to end
 
 Handoff doc:
 - [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)

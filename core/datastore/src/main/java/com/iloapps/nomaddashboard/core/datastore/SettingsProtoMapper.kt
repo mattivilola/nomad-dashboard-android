@@ -28,6 +28,7 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
         publicIpGeolocationEnabled = publicIpGeolocationEnabled,
         shareAnonymousAnalytics = shareAnonymousAnalytics,
         useCurrentLocationForWeather = useCurrentLocationForWeather,
+        useCurrentLocationForVisitedPlaces = useCurrentLocationForVisitedPlaces,
         weatherForecastExpanded = weatherForecastExpanded,
         fuelPricesEnabled = fuelPricesEnabled,
         emergencyCareEnabled = emergencyCareEnabled,
@@ -50,6 +51,7 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setPublicIpGeolocationEnabled(publicIpGeolocationEnabled)
         .setShareAnonymousAnalytics(shareAnonymousAnalytics)
         .setUseCurrentLocationForWeather(useCurrentLocationForWeather)
+        .setUseCurrentLocationForVisitedPlaces(useCurrentLocationForVisitedPlaces)
         .setWeatherForecastExpanded(weatherForecastExpanded)
         .setFuelPricesEnabled(fuelPricesEnabled)
         .setEmergencyCareEnabled(emergencyCareEnabled)
@@ -62,4 +64,3 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setSurfSpotLongitude(surfSpot.longitude ?: 0.0)
         .setTankerkonigApiKey(tankerkonigApiKey)
         .build()
-

@@ -50,6 +50,9 @@ private fun SettingsScreen(
                 SettingsToggle("Use current location for weather", settings.useCurrentLocationForWeather) {
                     onUpdate { current -> current.copy(useCurrentLocationForWeather = it) }
                 }
+                SettingsToggle("Use current location for visited places", settings.useCurrentLocationForVisitedPlaces) {
+                    onUpdate { current -> current.copy(useCurrentLocationForVisitedPlaces = it) }
+                }
                 SettingsToggle("Show external IP location", settings.publicIpGeolocationEnabled) {
                     onUpdate { current -> current.copy(publicIpGeolocationEnabled = it) }
                 }
