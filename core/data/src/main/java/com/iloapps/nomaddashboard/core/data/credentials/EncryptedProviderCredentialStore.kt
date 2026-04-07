@@ -38,6 +38,7 @@ class EncryptedProviderCredentialStore @Inject constructor(
             val updated = transform(loadCredentials()).normalized()
             sharedPreferences.edit {
                 putEncryptedString(TANKERKOENIG_API_KEY, updated.tankerkoenigApiKey)
+                putEncryptedString(RELIEFWEB_APP_NAME, updated.reliefWebAppName)
             }
             _credentials.value = updated
         }
@@ -46,11 +47,13 @@ class EncryptedProviderCredentialStore @Inject constructor(
     private fun loadCredentials(): ProviderCredentialSettings =
         ProviderCredentialSettings(
             tankerkoenigApiKey = sharedPreferences.getEncryptedString(TANKERKOENIG_API_KEY).orEmpty(),
+            reliefWebAppName = sharedPreferences.getEncryptedString(RELIEFWEB_APP_NAME).orEmpty(),
         ).normalized()
 
     private fun ProviderCredentialSettings.normalized(): ProviderCredentialSettings =
         copy(
             tankerkoenigApiKey = tankerkoenigApiKey.trim(),
+            reliefWebAppName = reliefWebAppName.trim(),
         )
 
     private fun android.content.SharedPreferences.Editor.putEncryptedString(
@@ -124,6 +127,7 @@ class EncryptedProviderCredentialStore @Inject constructor(
         const val GCM_TAG_LENGTH_BITS = 128
         const val KEY_ALIAS = "nomad-provider-credentials"
         const val KEY_SIZE_BITS = 256
+        const val RELIEFWEB_APP_NAME = "reliefweb_app_name"
         const val SHARED_PREFERENCES_NAME = "nomad-provider-credentials"
         const val TANKERKOENIG_API_KEY = "tankerkoenig_api_key"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

@@ -377,7 +377,7 @@ private fun WorldFootprintCard(
         if (hasMapsApiKey.not()) {
             InlineStatusContent(
                 title = "Google Maps key needed",
-                body = "Set a local package-restricted NOMAD_MAPS_API_KEY in Config/AppConfig.env to render the visited map. Saved place markers and country-day summaries remain available below.",
+                body = "Google Maps SDK for Android requires an app-level manifest API key. Configure a local debug or release key via Gradle or local.properties for this build, and keep private provider credentials in Settings only.",
                 icon = Icons.Rounded.TravelExplore,
             )
         } else {

@@ -18,7 +18,6 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryR
 import com.iloapps.nomaddashboard.core.data.travelalerts.CountryNameResolver
 import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebSecurityProvider
 import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryProvider
-import com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProviderAppConfig
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
@@ -404,9 +403,12 @@ class DefaultNomadDashboardRepositoryTest {
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
             fuelPriceProvider = FakeFuelPriceProvider(),
+            providerCredentialStore = FakeProviderCredentialStore(
+                ProviderCredentialSettings(reliefWebAppName = ""),
+            ),
             visitedHistoryStore = FakeVisitedHistoryStore(),
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
-            reliefWebSecurityProvider = reliefWebProvider(appName = ""),
+            reliefWebSecurityProvider = reliefWebProvider(),
             applicationScope = backgroundScope,
         )
 
@@ -468,7 +470,9 @@ class DefaultNomadDashboardRepositoryTest {
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
-        providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(),
+        providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(
+            ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
+        ),
         visitedHistoryStore: FakeVisitedHistoryStore,
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
@@ -536,7 +540,6 @@ class DefaultNomadDashboardRepositoryTest {
         )
 
     private fun reliefWebProvider(
-        appName: String = "NomadDashboardTests",
         onRequest: (List<String>) -> Unit = {},
         responseBody: MutableStateFlow<String> = MutableStateFlow(
             """
@@ -582,7 +585,6 @@ class DefaultNomadDashboardRepositoryTest {
                     return Response.success(responseBody.value.toResponseBody(JsonMediaType))
                 }
             },
-            appConfig = TravelAlertProviderAppConfig(reliefWebAppName = appName),
             countryNameResolver = CountryNameResolver(),
             json = TestJson,
         )

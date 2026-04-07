@@ -275,6 +275,8 @@ Notes:
   dedicated screenshot target runs it explicitly.
 - Provider credentials must be verified through the in-app Settings flow, not
   through local env-file injection into the app build.
+- ReliefWeb now follows the same rule as Tankerkonig: save the approved app
+  name in Settings and keep it only in encrypted device-local storage.
 - App-level KSP output can get into a bad incremental state under
   `app/build/generated/ksp/debug/java`; a direct
   `run_gradle -Pksp.incremental=false ...` pass can still verify the slice
@@ -350,7 +352,7 @@ Perform these checks on the first installed build:
 - visited screen shows empty state before any capture is stored
 - visited screen shows location-permission CTA when visited device capture is on but permission is missing
 - visited screen shows the `World Footprint` card once saved history exists
-- with a blank local `NOMAD_MAPS_API_KEY`, the visited screen shows map setup guidance instead of crashing
+- without a configured Android Maps SDK manifest key, the visited screen shows map setup guidance instead of crashing
 - when a map key is configured, the visited map shows all-time saved-place pins and shades countries from the selected country-day year
 - changing the selected year updates both the country summary and the map camera target
 - dashboard refresh records an IP-based place and country day when external IP location resolves

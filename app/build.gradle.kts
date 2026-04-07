@@ -1,4 +1,5 @@
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
+import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -16,9 +17,38 @@ val versionProperties = Properties().apply {
 
 fun env(name: String, default: String = ""): String = System.getenv(name)?.takeIf { it.isNotBlank() } ?: default
 
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        FileInputStream(localPropertiesFile).use(::load)
+    }
+}
+
+fun configValue(vararg names: String): String {
+    names.forEach { name ->
+        System.getenv(name)?.trim()?.takeIf(String::isNotEmpty)?.let { return it }
+        (findProperty(name) as? String)?.trim()?.takeIf(String::isNotEmpty)?.let { return it }
+        localProperties.getProperty(name)?.trim()?.takeIf(String::isNotEmpty)?.let { return it }
+    }
+    return ""
+}
+
 android {
     namespace = "com.iloapps.nomaddashboard"
     compileSdk = 36
+
+    val debugMapsApiKey = configValue(
+        "NOMAD_MAPS_API_KEY_DEBUG",
+        "nomad.mapsApiKey.debug",
+        "NOMAD_MAPS_API_KEY",
+        "nomad.mapsApiKey",
+    )
+    val releaseMapsApiKey = configValue(
+        "NOMAD_MAPS_API_KEY_RELEASE",
+        "nomad.mapsApiKey.release",
+        "NOMAD_MAPS_API_KEY",
+        "nomad.mapsApiKey",
+    )
 
     defaultConfig {
         applicationId = env("NOMAD_APPLICATION_ID", "com.iloapps.nomaddashboard")
@@ -28,8 +58,7 @@ android {
         versionName = versionProperties.getProperty("MARKETING_VERSION")
         testInstrumentationRunner = "com.iloapps.nomaddashboard.NomadDashboardTestRunner"
         vectorDrawables.useSupportLibrary = true
-
-        buildConfigField("String", "RELIEFWEB_APP_NAME", "\"${env("NOMAD_RELIEFWEB_APP_NAME")}\"")
+        manifestPlaceholders["googleMapsApiKey"] = ""
     }
 
     signingConfigs {
@@ -46,11 +75,13 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = env("NOMAD_DEBUG_APPLICATION_ID_SUFFIX", ".dev")
+            manifestPlaceholders["googleMapsApiKey"] = debugMapsApiKey
             versionNameSuffix = "-dev"
         }
         release {
             isMinifyEnabled = false
             isShrinkResources = false
+            manifestPlaceholders["googleMapsApiKey"] = releaseMapsApiKey
             signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

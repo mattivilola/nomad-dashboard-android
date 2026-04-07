@@ -104,6 +104,11 @@ fun SettingsScreen(
                         current.copy(tankerkoenigApiKey = apiKey)
                     }
                 },
+                onSaveReliefWebAppName = { appName ->
+                    onUpdateProviderCredentials { current ->
+                        current.copy(reliefWebAppName = appName)
+                    }
+                },
             )
         }
 
@@ -160,11 +165,16 @@ fun SettingsScreen(
 private fun ProviderCredentialCard(
     providerCredentials: ProviderCredentialSettings,
     onSaveTankerkoenigApiKey: (String) -> Unit,
+    onSaveReliefWebAppName: (String) -> Unit,
 ) {
     var tankerkoenigApiKey by rememberSaveable(providerCredentials.tankerkoenigApiKey) {
         mutableStateOf(providerCredentials.tankerkoenigApiKey)
     }
-    val isDirty = tankerkoenigApiKey != providerCredentials.tankerkoenigApiKey
+    var reliefWebAppName by rememberSaveable(providerCredentials.reliefWebAppName) {
+        mutableStateOf(providerCredentials.reliefWebAppName)
+    }
+    val isTankerkoenigDirty = tankerkoenigApiKey != providerCredentials.tankerkoenigApiKey
+    val isReliefWebDirty = reliefWebAppName != providerCredentials.reliefWebAppName
 
     NomadCard {
         NomadSectionHeader(
@@ -200,11 +210,49 @@ private fun ProviderCredentialCard(
                 Text("Clear key")
             }
             Button(
-                enabled = isDirty,
+                enabled = isTankerkoenigDirty,
                 modifier = Modifier.testTag(TankerkoenigApiKeySaveButtonTag),
                 onClick = { onSaveTankerkoenigApiKey(tankerkoenigApiKey) },
             ) {
                 Text("Save key")
+            }
+        }
+
+        OutlinedTextField(
+            value = reliefWebAppName,
+            onValueChange = { reliefWebAppName = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+                .testTag(ReliefWebAppNameFieldTag),
+            label = { Text("ReliefWeb app name") },
+            supportingText = {
+                Text("Required only for regional security lookups. Save the approved ReliefWeb app name here.")
+            },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            TextButton(
+                enabled = providerCredentials.reliefWebAppName.isNotBlank() || reliefWebAppName.isNotBlank(),
+                onClick = {
+                    reliefWebAppName = ""
+                    onSaveReliefWebAppName("")
+                },
+            ) {
+                Text("Clear app name")
+            }
+            Button(
+                enabled = isReliefWebDirty,
+                modifier = Modifier.testTag(ReliefWebAppNameSaveButtonTag),
+                onClick = { onSaveReliefWebAppName(reliefWebAppName) },
+            ) {
+                Text("Save app name")
             }
         }
     }
@@ -245,3 +293,5 @@ private fun AppSettings.moveCard(card: DashboardCardId, delta: Int): AppSettings
 
 private const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
 private const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"
+private const val ReliefWebAppNameFieldTag = "settings_reliefweb_app_name_field"
+private const val ReliefWebAppNameSaveButtonTag = "settings_reliefweb_app_name_save_button"

@@ -20,18 +20,18 @@ import kotlinx.serialization.json.JsonPrimitive
 @Singleton
 class ReliefWebSecurityProvider @Inject constructor(
     private val service: ReliefWebReportsService,
-    private val appConfig: TravelAlertProviderAppConfig,
     private val countryNameResolver: CountryNameResolver,
     private val json: Json,
 ) {
     suspend fun security(
+        appName: String,
         countryCodes: List<String>,
         primaryCountryCode: String,
     ): TravelAlertSignalSnapshot {
-        val appName = appConfig.reliefWebAppName.trim()
-        if (appName.isBlank()) {
+        val normalizedAppName = appName.trim()
+        if (normalizedAppName.isBlank()) {
             throw ReliefWebProviderError.AppNameMissing(
-                "Set NOMAD_RELIEFWEB_APP_NAME in local AppConfig.env.",
+                "Save a ReliefWeb app name in Settings.",
             )
         }
 
@@ -50,7 +50,7 @@ class ReliefWebSecurityProvider @Inject constructor(
         )
 
         val response = try {
-            service.reports(appName = appName, request = request)
+            service.reports(appName = normalizedAppName, request = request)
         } catch (error: IOException) {
             throw ReliefWebProviderError.RequestFailed(error)
         }

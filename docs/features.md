@@ -63,7 +63,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | --- | --- | --- |
 | Travel alerts card | Implemented | Dashboard card now shows an aggregate status plus dedicated Travel Advisory and Regional Security rows with checking, ready, stale, and unavailable states |
 | Smartraveller advisory | Implemented | Uses Smartraveller destination export data with tolerant country-name matching and Level 1/2/3/4 severity mapping |
-| ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires local `NOMAD_RELIEFWEB_APP_NAME` in `Config/AppConfig.env` |
+| ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires an approved ReliefWeb app name saved in Settings |
 | Weather alerts | Deferred | Provider decision still pending |
 
 ## Fuel Prices And Emergency Care
@@ -85,7 +85,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |
-| World map rendering | Implemented | Google Maps Compose shows all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; local `NOMAD_MAPS_API_KEY` required |
+| World map rendering | Implemented with config blocker | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries, but Android Maps SDK still requires an app-level manifest API key and is not currently configurable from the in-app Settings flow |
 
 ## Time Tracking
 

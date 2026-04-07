@@ -18,9 +18,8 @@ The Android port uses a local-first release process similar to the macOS repo:
 Create these local files from examples:
 
 - `Config/Signing.env`
-- `Config/AppConfig.env` for local helper scripts and package-restricted client
-  keys such as Google Maps plus the non-secret ReliefWeb app name; it is not
-  used for private provider credentials
+- `Config/AppConfig.env` for local helper scripts and app-level keys such as
+  Maps; it is not used for provider credentials
 
 ## Required Values
 
@@ -35,8 +34,7 @@ From `Config/Signing.env`:
 - `NOMAD_PLAY_TRACK`
 
 From `Config/AppConfig.env` as needed:
-- `NOMAD_RELIEFWEB_APP_NAME`
-- `NOMAD_MAPS_API_KEY` for the visited world map
+- no provider credentials; keep this file for future app-level local config only
 
 ## Commands
 
@@ -117,11 +115,11 @@ Not yet verified with real credentials:
 - never commit keystores
 - never commit Play service-account JSON
 - never commit shared private provider secrets
-- never package private provider credentials via `BuildConfig`, manifest
-  placeholders, or resources
-- the ReliefWeb app name is a non-secret provider identifier and may be wired
-  from local `Config/AppConfig.env` into `BuildConfig`
-- `NOMAD_MAPS_API_KEY` must stay local, only enable Maps SDK for Android, and
-  be restricted to the Android package name plus signing certificate
-- user-supplied provider credentials must be entered in-app after install and
-  stored only in encrypted device-local storage
+- never package provider credentials via `BuildConfig`, manifest placeholders,
+  or resources
+- Google Maps SDK for Android requires an app-level key before the map can
+  initialize, so it cannot use the same in-app settings flow as private
+  provider credentials
+- user-supplied provider credentials, including the ReliefWeb app name, must be
+  entered in-app after install and stored only in encrypted device-local
+  storage

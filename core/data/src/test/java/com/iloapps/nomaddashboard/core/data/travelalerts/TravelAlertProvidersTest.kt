@@ -116,13 +116,13 @@ class TravelAlertProvidersTest {
                     )
                 }
             },
-            appConfig = TravelAlertProviderAppConfig(reliefWebAppName = "NomadDashboardTests"),
             countryNameResolver = CountryNameResolver(),
             json = json,
         )
 
         val error = runCatching {
             provider.security(
+                appName = "NomadDashboardTests",
                 countryCodes = listOf("ES", "FR"),
                 primaryCountryCode = "ES",
             )
@@ -144,7 +144,6 @@ class TravelAlertProvidersTest {
                     request: ReliefWebReportsRequest,
                 ): Response<ResponseBody> = Response.success("{}".toResponseBody(JsonMediaType))
             },
-            appConfig = TravelAlertProviderAppConfig(reliefWebAppName = "NomadDashboardTests"),
             countryNameResolver = CountryNameResolver(),
             json = json,
         )
@@ -186,7 +185,6 @@ class TravelAlertProvidersTest {
                     request: ReliefWebReportsRequest,
                 ): Response<ResponseBody> = Response.success("{}".toResponseBody(JsonMediaType))
             },
-            appConfig = TravelAlertProviderAppConfig(reliefWebAppName = "NomadDashboardTests"),
             countryNameResolver = CountryNameResolver(),
             json = json,
         )

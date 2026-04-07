@@ -200,6 +200,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             primaryCountryCode = primaryTravelAlertCountryCode,
             primaryCountryName = primaryTravelAlertCountryName,
             coverageCountryCodes = coverageCountryCodes,
+            providerCredentials = currentProviderCredentials,
         )
 
         val overallHeadline = when {
@@ -332,6 +333,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         primaryCountryCode: String?,
         primaryCountryName: String?,
         coverageCountryCodes: List<String>,
+        providerCredentials: ProviderCredentialSettings,
     ): TravelAlertsSnapshot {
         val attemptedAt = Instant.now()
         val advisoryState = refreshAlertState(
@@ -352,6 +354,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             attemptedAt = attemptedAt,
         ) {
             reliefWebSecurityProvider.security(
+                appName = providerCredentials.reliefWebAppName,
                 countryCodes = coverageCountryCodes,
                 primaryCountryCode = primaryCountryCode ?: error("primary country required"),
             )

@@ -26,6 +26,8 @@ Current repository state:
   Tankerkonig support
 - travel-alert provider integrations implemented for Smartraveller advisory and
   ReliefWeb regional security
+- ReliefWeb app name handling moved into encrypted device-local provider
+  credentials and the Settings screen
 - dashboard travel-alert card now renders aggregate, advisory, and regional
   security states from live provider-backed repository data
 - Android-versus-macOS screenshot review completed; the highest-value next

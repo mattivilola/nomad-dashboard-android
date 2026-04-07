@@ -62,12 +62,29 @@ class SettingsSmokeTest {
         composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).assertTextContains("")
     }
 
+    @Test
+    fun reliefweb_app_name_persists_across_recreate_and_can_be_cleared() {
+        openSettings()
+
+        composeTestRule.onNodeWithTag(ReliefWebAppNameFieldTag).performTextClearance()
+        composeTestRule.onNodeWithTag(ReliefWebAppNameFieldTag).performTextInput("nomad-approved-app")
+        composeTestRule.onNodeWithTag(ReliefWebAppNameSaveButtonTag).performClick()
+
+        composeTestRule.activityRule.scenario.recreate()
+        openSettings()
+        composeTestRule.onNodeWithTag(ReliefWebAppNameFieldTag).assertTextContains("nomad-approved-app")
+
+        composeTestRule.onNodeWithText("Clear app name").performClick()
+        composeTestRule.onNodeWithTag(ReliefWebAppNameFieldTag).assertTextContains("")
+    }
+
     private fun openSettings() {
         composeTestRule
             .onNodeWithTag("nav-settings")
             .performClick()
         composeTestRule.onNodeWithTag(ExpandWeatherForecastSwitchTag).assertIsDisplayed()
         composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(ReliefWebAppNameFieldTag).assertIsDisplayed()
     }
 
     private fun toggleExpandWeatherForecast() {
@@ -104,6 +121,8 @@ class SettingsSmokeTest {
 
     private companion object {
         const val ExpandWeatherForecastSwitchTag = "settings_expand_weather_forecast_switch"
+        const val ReliefWebAppNameFieldTag = "settings_reliefweb_app_name_field"
+        const val ReliefWebAppNameSaveButtonTag = "settings_reliefweb_app_name_save_button"
         const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
         const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"
     }

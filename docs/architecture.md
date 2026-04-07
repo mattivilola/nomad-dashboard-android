@@ -262,12 +262,11 @@ Planned:
 - Release credentials only in gitignored local env files
 - User-supplied provider credentials must never be compiled into `BuildConfig`,
   manifest placeholders, or resources
-- the ReliefWeb app name is a non-secret provider identifier and is injected
-  from local `Config/AppConfig.env` into app `BuildConfig`
 - user-supplied provider credentials remain local in Android Keystore-backed
   encrypted storage and are excluded from Android backup
-- Android Maps/Places keys must be package/signature-restricted and must not be
-  treated as shared repo secrets
+- Android Maps/Places SDK keys cannot be treated like user-entered provider
+  credentials because the SDK expects an app-level key before map init; if that
+  constraint is unacceptable, the app needs a different map stack
 
 ## Platform Adaptation Notes
 
