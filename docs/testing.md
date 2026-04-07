@@ -32,9 +32,35 @@ make test
 ```
 
 Current behavior:
-- always runs `testDebugUnitTest`
-- also runs `connectedDebugAndroidTest` when `adb devices` reports at least one attached target in `device` state
-- prints a skip message and exits successfully after unit tests when no device/emulator is connected
+- uses the default emulator workflow
+- boots `Pixel_5_API_31` by default, or `NOMAD_ANDROID_AVD=<name> make test`
+- starts the emulator headless by default; set `NOMAD_ANDROID_EMULATOR_WINDOW=1`
+  if you want the emulator window
+- waits for the emulator to finish booting
+- sets `ANDROID_SERIAL` so Gradle targets the emulator instead of any attached phone
+
+Run unit tests plus connected tests on the emulator only:
+
+```sh
+make test-emulator
+```
+
+Current behavior:
+- boots `Pixel_5_API_31` by default, or `NOMAD_ANDROID_AVD=<name> make test-emulator`
+- starts the emulator headless by default; set `NOMAD_ANDROID_EMULATOR_WINDOW=1`
+  if you want the emulator window
+- waits for the emulator to finish booting
+- sets `ANDROID_SERIAL` so Gradle targets the emulator instead of any attached phone
+
+Run unit tests plus connected tests on a physical device:
+
+```sh
+make test-device
+```
+
+Current behavior:
+- selects the first attached non-emulator Android target
+- intended for occasional smoke verification, not the default unattended loop
 
 Run lint:
 
@@ -48,8 +74,8 @@ Current verified result:
 
 Latest verification attempt:
 - the visited unit-test coverage now compiles and passes during `testDebugUnitTest`
-- with a physical Android device attached, `make test` continues into
-  `connectedDebugAndroidTest`
+- the default workflow is being switched so `make test` uses the emulator path
+  and the phone is reserved for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both
   `testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"` and
   `androidTestImplementation(libs.androidx.test.runner)` so empty
@@ -163,8 +189,8 @@ Notes:
   content. Placeholder-specific assertions become stale as features move from
   scaffold to implementation.
 - If a physical device is connected, `make test` becomes slower and more fragile
-  because it enters the connected-test lane automatically. Use no attached
-  device or an emulator when the goal is quick unit-test feedback only.
+  on OEM-skinned phones. The default workflow now routes `make test` to the AVD
+  so the phone is not part of the normal loop.
 
 ## Run From Android Studio
 
@@ -172,6 +198,25 @@ Notes:
 2. Let Gradle sync.
 3. Select your emulator or phone.
 4. Press Run.
+
+## Emulator Workflow
+
+Preferred default for unattended connected tests:
+
+```sh
+make start-emulator
+make test
+```
+
+Notes:
+- the current machine already has `Pixel_5_API_31` configured
+- `make test` and `make test-emulator` avoid the Poco / HyperOS
+  install-approval loop by targeting the emulator explicitly
+- the emulator boots headless by default so connected tests can run unattended
+- keep the physical phone disconnected from routine test loops unless you are
+  doing manual smoke verification
+- use `make test-device` only when you intentionally want connected tests on the
+  phone
 
 ## Manual Smoke Checklist
 

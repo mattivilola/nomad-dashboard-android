@@ -16,6 +16,7 @@ Current repository state:
 - visited screen history UI implemented
 - visited device-location opt-in and permission CTA implemented
 - Compose UI smoke test suite added for the Android shell
+- emulator-first connected-test workflow added
 
 ## Completed
 
@@ -42,12 +43,13 @@ Current repository state:
 - country-day aggregation logic implemented
 - time-tracking route placeholder implemented
 - Compose UI smoke tests added for app launch, top-level navigation, dashboard shell render, and one settings persistence flow
+- emulator boot and emulator-targeted test helper scripts added
 - release/signing/publish helper scripts scaffolded
 - README and docs set added
 
 ## In Progress
 
-- verification rerun for build/lint/full connected-device test flow after the visited slice
+- verification rerun for build/lint/full emulator-first test flow after the visited slice
 
 ## Not Started
 
@@ -63,7 +65,6 @@ Current repository state:
 
 Verified:
 - `make build`
-- `make test`
 - `make lint`
 - wireless ADB pairing and reconnect flow
 - debug APK install on physical Android phone
@@ -73,8 +74,8 @@ Verified:
 Not yet fully re-verified after the visited slice in this session:
 - full `make build`
 - full `make lint`
-- full `make test` completion with connected Android tests on an attached device
-- run on emulator
+- full `make test` completion with the new default emulator path
+- end-to-end physical-device smoke pass with the explicit `make test-device` path
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
 
@@ -88,8 +89,8 @@ Not yet fully re-verified after the visited slice in this session:
 ## Parallel-Safe Workstreams
 
 Recommended secondary task while visited-data verification is active:
-- rerun the connected-device test flow once the attached-target instrumentation
-  path has been rechecked end to end
+- rerun the emulator-first test flow end to end, then keep the phone for
+  explicit smoke checks only
 
 Handoff doc:
 - [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)

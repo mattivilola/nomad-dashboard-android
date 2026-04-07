@@ -1,7 +1,7 @@
 APP_NAME := NomadDashboard
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap doctor connect-wireless build run rerun test lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
+.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
 
 help: ## Print available make targets
 	@printf "\nAvailable commands:\n\n"
@@ -17,6 +17,9 @@ doctor: ## Print the resolved Java/SDK/Gradle environment
 connect-wireless: ## Pair and connect an Android device over Wi-Fi
 	./scripts/connect-wireless-device.sh
 
+start-emulator: ## Boot the default Android emulator AVD
+	./scripts/start-emulator.sh
+
 build: ## Build the debug app
 	./scripts/build-dev.sh
 
@@ -26,8 +29,14 @@ run: ## Install and launch the debug app on a connected device or emulator
 rerun: ## Reinstall and relaunch the debug app
 	./scripts/rerun-dev.sh
 
-test: ## Run unit tests and connected tests when available
+test: ## Run unit tests and connected tests on the default emulator
 	./scripts/test.sh
+
+test-emulator: ## Run unit tests and connected tests against the emulator only
+	./scripts/test-emulator.sh
+
+test-device: ## Run unit tests and connected tests against a physical device
+	./scripts/test-device.sh
 
 lint: ## Run Kotlin and Android lint checks
 	./scripts/lint.sh
