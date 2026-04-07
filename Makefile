@@ -1,7 +1,7 @@
 APP_NAME := NomadDashboard
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
+.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device screenshots lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
 
 help: ## Print available make targets
 	@printf "\nAvailable commands:\n\n"
@@ -37,6 +37,9 @@ test-emulator: ## Run unit tests and connected tests against the emulator only
 
 test-device: ## Run unit tests and connected tests against a physical device
 	./scripts/test-device.sh
+
+screenshots: ## Capture deterministic Android UI review screenshots from the emulator
+	./scripts/capture-screenshots.sh
 
 lint: ## Run Kotlin and Android lint checks
 	./scripts/lint.sh

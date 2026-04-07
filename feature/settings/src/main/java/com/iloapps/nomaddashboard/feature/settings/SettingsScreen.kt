@@ -48,13 +48,17 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun SettingsScreen(
+fun SettingsScreen(
     uiState: SettingsUiState,
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
     onUpdateProviderCredentials: ((ProviderCredentialSettings) -> ProviderCredentialSettings) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val settings = uiState.settings
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         item {
             NomadCard {
                 NomadSectionHeader(

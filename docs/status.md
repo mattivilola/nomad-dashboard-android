@@ -65,6 +65,8 @@ Current repository state:
 ## In Progress
 
 - physical-device notification smoke verification for the new time-tracking runtime
+- emulator app smoke verification is currently blocked by an Android test runtime
+  `ActivityInvoker` classpath failure in `:app:connectedDebugAndroidTest`
 
 ## Not Started
 
@@ -78,7 +80,6 @@ Current repository state:
 
 Verified:
 - `make build`
-- `make test`
 - `make lint`
 - wireless ADB pairing and reconnect flow
 - debug APK install on physical Android phone
@@ -87,10 +88,17 @@ Verified:
 - visited model/store/repository unit coverage added and passing via `testDebugUnitTest`
 - targeted compile verification for `:core:data` and `:feature:dashboard`
 - time-tracking repository/storage/runtime coverage added and passing
-- emulator-first connected smoke tests passing through `make test` on 2026-04-07
+- `make build` passed again on 2026-04-07 after the encrypted credential
+  storage and settings hardening slice
+- `make lint` passed again on 2026-04-07 after the encrypted credential
+  storage and settings hardening slice
 
-Not yet fully re-verified after the time-tracking slice in this session:
-- end-to-end physical-device smoke pass with the explicit `make test-device` path
+Not yet fully re-verified after the encrypted credential hardening slice in this session:
+- `make test` currently fails in `:app:connectedDebugAndroidTest` because the
+  instrumentation runtime cannot resolve
+  `androidx.test.internal.platform.app.ActivityInvoker`
+- end-to-end physical-device smoke pass with the explicit `make test-device`
+  path
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
 

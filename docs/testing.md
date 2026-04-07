@@ -82,18 +82,18 @@ make lint
 ```
 
 Current verified result:
-- `make build` passed on 2026-04-07 after the time-tracking slice
-- `make test` passed on 2026-04-07 through the default emulator workflow
-- `make lint` passed on 2026-04-07 after the time-tracking slice
+- `make build` passed on 2026-04-07 after the credential-hardening slice
+- `make lint` passed on 2026-04-07 after the credential-hardening slice
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- on 2026-04-07, `make build` passed after wiring the Room-backed
-  time-tracking repository, screen, and foreground service
-- on 2026-04-07, `make test` passed with `scripts/test-emulator.sh` as the
-  default path, including app smoke tests and the new time-tracking unit tests
-- on 2026-04-07, `make lint` passed after the foreground-service permission
-  guards and notification runtime wiring were finalized
+- on 2026-04-07, `make build` passed after removing build-time provider
+  credential injection and adding encrypted device-local storage plus settings UI
+- on 2026-04-07, `make lint` passed after the credential-hardening slice
+- on 2026-04-07, `make test` failed in `:app:connectedDebugAndroidTest`
+  because the instrumentation runtime could not resolve
+  `androidx.test.internal.platform.app.ActivityInvoker` while the existing app
+  smoke tests were trying to launch `MainActivity`
 - the default workflow now routes `make test` through the emulator path and
   reserves the phone for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both

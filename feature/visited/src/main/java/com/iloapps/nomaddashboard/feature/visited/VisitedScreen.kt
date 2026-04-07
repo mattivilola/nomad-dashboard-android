@@ -114,6 +114,7 @@ fun VisitedScreen(
     hasLocationPermission: Boolean,
     onRefresh: () -> Unit,
     onRequestLocationPermission: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val placeSummary = state.places.visitedPlaceSummary()
     val availableYears = state.countryDays.availableYears()
@@ -132,7 +133,10 @@ fun VisitedScreen(
     val selectedYearSummary = state.countryDays.yearSummary(selectedYear)
     val monthlySummaries = state.countryDays.monthlySummaries(selectedYear)
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         item {
             NomadCard {
                 NomadSectionHeader(

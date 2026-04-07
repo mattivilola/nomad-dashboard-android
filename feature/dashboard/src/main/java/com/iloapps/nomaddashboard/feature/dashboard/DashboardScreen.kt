@@ -55,16 +55,17 @@ fun DashboardRoute(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DashboardScreen(
+fun DashboardScreen(
     state: DashboardUiState,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenVisited: () -> Unit,
     onOpenTimeTracking: () -> Unit,
     onOpenAbout: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {

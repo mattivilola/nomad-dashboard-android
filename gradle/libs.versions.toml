@@ -27,6 +27,7 @@ playPublisher = "3.10.1"
 javaxInject = "1"
 androidxTestRunner = "1.6.2"
 androidxTestMonitor = "1.7.2"
+uiautomator = "2.3.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -69,6 +70,7 @@ androidx-test-core = { module = "androidx.test:core", version.ref = "androidxTes
 androidx-test-monitor = { module = "androidx.test:monitor", version.ref = "androidxTestMonitor" }
 androidx-espresso-core = { module = "androidx.test.espresso:espresso-core", version.ref = "espresso" }
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
+androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
 truth = { module = "com.google.truth:truth", version.ref = "truth" }
 javax-inject = { module = "javax.inject:javax.inject", version.ref = "javaxInject" }
 

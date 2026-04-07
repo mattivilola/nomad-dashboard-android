@@ -119,11 +119,15 @@ fun TimeTrackingScreen(
     onCreateProject: () -> Unit,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val activeEntry = state.activeEntry
     val now = rememberTickerInstant(activeEntry != null)
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         item {
             NomadCard {
                 NomadSectionHeader(
