@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,7 +53,11 @@ private fun SettingsScreen(
                 SettingsToggle("Show external IP location", settings.publicIpGeolocationEnabled) {
                     onUpdate { current -> current.copy(publicIpGeolocationEnabled = it) }
                 }
-                SettingsToggle("Expand weather forecast", settings.weatherForecastExpanded) {
+                SettingsToggle(
+                    title = "Expand weather forecast",
+                    checked = settings.weatherForecastExpanded,
+                    switchModifier = Modifier.testTag("settings_expand_weather_forecast_switch"),
+                ) {
                     onUpdate { current -> current.copy(weatherForecastExpanded = it) }
                 }
                 SettingsToggle("Enable fuel prices", settings.fuelPricesEnabled) {
@@ -123,6 +128,7 @@ private fun SettingsScreen(
 private fun SettingsToggle(
     title: String,
     checked: Boolean,
+    switchModifier: Modifier = Modifier,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -131,7 +137,11 @@ private fun SettingsToggle(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, modifier = Modifier.weight(1f).padding(end = 12.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = switchModifier,
+        )
     }
 }
 

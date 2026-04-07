@@ -13,6 +13,7 @@ Current repository state:
 - build/test/lint verified locally
 - real-device debug install verified on Android phone via wireless debugging
 - visited places persistence and country-day aggregation work has started
+- Compose UI smoke test suite added for the Android shell
 
 ## Completed
 
@@ -36,6 +37,7 @@ Current repository state:
 - about route implemented
 - visited route placeholder implemented
 - time-tracking route placeholder implemented
+- Compose UI smoke tests added for app launch, top-level navigation, dashboard shell render, and one settings persistence flow
 - release/signing/publish helper scripts scaffolded
 - README and docs set added
 
@@ -65,6 +67,8 @@ Verified:
 - app launch on physical Android phone
 
 Not yet verified in this session:
+- `make test` after smoke-test addition is currently blocked by compile errors in [VisitedModels.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/main/java/com/iloapps/nomaddashboard/core/model/VisitedModels.kt) from the active visited-data workstream
+- connected Compose smoke test execution after the current visited-data compile blocker is resolved
 - run on emulator
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
@@ -79,8 +83,8 @@ Not yet verified in this session:
 ## Parallel-Safe Workstreams
 
 Recommended secondary task while visited-data work is active:
-- add Compose UI smoke tests for app launch, top-level navigation, and one
-  settings interaction
+- rerun `make test` once the visited-data compile blocker is resolved so the new
+  Compose smoke suite can execute on a connected target
 
 Handoff doc:
 - [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)

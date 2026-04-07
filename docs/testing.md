@@ -31,6 +31,11 @@ Run unit tests:
 make test
 ```
 
+Current behavior:
+- always runs `testDebugUnitTest`
+- also runs `connectedDebugAndroidTest` when `adb devices` reports at least one attached target in `device` state
+- prints a skip message and exits successfully after unit tests when no device/emulator is connected
+
 Run lint:
 
 ```sh
@@ -40,6 +45,10 @@ make lint
 Current verified result:
 - all three commands pass in this repo
 - debug APK was installed and launched on a physical Android phone over wireless debugging
+
+Latest verification attempt:
+- `make test` was rerun after adding Compose shell smoke tests
+- the run is currently blocked before connected test execution by unrelated compile errors in [VisitedModels.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/main/java/com/iloapps/nomaddashboard/core/model/VisitedModels.kt), which belongs to the active visited-place / country-day workstream
 
 ## APK Location
 
@@ -170,16 +179,22 @@ Perform these checks on the first installed build:
 
 Implemented now:
 - settings proto round-trip unit test
+- Compose UI smoke tests for:
+  - app launch into dashboard
+  - top-level navigation across all five shell destinations
+  - stable dashboard shell rendering without live-network assertions
+  - persisted `Expand weather forecast` toggle across activity recreation
 
 File:
 - [SettingsProtoMapperTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/datastore/src/test/java/com/iloapps/nomaddashboard/core/datastore/SettingsProtoMapperTest.kt)
+- [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
+- [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
 
 Planned next:
 - repository refresh tests
 - storage migration tests
 - visited-country-day logic tests
 - time-tracking ledger tests
-- Compose UI route smoke tests
 
 Recommended parallel task while visited-data work is in progress:
-- [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)
+- rerun [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md) verification once the active visited-data compile blocker is resolved
