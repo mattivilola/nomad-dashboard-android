@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -36,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -44,9 +44,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadBadgeTone
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadPill
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadStatusBadge
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadTopBar
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Duration
 import java.time.Instant
@@ -129,22 +132,30 @@ fun TimeTrackingScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            NomadCard {
-                NomadSectionHeader(
+            NomadCard(modifier = Modifier.testTag("timetracking_overview")) {
+                NomadTopBar(
                     title = "Time Tracking",
-                    subtitle = if (state.settings.projectTimeTrackingEnabled) {
-                        "Local-first project tracking with a foreground notification."
+                    subtitle = if (state.settings.projectTimeTrackingEnabled) "Local-first ledger" else "Tracking disabled",
+                    supportingText = if (state.settings.projectTimeTrackingEnabled) {
+                        "Keep focused project sessions visible and locally recorded with a foreground notification."
                     } else {
                         "Project time tracking is currently disabled."
                     },
+                    badgeText = if (activeEntry != null) "Active session" else "Ready",
+                    badgeTone = if (activeEntry != null) NomadBadgeTone.Accent else NomadBadgeTone.Good,
+                    trailing = {
+                        Icon(Icons.Rounded.Timer, contentDescription = null)
+                    },
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    maxItemsInEachRow = 2,
                 ) {
-                    NomadPill(text = "Projects: ${state.projects.size}")
-                    NomadPill(text = if (hasNotificationPermission) "Notifications ready" else "Notification permission needed")
+                    NomadMetricBlock("Projects", state.projects.size.toString(), "local ledger")
+                    NomadMetricBlock("Recent", state.recentEntries.size.toString(), "completed sessions")
+                    NomadMetricBlock("Notifications", if (hasNotificationPermission) "Ready" else "Needed")
+                    NomadMetricBlock("Selected", state.projects.firstOrNull { it.id == state.selectedProjectId }?.name ?: "None")
                 }
             }
         }
@@ -160,13 +171,62 @@ fun TimeTrackingScreen(
         }
 
         item {
+            NomadCard(modifier = Modifier.testTag(if (activeEntry != null) "timetracking_active_state" else "timetracking_ready_state")) {
+                if (activeEntry != null) {
+                    NomadSectionClusterHeader(
+                        title = "Active Session",
+                        subtitle = activeEntry.project.name,
+                        badges = listOf("Running" to NomadBadgeTone.Accent),
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        maxItemsInEachRow = 2,
+                    ) {
+                        NomadMetricBlock("Started", activeEntry.entry.startAt.formatTimestamp())
+                        NomadMetricBlock("Elapsed", formatDuration(Duration.between(activeEntry.entry.startAt, now)))
+                    }
+                    Button(onClick = onStopTracking) {
+                        Icon(Icons.Rounded.Stop, contentDescription = null)
+                        Text("Stop tracking", modifier = Modifier.padding(start = 8.dp))
+                    }
+                } else {
+                    NomadSectionClusterHeader(
+                        title = "Start Tracking",
+                        subtitle = state.selectedProjectId?.let { "Ready to start the next session." }
+                            ?: "Create or select a project before starting.",
+                        badges = listOf(
+                            (if (hasNotificationPermission) "Notifications ready" else "Notification permission needed")
+                                to if (hasNotificationPermission) NomadBadgeTone.Good else NomadBadgeTone.Warning,
+                        ),
+                    )
+                    Text(
+                        text = if (hasNotificationPermission) {
+                            "Starting a session writes an open entry locally and launches the foreground notification."
+                        } else {
+                            "Android 13+ notification permission is required before the foreground tracking service can start."
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Button(
+                        onClick = onStartTracking,
+                        enabled = state.selectedProjectId != null,
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                        Text("Start tracking", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        }
+
+        item {
             NomadCard {
-                NomadSectionHeader(
+                NomadSectionClusterHeader(
                     title = "Projects",
                     subtitle = if (state.projects.isEmpty()) {
-                        "Add your first project to start a local time-tracking ledger."
+                        "Add your first project to start the local ledger."
                     } else {
-                        "Select the project that should receive the next tracked session."
+                        "Select the project that should receive the next session."
                     },
                 )
                 if (state.projects.isNotEmpty()) {
@@ -194,13 +254,13 @@ fun TimeTrackingScreen(
                     onValueChange = onProjectNameChanged,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 14.dp),
+                        .padding(top = 8.dp),
                     label = { Text("New project") },
                     singleLine = true,
                 )
                 Button(
                     onClick = onCreateProject,
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 6.dp),
                 ) {
                     Icon(Icons.Rounded.Add, contentDescription = null)
                     Text("Add project", modifier = Modifier.padding(start = 8.dp))
@@ -210,7 +270,6 @@ fun TimeTrackingScreen(
                         text = message,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 10.dp),
                     )
                 }
             }
@@ -218,59 +277,12 @@ fun TimeTrackingScreen(
 
         item {
             NomadCard {
-                if (activeEntry != null) {
-                    NomadSectionHeader(
-                        title = "Active Session",
-                        subtitle = activeEntry.project.name,
-                    )
-                    Text(
-                        text = "Started ${activeEntry.entry.startAt.formatTimestamp()}",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "Elapsed ${formatDuration(Duration.between(activeEntry.entry.startAt, now))}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
-                    )
-                    Button(onClick = onStopTracking) {
-                        Icon(Icons.Rounded.Stop, contentDescription = null)
-                        Text("Stop tracking", modifier = Modifier.padding(start = 8.dp))
-                    }
-                } else {
-                    NomadSectionHeader(
-                        title = "Start Tracking",
-                        subtitle = state.selectedProjectId?.let { "Ready to start a session." }
-                            ?: "Create or select a project before starting.",
-                    )
-                    Text(
-                        text = if (hasNotificationPermission) {
-                            "Starting a session writes an open entry locally and launches the foreground notification."
-                        } else {
-                            "Android 13+ notification permission is required before the foreground tracking service can start."
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Button(
-                        onClick = onStartTracking,
-                        enabled = state.selectedProjectId != null,
-                        modifier = Modifier.padding(top = 12.dp),
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                        Text("Start tracking", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-        }
-
-        item {
-            NomadCard {
-                NomadSectionHeader(
+                NomadSectionClusterHeader(
                     title = "Recent Sessions",
                     subtitle = if (state.recentEntries.isEmpty()) {
-                        "Completed sessions will appear here after you stop a timer."
+                        "Completed sessions appear here after you stop a timer."
                     } else {
-                        "${state.recentEntries.size} completed session${if (state.recentEntries.size == 1) "" else "s"} saved locally."
+                        "${state.recentEntries.size} completed sessions saved locally."
                     },
                 )
                 if (state.recentEntries.isEmpty()) {
@@ -293,24 +305,29 @@ fun TimeTrackingScreen(
 @Composable
 private fun RecentEntryRow(entry: TimeTrackingRecord) {
     val endAt = entry.entry.endAt ?: return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    NomadCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = entry.project.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                Text(
+                    text = entry.project.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Start ${entry.entry.startAt.formatTimestamp()} · Stop ${endAt.formatTimestamp()}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
+                )
+            }
+            NomadStatusBadge(
+                text = formatDuration(Duration.between(entry.entry.startAt, endAt)),
+                tone = NomadBadgeTone.Info,
             )
-            NomadPill(text = formatDuration(Duration.between(entry.entry.startAt, endAt)))
         }
-        Text(
-            text = "Start ${entry.entry.startAt.formatTimestamp()} · Stop ${endAt.formatTimestamp()}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
-        )
     }
 }
 

@@ -26,6 +26,7 @@ import com.iloapps.nomaddashboard.feature.visited.VisitedScreen
 
 class ScreenshotReviewActivity : ComponentActivity() {
     private var currentScreen by mutableStateOf(ScreenshotReviewScreen.Dashboard)
+    private var currentTheme by mutableStateOf(ScreenshotReviewTheme.Light)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,7 +34,7 @@ class ScreenshotReviewActivity : ComponentActivity() {
         updateScreen(intent)
         enableEdgeToEdge()
         setContent {
-            NomadTheme {
+            NomadTheme(darkTheme = currentTheme.darkTheme) {
                 Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->
                     val screenModifier = Modifier
                         .fillMaxSize()
@@ -98,16 +99,25 @@ class ScreenshotReviewActivity : ComponentActivity() {
     fun showScreen(screen: ScreenshotReviewScreen) {
         currentScreen = screen
     }
+
+    fun showTheme(theme: ScreenshotReviewTheme) {
+        currentTheme = theme
+    }
+
     private fun updateScreen(intent: Intent?) {
         currentScreen = ScreenshotReviewScreen.fromRouteName(
             intent?.getStringExtra(ScreenshotReviewScreen.ExtraScreen),
         )
+        currentTheme = ScreenshotReviewTheme.fromRouteName(
+            intent?.getStringExtra(ScreenshotReviewScreen.ExtraTheme),
+        )
     }
 
     companion object {
-        fun intent(context: Context, screen: ScreenshotReviewScreen): Intent =
+        fun intent(context: Context, screen: ScreenshotReviewScreen, theme: ScreenshotReviewTheme): Intent =
             Intent(context, ScreenshotReviewActivity::class.java).apply {
                 putExtra(ScreenshotReviewScreen.ExtraScreen, screen.routeName)
+                putExtra(ScreenshotReviewScreen.ExtraTheme, theme.routeName)
             }
     }
 }

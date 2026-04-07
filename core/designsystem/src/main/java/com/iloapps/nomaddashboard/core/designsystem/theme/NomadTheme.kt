@@ -9,6 +9,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 val Sand = Color(0xFFF4EFE3)
@@ -25,6 +28,8 @@ private val LightColors: ColorScheme = lightColorScheme(
     background = Sand,
     surface = Card,
     surfaceVariant = Cloud,
+    tertiary = Color(0xFFB08838),
+    surfaceTint = Sea,
     onPrimary = Color.White,
     onSecondary = Color.White,
     onBackground = Ink,
@@ -38,11 +43,71 @@ private val DarkColors: ColorScheme = darkColorScheme(
     background = Color(0xFF152028),
     surface = Color(0xFF1E2B34),
     surfaceVariant = Color(0xFF203741),
+    tertiary = Color(0xFFE1C16D),
+    surfaceTint = Color(0xFF8ED0CD),
     onPrimary = Ink,
     onSecondary = Ink,
     onBackground = Color(0xFFF3F4F6),
     onSurface = Color(0xFFF3F4F6),
     outline = Color(0xFF43606B),
+)
+
+private val NomadTypography = Typography(
+    displaySmall = TextStyle(
+        fontSize = 28.sp,
+        lineHeight = 30.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.5).sp,
+    ),
+    headlineSmall = TextStyle(
+        fontSize = 30.sp,
+        lineHeight = 32.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.4).sp,
+    ),
+    titleLarge = TextStyle(
+        fontSize = 20.sp,
+        lineHeight = 24.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp,
+    ),
+    titleMedium = TextStyle(
+        fontSize = 17.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.SemiBold,
+    ),
+    titleSmall = TextStyle(
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
+        fontWeight = FontWeight.SemiBold,
+    ),
+    bodyLarge = TextStyle(
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.Normal,
+    ),
+    bodyMedium = TextStyle(
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        fontWeight = FontWeight.Normal,
+    ),
+    bodySmall = TextStyle(
+        fontSize = 12.sp,
+        lineHeight = 17.sp,
+        fontWeight = FontWeight.Normal,
+    ),
+    labelLarge = TextStyle(
+        fontSize = 13.sp,
+        lineHeight = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.2.sp,
+    ),
+    labelMedium = TextStyle(
+        fontSize = 11.sp,
+        lineHeight = 14.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.3.sp,
+    ),
 )
 
 private val NomadShapes = Shapes(
@@ -58,7 +123,7 @@ fun NomadTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = Typography(),
+        typography = NomadTypography,
         shapes = NomadShapes,
         content = content,
     )

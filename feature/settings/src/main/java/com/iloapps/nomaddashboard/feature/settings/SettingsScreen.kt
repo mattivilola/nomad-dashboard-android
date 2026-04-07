@@ -2,36 +2,42 @@ package com.iloapps.nomaddashboard.feature.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadBadgeTone
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadStatusBadge
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadTopBar
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.DashboardCardWidthMode
@@ -61,36 +67,94 @@ fun SettingsScreen(
     ) {
         item {
             NomadCard {
-                NomadSectionHeader(
+                NomadTopBar(
                     title = "Settings",
-                    subtitle = "Manage Android-first behavior while preserving macOS parity goals.",
+                    subtitle = "Control room",
+                    supportingText = "Tune Android behavior while keeping the app local-first, travel-focused, and parity-minded.",
+                    badgeText = "Device local only",
+                    badgeTone = NomadBadgeTone.Good,
+                    trailing = {
+                        Icon(Icons.Rounded.Settings, contentDescription = null)
+                    },
                 )
-                SettingsToggle("Use current location for weather", settings.useCurrentLocationForWeather) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    NomadMetricBlock("Sources", enabledSourceCount(settings).toString(), "active capture and provider surfaces")
+                    NomadMetricBlock("Cards", settings.dashboardCardOrder.size.toString(), "dashboard modules available")
+                }
+            }
+        }
+
+        item {
+            SettingsGroupCard(
+                title = "Location And Capture",
+                subtitle = "Choose which travel signals the app may use when refreshing weather and visited history.",
+            ) {
+                SettingsToggleRow(
+                    title = "Use current location for weather",
+                    description = "Prefer on-device location for the weather card when available.",
+                    checked = settings.useCurrentLocationForWeather,
+                ) {
                     onUpdate { current -> current.copy(useCurrentLocationForWeather = it) }
                 }
-                SettingsToggle("Use current location for visited places", settings.useCurrentLocationForVisitedPlaces) {
+                SettingsToggleRow(
+                    title = "Use current location for visited places",
+                    description = "Capture device-derived visited places in addition to IP-based travel observations.",
+                    checked = settings.useCurrentLocationForVisitedPlaces,
+                ) {
                     onUpdate { current -> current.copy(useCurrentLocationForVisitedPlaces = it) }
                 }
-                SettingsToggle("Show external IP location", settings.publicIpGeolocationEnabled) {
+                SettingsToggleRow(
+                    title = "Show external IP location",
+                    description = "Keep public-IP travel context visible on the dashboard and in visited history.",
+                    checked = settings.publicIpGeolocationEnabled,
+                ) {
                     onUpdate { current -> current.copy(publicIpGeolocationEnabled = it) }
                 }
-                SettingsToggle(
+                SettingsToggleRow(
+                    title = "Enable visited places",
+                    description = "Keep the local visited-map ledger active on this device.",
+                    checked = settings.visitedPlacesEnabled,
+                ) {
+                    onUpdate { current -> current.copy(visitedPlacesEnabled = it) }
+                }
+            }
+        }
+
+        item {
+            SettingsGroupCard(
+                title = "Dashboard Modules",
+                subtitle = "Control which modules are active and how much detail the main screen should expose.",
+            ) {
+                SettingsToggleRow(
                     title = "Expand weather forecast",
+                    description = "Show the longer forecast block inside the main weather card.",
                     checked = settings.weatherForecastExpanded,
                     switchModifier = Modifier.testTag("settings_expand_weather_forecast_switch"),
                 ) {
                     onUpdate { current -> current.copy(weatherForecastExpanded = it) }
                 }
-                SettingsToggle("Enable fuel prices", settings.fuelPricesEnabled) {
+                SettingsToggleRow(
+                    title = "Enable fuel prices",
+                    description = "Keep nearby fuel rows visible when country coverage is available.",
+                    checked = settings.fuelPricesEnabled,
+                ) {
                     onUpdate { current -> current.copy(fuelPricesEnabled = it) }
                 }
-                SettingsToggle("Enable emergency care", settings.emergencyCareEnabled) {
+                SettingsToggleRow(
+                    title = "Enable emergency care",
+                    description = "Reserve dashboard space for nearby hospital lookup and quick map access.",
+                    checked = settings.emergencyCareEnabled,
+                ) {
                     onUpdate { current -> current.copy(emergencyCareEnabled = it) }
                 }
-                SettingsToggle("Enable visited places", settings.visitedPlacesEnabled) {
-                    onUpdate { current -> current.copy(visitedPlacesEnabled = it) }
-                }
-                SettingsToggle("Enable project time tracking", settings.projectTimeTrackingEnabled) {
+                SettingsToggleRow(
+                    title = "Enable project time tracking",
+                    description = "Turn on the local project ledger and foreground tracking controls.",
+                    checked = settings.projectTimeTrackingEnabled,
+                ) {
                     onUpdate { current -> current.copy(projectTimeTrackingEnabled = it) }
                 }
             }
@@ -114,25 +178,17 @@ fun SettingsScreen(
 
         item {
             NomadCard {
-                NomadSectionHeader(
-                    title = "Dashboard Layout",
-                    subtitle = "Adjust card order and width preferences. Narrow cards take effect on larger layouts.",
+                NomadSectionClusterHeader(
+                    title = "Dashboard Order",
+                    subtitle = "Prioritize the phone dashboard the way you actually scan it. Width preferences still matter on wider layouts.",
+                    badges = listOf("Weather-first" to NomadBadgeTone.Good),
                 )
-                settings.dashboardCardOrder.forEach { card ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(card.label(), fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = "Width: ${settings.dashboardCardWidthModes[card] ?: DashboardCardWidthMode.WIDE}",
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    settings.dashboardCardOrder.forEach { card ->
+                        DashboardLayoutRow(
+                            card = card,
+                            widthMode = settings.dashboardCardWidthModes[card] ?: DashboardCardWidthMode.WIDE,
+                            onToggleWidth = {
                                 onUpdate { current ->
                                     current.copy(
                                         dashboardCardWidthModes = current.dashboardCardWidthModes.toMutableMap().apply {
@@ -144,20 +200,26 @@ fun SettingsScreen(
                                         },
                                     )
                                 }
-                            }) {
-                                Text(if (settings.dashboardCardWidthModes[card] == DashboardCardWidthMode.NARROW) "N" else "W")
-                            }
-                            IconButton(onClick = { onUpdate { it.moveCard(card, -1) } }) {
-                                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Move up")
-                            }
-                            IconButton(onClick = { onUpdate { it.moveCard(card, 1) } }) {
-                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Move down")
-                            }
-                        }
+                            },
+                            onMoveUp = { onUpdate { it.moveCard(card, -1) } },
+                            onMoveDown = { onUpdate { it.moveCard(card, 1) } },
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsGroupCard(
+    title: String,
+    subtitle: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    NomadCard {
+        NomadSectionClusterHeader(title = title, subtitle = subtitle)
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
     }
 }
 
@@ -177,9 +239,10 @@ private fun ProviderCredentialCard(
     val isReliefWebDirty = reliefWebAppName != providerCredentials.reliefWebAppName
 
     NomadCard {
-        NomadSectionHeader(
+        NomadSectionClusterHeader(
             title = "Provider Credentials",
-            subtitle = "User-supplied provider secrets stay encrypted on this device only and are excluded from Android backup.",
+            subtitle = "User-managed provider values stay encrypted on this device only and never ship inside the app artifact.",
+            badges = listOf("Encrypted on-device" to NomadBadgeTone.Good),
         )
         OutlinedTextField(
             value = tankerkoenigApiKey,
@@ -189,15 +252,13 @@ private fun ProviderCredentialCard(
                 .testTag(TankerkoenigApiKeyFieldTag),
             label = { Text("Tankerkönig API key") },
             supportingText = {
-                Text("Required only for Germany fuel lookups. Leave blank to disable the Germany provider.")
+                Text("Required only for Germany fuel prices.")
             },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
         )
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
             TextButton(
@@ -223,19 +284,17 @@ private fun ProviderCredentialCard(
             onValueChange = { reliefWebAppName = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp)
+                .padding(top = 6.dp)
                 .testTag(ReliefWebAppNameFieldTag),
             label = { Text("ReliefWeb app name") },
             supportingText = {
-                Text("Required only for regional security lookups. Save the approved ReliefWeb app name here.")
+                Text("Required only for regional security lookups.")
             },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
         )
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
             TextButton(
@@ -257,8 +316,7 @@ private fun ProviderCredentialCard(
         }
 
         Text(
-            text = "Emergency care and the visited map use app-level map services and are not configured in this screen.",
-            modifier = Modifier.padding(top = 16.dp),
+            text = "Map SDK keys remain app-level local configuration, not per-user secrets in this screen.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
         )
@@ -266,8 +324,9 @@ private fun ProviderCredentialCard(
 }
 
 @Composable
-private fun SettingsToggle(
+private fun SettingsToggleRow(
     title: String,
+    description: String,
     checked: Boolean,
     switchModifier: Modifier = Modifier,
     onCheckedChange: (Boolean) -> Unit,
@@ -277,7 +336,14 @@ private fun SettingsToggle(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -285,6 +351,50 @@ private fun SettingsToggle(
         )
     }
 }
+
+@Composable
+private fun DashboardLayoutRow(
+    card: DashboardCardId,
+    widthMode: DashboardCardWidthMode,
+    onToggleWidth: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+            Text(card.label(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            NomadStatusBadge(
+                text = if (widthMode == DashboardCardWidthMode.NARROW) "Narrow on large screens" else "Wide by default",
+                tone = NomadBadgeTone.Info,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onToggleWidth) {
+                Text(if (widthMode == DashboardCardWidthMode.NARROW) "Make wide" else "Make narrow")
+            }
+            IconButton(onClick = onMoveUp) {
+                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Move up")
+            }
+            IconButton(onClick = onMoveDown) {
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Move down")
+            }
+        }
+    }
+}
+
+private fun enabledSourceCount(settings: AppSettings): Int =
+    listOf(
+        settings.useCurrentLocationForWeather,
+        settings.useCurrentLocationForVisitedPlaces,
+        settings.publicIpGeolocationEnabled,
+        settings.fuelPricesEnabled,
+        settings.emergencyCareEnabled,
+        settings.projectTimeTrackingEnabled,
+    ).count { it }
 
 private fun DashboardCardId.label(): String = name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase)
 

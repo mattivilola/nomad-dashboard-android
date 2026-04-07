@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import com.iloapps.nomaddashboard.review.ScreenshotReviewActivity
 import com.iloapps.nomaddashboard.review.ScreenshotReviewScreen
+import com.iloapps.nomaddashboard.review.ScreenshotReviewTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -46,26 +47,29 @@ class ScreenshotReviewTest {
     }
 
     private fun capture(screen: ScreenshotReviewScreen) {
-        composeTestRule.runOnUiThread {
-            composeTestRule.activity.showScreen(screen)
-        }
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag(screen.rootTag).assertIsDisplayed()
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        ScreenshotReviewTheme.entries.forEach { theme ->
+            composeTestRule.runOnUiThread {
+                composeTestRule.activity.showTheme(theme)
+                composeTestRule.activity.showScreen(screen)
+            }
+            composeTestRule.waitForIdle()
+            composeTestRule.onNodeWithTag(screen.rootTag).assertIsDisplayed()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-        val screenshotPath = "${ScreenshotReviewScreen.SharedExportDirectory}/${screen.fileName}"
-        device.executeShellCommand("mkdir -p ${ScreenshotReviewScreen.SharedExportDirectory}")
-        device.executeShellCommand("rm -f $screenshotPath")
-        android.util.Log.i("ScreenshotReview", "Capturing ${screen.routeName} -> $screenshotPath")
-        assertTrue(
-            "Expected screenshot capture to succeed for ${screen.routeName}",
-            device.executeShellCommand("screencap -p $screenshotPath").isBlank(),
-        )
-        val statOutput = device.executeShellCommand("stat -c %s $screenshotPath").trim()
-        assertTrue(
-            "Expected screenshot file to exist for ${screen.routeName}",
-            statOutput.toLongOrNull()?.let { it > 0L } == true,
-        )
-        android.util.Log.i("ScreenshotReview", "Saved ${screen.fileName}")
+            val screenshotPath = "${ScreenshotReviewScreen.SharedExportDirectory}/${screen.fileName(theme)}"
+            device.executeShellCommand("mkdir -p ${ScreenshotReviewScreen.SharedExportDirectory}")
+            device.executeShellCommand("rm -f $screenshotPath")
+            android.util.Log.i("ScreenshotReview", "Capturing ${screen.routeName}-${theme.routeName} -> $screenshotPath")
+            assertTrue(
+                "Expected screenshot capture to succeed for ${screen.routeName}-${theme.routeName}",
+                device.executeShellCommand("screencap -p $screenshotPath").isBlank(),
+            )
+            val statOutput = device.executeShellCommand("stat -c %s $screenshotPath").trim()
+            assertTrue(
+                "Expected screenshot file to exist for ${screen.routeName}-${theme.routeName}",
+                statOutput.toLongOrNull()?.let { it > 0L } == true,
+            )
+            android.util.Log.i("ScreenshotReview", "Saved ${screen.fileName(theme)}")
+        }
     }
 }

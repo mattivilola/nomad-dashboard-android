@@ -55,14 +55,19 @@ ANDROID_SERIAL="$emulator_serial" run_gradle \
   -Pandroid.testInstrumentationRunnerArguments.class="$screenshot_test_class"
 
 for filename in \
-  dashboard-phone.png \
-  settings-phone.png \
-  visited-phone.png \
-  timetracking-phone.png \
-  about-phone.png
+  dashboard-phone-light.png \
+  dashboard-phone-dark.png \
+  settings-phone-light.png \
+  settings-phone-dark.png \
+  visited-phone-light.png \
+  visited-phone-dark.png \
+  timetracking-phone-light.png \
+  timetracking-phone-dark.png \
+  about-phone-light.png \
+  about-phone-dark.png
 do
   if [[ -n "$screen_filter" ]]; then
-    [[ "$filename" == "${screen_filter}-phone.png" ]] || continue
+    [[ "$filename" == "${screen_filter}-phone-light.png" ]] || [[ "$filename" == "${screen_filter}-phone-dark.png" ]] || continue
   fi
   adb -s "$emulator_serial" pull "$remote_directory/$filename" "$local_directory/$filename" >/dev/null
   [[ -s "$local_directory/$filename" ]] || fail "Expected screenshot export for $filename, but the local file is empty."
