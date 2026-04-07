@@ -81,7 +81,7 @@ Acceptance criteria:
 - Time tracking can start, stop, resume, and persist state correctly
 
 Status:
-- Scaffolded only
+- Visited history slice implemented; metric history and time tracking remain scaffolded
 
 ### Slice 4: Provider-complete parity
 
@@ -220,8 +220,6 @@ Security policy:
 
 The next substantive milestone after the current bootstrap should deliver:
 
-- visited places persistence in Room
-- visited-country-day aggregation logic
 - foreground-service time tracking skeleton
 - dashboard history series persistence
 - at least one live provider-complete card beyond weather and IP
@@ -242,8 +240,7 @@ Definition of done:
 
 ## Immediate Next Steps
 
-1. Implement local visited-place and country-day storage plus feature UI.
-2. Implement time-tracking persistence and foreground-service runtime.
-3. Add release docs for signed internal AAB publishing with a real keystore.
-4. Add manual screenshot capture process for Android parity reviews.
-
+1. Implement time-tracking persistence and foreground-service runtime.
+2. Add release docs for signed internal AAB publishing with a real keystore.
+3. Add manual screenshot capture process for Android parity reviews.
+4. Add map rendering on top of the persisted visited-history slice.

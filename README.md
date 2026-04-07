@@ -29,6 +29,8 @@ The flow is: pair endpoint, pairing code, then connect endpoint.
 ## Documentation
 
 - [Docs index](./docs/README.md)
+- [Agent guidance](./AGENTS.md)
+- [Claude guidance](./CLAUDE.md)
 - [Android port plan](./docs/android-port-plan.md)
 - [Architecture](./docs/architecture.md)
 - [Features](./docs/features.md)

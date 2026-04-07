@@ -47,8 +47,10 @@ Current verified result:
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- `make test` was rerun after adding Compose shell smoke tests
-- the run is currently blocked before connected test execution by unrelated compile errors in [VisitedModels.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/main/java/com/iloapps/nomaddashboard/core/model/VisitedModels.kt), which belongs to the active visited-place / country-day workstream
+- the visited unit-test coverage now compiles and passes during `testDebugUnitTest`
+- with a physical Android device attached, `make test` continues into
+  `connectedDebugAndroidTest`, which is a separate verification lane from the
+  visited unit coverage and was still being rerun in this session
 
 ## APK Location
 
@@ -168,6 +170,16 @@ Perform these checks on the first installed build:
 - settings persist after app relaunch
 - card reordering works
 - card width toggling persists
+- visited device-location toggle only prompts from the visited screen, not from Settings
+
+### Visited history
+
+- visited screen shows disabled state when visited places are off
+- visited screen shows empty state before any capture is stored
+- visited screen shows location-permission CTA when visited device capture is on but permission is missing
+- dashboard refresh records an IP-based place and country day when external IP location resolves
+- granting location permission and refreshing records a device-based visit
+- country-day summaries show yearly totals, monthly totals, and inferred gap days
 
 ### Build and environment
 
@@ -179,6 +191,9 @@ Perform these checks on the first installed build:
 
 Implemented now:
 - settings proto round-trip unit test
+- visited model summary tests
+- visited history store merge and country-day logic tests
+- repository refresh tests for IP capture, device capture, and disabled-state behavior
 - Compose UI smoke tests for:
   - app launch into dashboard
   - top-level navigation across all five shell destinations
@@ -187,13 +202,14 @@ Implemented now:
 
 File:
 - [SettingsProtoMapperTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/datastore/src/test/java/com/iloapps/nomaddashboard/core/datastore/SettingsProtoMapperTest.kt)
+- [VisitedModelsTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/test/java/com/iloapps/nomaddashboard/core/model/VisitedModelsTest.kt)
+- [RoomVisitedHistoryStoreTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/visited/RoomVisitedHistoryStoreTest.kt)
+- [DefaultNomadDashboardRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepositoryTest.kt)
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
 
 Planned next:
-- repository refresh tests
 - storage migration tests
-- visited-country-day logic tests
 - time-tracking ledger tests
 
 Recommended parallel task while visited-data work is in progress:
