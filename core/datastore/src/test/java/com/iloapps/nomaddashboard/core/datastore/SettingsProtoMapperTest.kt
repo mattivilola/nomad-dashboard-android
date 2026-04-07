@@ -28,7 +28,6 @@ class SettingsProtoMapperTest {
             visitedPlacesEnabled = false,
             projectTimeTrackingEnabled = true,
             surfSpot = SurfSpotConfiguration("Tarifa", 36.01, -5.60),
-            tankerkonigApiKey = "demo",
         )
 
         val restored = settings.toProto().toExternalModel()
@@ -44,6 +43,16 @@ class SettingsProtoMapperTest {
         assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
         assertThat(restored.surfSpot.latitude).isEqualTo(36.01)
         assertThat(restored.surfSpot.longitude).isEqualTo(-5.60)
-        assertThat(restored.tankerkonigApiKey).isEqualTo("demo")
+    }
+
+    @Test
+    fun `legacy tankerkoenig key does not round trip through app settings anymore`() {
+        val proto = AppSettingsProto.newBuilder()
+            .setTankerkonigApiKey("legacy-demo")
+            .build()
+
+        val roundTripped = proto.toExternalModel().toProto()
+
+        assertThat(roundTripped.tankerkonigApiKey).isEmpty()
     }
 }

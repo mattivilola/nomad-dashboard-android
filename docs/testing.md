@@ -102,6 +102,8 @@ Latest verification attempt:
   instrumentation APKs do not crash before reporting `0 tests`
 - the app smoke tests now use stable shell navigation tags instead of depending
   on every bottom-bar label remaining visible at emulator width
+- the settings smoke flow now also covers the masked Tankerkonig API key field
+  persisting across activity recreation
 
 ## APK Location
 
@@ -215,6 +217,8 @@ Notes:
 - UI smoke assertions should target stable shell labels and durable route
   content. Placeholder-specific assertions become stale as features move from
   scaffold to implementation.
+- Provider credentials must be verified through the in-app Settings flow, not
+  through local env-file injection into the app build.
 - If a physical device is connected, `make test` becomes slower and more fragile
   on OEM-skinned phones. The default workflow now routes `make test` to the AVD
   so the phone is not part of the normal loop.
@@ -265,8 +269,9 @@ Perform these checks on the first installed build:
 - weather section shows data when IP geolocation returns coordinates
 - when fuel prices are enabled, the fuel card shows the cheapest nearby diesel
   and gasoline rows for Spain, France, Italy, or Germany
-- in Germany without local `NOMAD_TANKERKOENIG_API_KEY`, the fuel card shows a
-  configuration-required message instead of using any shared bundled key
+- in Germany without a Tankerkonig key saved in the app's Settings screen, the
+  fuel card shows a configuration-required message instead of using any shared
+  bundled key
 - without device location and without usable IP location/country, the fuel card
   shows an unavailable state instead of crashing
 
@@ -274,6 +279,7 @@ Perform these checks on the first installed build:
 
 - toggles change state
 - settings persist after app relaunch
+- the masked Tankerkonig key field persists after save and app relaunch
 - card reordering works
 - card width toggling persists
 - visited device-location toggle only prompts from the visited screen, not from Settings

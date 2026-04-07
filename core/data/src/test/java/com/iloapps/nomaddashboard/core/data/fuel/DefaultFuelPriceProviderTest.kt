@@ -69,12 +69,13 @@ class DefaultFuelPriceProviderTest {
         )
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 39.4699,
                 longitude = -0.3763,
                 countryCode = "ES",
                 countryName = "Spain",
             ),
+            credentials = FuelProviderCredentials(),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.READY)
@@ -113,12 +114,13 @@ class DefaultFuelPriceProviderTest {
         )
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 48.8566,
                 longitude = 2.3522,
                 countryCode = "FR",
                 countryName = "France",
             ),
+            credentials = FuelProviderCredentials(),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.READY)
@@ -152,12 +154,13 @@ class DefaultFuelPriceProviderTest {
         )
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 41.9028,
                 longitude = 12.4964,
                 countryCode = "IT",
                 countryName = "Italy",
             ),
+            credentials = FuelProviderCredentials(),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.READY)
@@ -188,12 +191,13 @@ class DefaultFuelPriceProviderTest {
         )
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 45.4642,
                 longitude = 9.1900,
                 countryCode = "IT",
                 countryName = "Italy",
             ),
+            credentials = FuelProviderCredentials(),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.READY)
@@ -203,19 +207,20 @@ class DefaultFuelPriceProviderTest {
 
     @Test
     fun `germany provider reports missing local Tankerkonig config`() = runTest {
-        val provider = provider(localConfig = FuelProviderLocalConfig(tankerkoenigApiKey = ""))
+        val provider = provider()
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 52.52,
                 longitude = 13.405,
                 countryCode = "DE",
                 countryName = "Germany",
             ),
+            credentials = FuelProviderCredentials(),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.CONFIGURATION_REQUIRED)
-        assertThat(snapshot.detail).contains("NOMAD_TANKERKOENIG_API_KEY")
+        assertThat(snapshot.detail).contains("saved in Settings")
     }
 
     @Test
@@ -247,16 +252,16 @@ class DefaultFuelPriceProviderTest {
                         ),
                     )
             },
-            localConfig = FuelProviderLocalConfig(tankerkoenigApiKey = "user-key-123"),
         )
 
         val snapshot = provider.prices(
-            FuelSearchRequest(
+            request = FuelSearchRequest(
                 latitude = 52.52,
                 longitude = 13.405,
                 countryCode = "DE",
                 countryName = "Germany",
             ),
+            credentials = FuelProviderCredentials(tankerkoenigApiKey = "user-key-123"),
         )
 
         assertThat(snapshot.status).isEqualTo(FuelPriceStatus.READY)
@@ -290,7 +295,6 @@ class DefaultFuelPriceProviderTest {
                 apiKey: String,
             ): TankerkoenigListResponse = TankerkoenigListResponse()
         },
-        localConfig: FuelProviderLocalConfig = FuelProviderLocalConfig(tankerkoenigApiKey = ""),
     ): DefaultFuelPriceProvider =
         DefaultFuelPriceProvider(
             json = json,
@@ -298,6 +302,5 @@ class DefaultFuelPriceProviderTest {
             franceFuelPriceService = franceFuelPriceService,
             italyFuelPriceService = italyFuelPriceService,
             tankerkoenigService = tankerkoenigService,
-            localConfig = localConfig,
         )
 }

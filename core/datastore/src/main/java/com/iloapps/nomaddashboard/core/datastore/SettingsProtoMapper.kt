@@ -39,7 +39,6 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
             latitude = surfSpotLatitude.takeIf { hasSurfSpotLatitude },
             longitude = surfSpotLongitude.takeIf { hasSurfSpotLongitude },
         ),
-        tankerkonigApiKey = tankerkonigApiKey,
     )
 }
 
@@ -62,5 +61,4 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setHasSurfSpotLongitude(surfSpot.longitude != null)
         .setSurfSpotLatitude(surfSpot.latitude ?: 0.0)
         .setSurfSpotLongitude(surfSpot.longitude ?: 0.0)
-        .setTankerkonigApiKey(tankerkonigApiKey)
         .build()

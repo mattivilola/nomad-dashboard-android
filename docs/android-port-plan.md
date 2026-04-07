@@ -181,7 +181,7 @@ Current planned storage groups:
 Constraints:
 - local-first only
 - no shared private credentials in tracked files or shipped bundle
-- user-supplied keys stay local
+- user-supplied keys stay local in encrypted device storage after install
 
 ### 5. Provider strategy
 
@@ -214,7 +214,10 @@ Distribution policy:
 
 Security policy:
 - signing keys and Play service-account credentials are local only
-- no secrets in source, resources, manifest placeholders committed to git
+- no secrets in source, resources, `BuildConfig`, or manifest placeholders
+  committed to git or shipped in the app
+- user-supplied provider credentials must be entered in-app and stored only in
+  encrypted device-local storage
 
 ## Acceptance Criteria For The Next Milestone
 

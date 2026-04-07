@@ -83,6 +83,7 @@ Responsibilities:
 - Hilt dependency graph
 - repository implementation
 - Android telemetry readers
+- encrypted provider credential storage backed by Android Keystore
 - orchestration of local and remote data
 
 Key files:
@@ -122,9 +123,13 @@ Current dashboard data flow:
 Settings flow:
 
 1. `SettingsViewModel` reads `AppSettings` from `NomadSettingsDataSource`.
-2. UI toggles emit update lambdas.
-3. Repository persists settings through Proto DataStore.
-4. Repository refreshes dashboard state using the updated settings.
+2. `SettingsViewModel` reads provider credentials from the encrypted
+   `ProviderCredentialStore`.
+3. UI toggles emit update lambdas for general app settings.
+4. Provider credential edits are saved explicitly from the Settings screen into
+   Android Keystore-backed encrypted local storage.
+5. Repository persists general settings through Proto DataStore and refreshes
+   dashboard state using the updated settings plus provider credentials.
 
 Visited history flow:
 
@@ -166,7 +171,7 @@ Fuel prices flow:
    - Spain ministry REST JSON
    - France government records API
    - Italy MIMIT daily CSV datasets
-   - Germany Tankerkonig with local-only key config
+   - Germany Tankerkonig with encrypted in-app key storage
 5. The provider returns the cheapest nearby diesel and gasoline stations, or an
    explicit unsupported/configuration/unavailable state.
 
@@ -183,6 +188,7 @@ Fuel prices flow:
 ### Implemented
 
 - Proto DataStore for app settings
+- Android Keystore-backed encrypted provider credential storage
 - Room-backed visited places with merged source provenance
 - Room-backed visited country days with observed and inferred rows
 - Room-backed time-tracking projects
@@ -202,11 +208,11 @@ Implemented now:
 - Spain fuel prices
 - France fuel prices
 - Italy fuel prices
-- Germany Tankerkonig fuel prices with local-only key config
+- Germany Tankerkonig fuel prices with encrypted in-app key storage
 
 Configured but not yet feature-complete:
 - ReliefWeb app name local config
-- future Maps/Places keys
+- future Maps/Places user-provided credentials
 - future analytics ID
 
 ## Background and Runtime Strategy
@@ -225,10 +231,12 @@ Planned:
 
 - No shared secrets in tracked config
 - Release credentials only in gitignored local env files
-- Android Maps/Places keys must be restricted to package and signing cert
-- user-supplied provider credentials remain local
-- `NOMAD_TANKERKOENIG_API_KEY` is read from local `Config/AppConfig.env` only;
-  the Android app does not ship a shared Germany fuel key
+- User-supplied provider credentials must never be compiled into `BuildConfig`,
+  manifest placeholders, or resources
+- user-supplied provider credentials remain local in Android Keystore-backed
+  encrypted storage and are excluded from Android backup
+- Android Maps/Places keys, if added later, must be user-managed in-app or
+  package/signature-restricted and must not be treated as shared repo secrets
 
 ## Platform Adaptation Notes
 

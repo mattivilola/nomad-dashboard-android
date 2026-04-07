@@ -16,7 +16,8 @@ The Android port uses a local-first release process similar to the macOS repo:
 Create these local files from examples:
 
 - `Config/Signing.env`
-- `Config/AppConfig.env`
+- `Config/AppConfig.env` only if you use local helper scripts such as source
+  probes; it is not used to package shipped app credentials
 
 ## Required Values
 
@@ -30,11 +31,8 @@ From `Config/Signing.env`:
 - `NOMAD_PLAY_SERVICE_ACCOUNT_JSON`
 - `NOMAD_PLAY_TRACK`
 
-From `Config/AppConfig.env` as needed:
+From `Config/AppConfig.env` for optional helper scripts only:
 - `NOMAD_RELIEFWEB_APP_NAME`
-- `NOMAD_MAPS_API_KEY`
-- `NOMAD_PLACES_API_KEY`
-- `NOMAD_TELEMETRYDECK_APP_ID`
 
 ## Commands
 
@@ -88,6 +86,7 @@ Implemented:
 - version source of truth
 - release helper scripts
 - publish helper wiring
+- shipped app provider credentials removed from build-time env injection
 
 Not yet verified with real credentials:
 - signed release artifact generation
@@ -99,5 +98,7 @@ Not yet verified with real credentials:
 - never commit keystores
 - never commit Play service-account JSON
 - never commit shared private provider secrets
-- keep package/signature-restricted client keys in local env only
-
+- never package provider credentials via `BuildConfig`, manifest placeholders,
+  or resources
+- user-supplied provider credentials must be entered in-app after install and
+  stored only in encrypted device-local storage

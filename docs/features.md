@@ -72,7 +72,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | --- | --- | --- |
 | Fuel card | Implemented | Dashboard card now shows ready/configuration/unavailable/no-stations states with the cheapest nearby diesel and gasoline rows |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
-| Germany Tankerkonig support | Implemented | Requires local `NOMAD_TANKERKOENIG_API_KEY` in gitignored `Config/AppConfig.env` |
+| Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
 | Emergency care card shell | Bootstrap | Setting and dashboard text exist |
 | Nearby hospitals via Places | Planned | Android replacement for Apple Maps |
 | In-app map preview | Planned | Depends on Maps integration |
@@ -105,6 +105,6 @@ This document tracks Android parity against the macOS app at the feature level.
 | Gradle wrapper project | Implemented | Android Studio-compatible |
 | Make targets | Implemented | Build/test/lint/run/release helper targets |
 | Wireless ADB helper | Implemented | `make connect-wireless` |
-| Signed AAB/APK script flow | Implemented | Requires local signing env |
+| Signed AAB/APK script flow | Implemented | Requires local signing env only; shipped app credentials are not read from local env files |
 | Google Play internal publish script | Implemented | Requires local Play service account |
 | Release version bump helper | Implemented | `prepare-release.sh` |

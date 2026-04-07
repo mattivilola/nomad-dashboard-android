@@ -1,7 +1,9 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
+import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
@@ -20,6 +22,7 @@ import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
+import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedSummary
@@ -38,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -55,10 +59,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val timeTrackingRepository: TimeTrackingRepository,
     private val visitedHistoryStore: VisitedHistoryStore,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
+    private val providerCredentialStore: ProviderCredentialStore,
     @ApplicationScope
-    applicationScope: CoroutineScope,
+    private val applicationScope: CoroutineScope,
 ) : NomadDashboardRepository {
     override val settings: Flow<AppSettings> = settingsDataSource.settings
+    override val providerCredentials: Flow<ProviderCredentialSettings> = providerCredentialStore.credentials
     override val visitedPlaces: Flow<List<VisitedPlace>> = visitedHistoryStore.visitedPlaces
     override val visitedCountryDays: Flow<List<VisitedCountryDay>> = visitedHistoryStore.visitedCountryDays
 
@@ -68,8 +74,15 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
     private var previousTrafficSample: TrafficSample? = null
 
+    init {
+        applicationScope.launch {
+            migrateLegacyProviderCredentials()
+        }
+    }
+
     override suspend fun refresh() {
         val currentSettings = settings.first()
+        val currentProviderCredentials = providerCredentials.first()
         internalSnapshot.update { it.copy(isRefreshing = true) }
 
         val (connectivity, currentTraffic) = telemetryReader.connectivity(previousTrafficSample)
@@ -160,7 +173,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 currentDevicePlace = currentDevicePlace,
                 travelContext = travelContext,
             )?.let { request ->
-                fuelPriceProvider.prices(request)
+                fuelPriceProvider.prices(
+                    request = request,
+                    credentials = FuelProviderCredentials(
+                        tankerkoenigApiKey = currentProviderCredentials.tankerkoenigApiKey,
+                    ),
+                )
             } ?: FuelPriceSnapshot(
                 status = FuelPriceStatus.UNAVAILABLE,
                 sourceName = "Nomad Fuel Prices",
@@ -243,6 +261,27 @@ class DefaultNomadDashboardRepository @Inject constructor(
         if (current.projectTimeTrackingEnabled && updated.projectTimeTrackingEnabled.not()) {
             timeTrackingRepository.stopTracking()
         }
+    }
+
+    override suspend fun updateProviderCredentials(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings) {
+        providerCredentialStore.update(transform)
+        refresh()
+    }
+
+    private suspend fun migrateLegacyProviderCredentials() {
+        val legacyKey = settingsDataSource.legacyTankerkoenigApiKey().trim()
+        if (legacyKey.isBlank()) {
+            return
+        }
+
+        providerCredentialStore.update { current ->
+            if (current.tankerkoenigApiKey.isBlank()) {
+                current.copy(tankerkoenigApiKey = legacyKey)
+            } else {
+                current
+            }
+        }
+        settingsDataSource.clearLegacyTankerkoenigApiKey()
     }
 
     private fun weatherSummary(daily: OpenMeteoDaily?): String {

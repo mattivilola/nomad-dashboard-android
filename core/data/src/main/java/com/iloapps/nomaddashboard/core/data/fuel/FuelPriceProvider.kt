@@ -11,5 +11,5 @@ data class FuelSearchRequest(
 )
 
 interface FuelPriceProvider {
-    suspend fun prices(request: FuelSearchRequest): FuelPriceSnapshot
+    suspend fun prices(request: FuelSearchRequest, credentials: FuelProviderCredentials): FuelPriceSnapshot
 }

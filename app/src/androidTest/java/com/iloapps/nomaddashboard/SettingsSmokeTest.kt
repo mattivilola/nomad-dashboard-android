@@ -5,9 +5,13 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import org.junit.Rule
 import org.junit.Test
 
@@ -42,11 +46,28 @@ class SettingsSmokeTest {
         }
     }
 
+    @Test
+    fun tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared() {
+        openSettings()
+
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).performTextClearance()
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).performTextInput("test-key-123")
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeySaveButtonTag).performClick()
+
+        composeTestRule.activityRule.scenario.recreate()
+        openSettings()
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).assertTextContains("test-key-123")
+
+        composeTestRule.onNodeWithText("Clear key").performClick()
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).assertTextContains("")
+    }
+
     private fun openSettings() {
         composeTestRule
             .onNodeWithTag("nav-settings")
             .performClick()
         composeTestRule.onNodeWithTag(ExpandWeatherForecastSwitchTag).assertIsDisplayed()
+        composeTestRule.onNodeWithTag(TankerkoenigApiKeyFieldTag).assertIsDisplayed()
     }
 
     private fun toggleExpandWeatherForecast() {
@@ -83,5 +104,7 @@ class SettingsSmokeTest {
 
     private companion object {
         const val ExpandWeatherForecastSwitchTag = "settings_expand_weather_forecast_switch"
+        const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
+        const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"
     }
 }

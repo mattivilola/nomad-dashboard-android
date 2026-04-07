@@ -7,6 +7,9 @@ Repository guidance for coding agents working on Nomad Dashboard Android.
 - Never remove any files without the user's explicit consent.
 - Do not revert user changes you did not make.
 - Keep secrets out of git. Use local `Config/Signing.env` and `Config/AppConfig.env`.
+- Never ship user-supplied API keys, app names, or similar provider credentials through `BuildConfig`, manifest placeholders, resources, or any other build-time injection path.
+- User-managed provider credentials must be entered in-app after install and stored only in device-local encrypted storage backed by Android Keystore.
+- Do not store secrets in Proto DataStore, Room, plain SharedPreferences, logs, screenshots, or Android backup payloads.
 - Keep the project compatible with Android Studio on macOS.
 - Update docs when behavior, scope, architecture, testing flow, or status changes.
 
@@ -110,6 +113,7 @@ If you change app behavior, rerun the relevant checks and update docs.
 - Prefer additive edits over speculative refactors.
 - Preserve module boundaries.
 - Do not introduce hardcoded API keys or signing values.
+- Do not reintroduce build-time env wiring for provider credentials that ship inside the app artifact.
 - Use existing models/contracts before inventing new ones.
 - Keep Android-specific adaptations in `core:data` and `core:network`, not in
   Compose UI code.
@@ -118,6 +122,7 @@ When touching storage:
 - document schema/model changes
 - add or update tests where practical
 - keep migration implications visible in docs
+- keep secret-bearing data in encrypted local storage and excluded from Android backup
 
 When touching UI:
 - preserve the existing Nomad visual identity
@@ -133,6 +138,7 @@ Update these files when relevant:
 - `docs/architecture.md`: module/data-flow/storage changes
 - `docs/testing.md`: workflow/test coverage changes
 - `docs/release.md`: signing/publishing changes
+- `README.md`, `AGENTS.md`, and `CLAUDE.md`: credential-handling policy changes
 
 If you add a parallel-safe handoff task, document it explicitly.
 

@@ -5,12 +5,13 @@ import androidx.datastore.dataStoreFile
 import androidx.room.Room
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
+import com.iloapps.nomaddashboard.core.data.credentials.EncryptedProviderCredentialStore
+import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.fuel.DefaultFuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
-import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderLocalConfig
 import com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingRepository
@@ -47,7 +48,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import javax.inject.Singleton
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -64,14 +64,7 @@ object NomadInfrastructureModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient =
-        OkHttpClient.Builder()
-            .addInterceptor(
-                HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BASIC
-                },
-            )
-            .build()
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
 
     @Provides
     @Singleton
@@ -184,13 +177,6 @@ object NomadInfrastructureModule {
         )
 
     @Provides
-    @Singleton
-    fun provideFuelProviderLocalConfig(): FuelProviderLocalConfig =
-        FuelProviderLocalConfig(
-            tankerkoenigApiKey = com.iloapps.nomaddashboard.core.data.BuildConfig.TANKERKOENIG_API_KEY,
-        )
-
-    @Provides
     @IoDispatcher
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
@@ -234,6 +220,12 @@ abstract class NomadRepositoryModule {
     abstract fun bindFuelPriceProvider(
         impl: DefaultFuelPriceProvider,
     ): FuelPriceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindProviderCredentialStore(
+        impl: EncryptedProviderCredentialStore,
+    ): ProviderCredentialStore
 
     @Binds
     @Singleton

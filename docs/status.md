@@ -20,6 +20,8 @@ Current repository state:
 - time-tracking persistence, screen state, and foreground runtime implemented
 - Compose UI smoke test suite added for the Android shell
 - emulator-first connected-test workflow added
+- encrypted device-local provider credential storage implemented for Germany
+  Tankerkonig support
 
 ## Completed
 
@@ -45,7 +47,8 @@ Current repository state:
 - Spain ministry fuel provider implemented
 - France government fuel provider implemented
 - Italy MIMIT fuel provider implemented
-- Germany Tankerkonig fuel provider implemented with local-only config
+- Germany Tankerkonig fuel provider implemented
+- Germany Tankerkonig key moved to encrypted in-app settings storage
 - visited route implemented
 - visited places persistence implemented
 - country-day aggregation logic implemented

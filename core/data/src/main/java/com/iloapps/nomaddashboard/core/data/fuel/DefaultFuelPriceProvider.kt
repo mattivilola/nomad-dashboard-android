@@ -36,9 +36,11 @@ class DefaultFuelPriceProvider @Inject constructor(
     private val franceFuelPriceService: FranceFuelPriceService,
     private val italyFuelPriceService: ItalyFuelPriceService,
     private val tankerkoenigService: TankerkoenigService,
-    private val localConfig: FuelProviderLocalConfig,
 ) : FuelPriceProvider {
-    override suspend fun prices(request: FuelSearchRequest): FuelPriceSnapshot {
+    override suspend fun prices(
+        request: FuelSearchRequest,
+        credentials: FuelProviderCredentials,
+    ): FuelPriceSnapshot {
         val countryCode = request.countryCode.uppercase(Locale.US)
         return when (countryCode) {
             "ES" -> runSource(request, sourceName = "Spanish Ministry Fuel Prices") {
@@ -54,7 +56,7 @@ class DefaultFuelPriceProvider @Inject constructor(
             ) {
                 italySnapshot(request)
             }
-            "DE" -> germanySnapshot(request)
+            "DE" -> germanySnapshot(request, credentials)
             else -> unsupportedSnapshot(request)
         }
     }
@@ -217,8 +219,11 @@ class DefaultFuelPriceProvider @Inject constructor(
         )
     }
 
-    private suspend fun germanySnapshot(request: FuelSearchRequest): FuelPriceSnapshot {
-        val apiKey = localConfig.tankerkoenigApiKey.normalizedText()
+    private suspend fun germanySnapshot(
+        request: FuelSearchRequest,
+        credentials: FuelProviderCredentials,
+    ): FuelPriceSnapshot {
+        val apiKey = credentials.tankerkoenigApiKey.normalizedText()
         if (apiKey.isNullOrEmpty()) {
             return FuelPriceSnapshot(
                 status = FuelPriceStatus.CONFIGURATION_REQUIRED,
@@ -227,7 +232,7 @@ class DefaultFuelPriceProvider @Inject constructor(
                 countryName = request.countryName,
                 searchRadiusKilometers = request.searchRadiusKilometers,
                 fetchedAt = Instant.now(),
-                detail = "Germany needs NOMAD_TANKERKOENIG_API_KEY in local AppConfig.env.",
+                detail = "Germany needs a Tankerkönig API key saved in Settings.",
                 note = "Germany uses the free Tankerkönig API.",
             )
         }

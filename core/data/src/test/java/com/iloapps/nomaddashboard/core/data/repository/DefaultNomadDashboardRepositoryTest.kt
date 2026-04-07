@@ -1,12 +1,14 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
+import androidx.datastore.core.DataStore
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
+import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
-import androidx.datastore.core.DataStore
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
@@ -24,6 +26,7 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
+import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
@@ -241,6 +244,40 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
+    fun `refresh forwards provider credentials to fuel provider`() = runTest {
+        val settings = AppSettings(
+            fuelPricesEnabled = true,
+            publicIpGeolocationEnabled = false,
+        )
+        val fuelPriceProvider = FakeFuelPriceProvider()
+        val providerCredentialStore = FakeProviderCredentialStore(
+            ProviderCredentialSettings(tankerkoenigApiKey = "user-key-123"),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = fuelPriceProvider,
+            providerCredentialStore = providerCredentialStore,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace(
+                    city = "Berlin",
+                    region = "Berlin",
+                    country = "Germany",
+                    countryCode = "DE",
+                    latitude = 52.52,
+                    longitude = 13.405,
+                ),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        assertThat(fuelPriceProvider.credentials.single().tankerkoenigApiKey).isEqualTo("user-key-123")
+    }
+
+    @Test
     fun `refresh exposes active time tracking summary`() = runTest {
         val activeRecord = TimeTrackingRecord(
             entry = TimeTrackingEntry(
@@ -277,6 +314,7 @@ class DefaultNomadDashboardRepositoryTest {
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
+        providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(),
         visitedHistoryStore: FakeVisitedHistoryStore,
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
@@ -291,6 +329,7 @@ class DefaultNomadDashboardRepositoryTest {
             timeTrackingRepository = timeTrackingRepository,
             visitedHistoryStore = visitedHistoryStore,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
+            providerCredentialStore = providerCredentialStore,
             applicationScope = applicationScope,
         )
 }
@@ -363,10 +402,27 @@ private class FakeFuelPriceProvider(
     ),
 ) : FuelPriceProvider {
     val requests = mutableListOf<FuelSearchRequest>()
+    val credentials = mutableListOf<FuelProviderCredentials>()
 
-    override suspend fun prices(request: FuelSearchRequest): FuelPriceSnapshot {
+    override suspend fun prices(
+        request: FuelSearchRequest,
+        credentials: FuelProviderCredentials,
+    ): FuelPriceSnapshot {
         requests += request
+        this.credentials += credentials
         return snapshot
+    }
+}
+
+private class FakeProviderCredentialStore(
+    initialValue: ProviderCredentialSettings = ProviderCredentialSettings(),
+) : ProviderCredentialStore {
+    private val state = MutableStateFlow(initialValue)
+
+    override val credentials = state
+
+    override suspend fun update(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings) {
+        state.value = transform(state.value)
     }
 }
 

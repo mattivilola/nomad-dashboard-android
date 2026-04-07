@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.fuel
 
 data class FuelProviderLocalConfig(
-    val tankerkoenigApiKey: String,
+    val tankerkoenigApiKey: String = "",
 )
+
+typealias FuelProviderCredentials = FuelProviderLocalConfig

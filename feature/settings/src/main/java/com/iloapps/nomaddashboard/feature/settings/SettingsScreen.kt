@@ -6,19 +6,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,18 +35,25 @@ import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.DashboardCardWidthMode
+import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
-    SettingsScreen(settings = settings, onUpdate = viewModel::update)
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    SettingsScreen(
+        uiState = uiState,
+        onUpdate = viewModel::update,
+        onUpdateProviderCredentials = viewModel::updateProviderCredentials,
+    )
 }
 
 @Composable
 private fun SettingsScreen(
-    settings: AppSettings,
+    uiState: SettingsUiState,
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
+    onUpdateProviderCredentials: ((ProviderCredentialSettings) -> ProviderCredentialSettings) -> Unit,
 ) {
+    val settings = uiState.settings
     LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             NomadCard {
@@ -76,6 +90,17 @@ private fun SettingsScreen(
                     onUpdate { current -> current.copy(projectTimeTrackingEnabled = it) }
                 }
             }
+        }
+
+        item {
+            ProviderCredentialCard(
+                providerCredentials = uiState.providerCredentials,
+                onSaveTankerkoenigApiKey = { apiKey ->
+                    onUpdateProviderCredentials { current ->
+                        current.copy(tankerkoenigApiKey = apiKey)
+                    }
+                },
+            )
         }
 
         item {
@@ -128,6 +153,60 @@ private fun SettingsScreen(
 }
 
 @Composable
+private fun ProviderCredentialCard(
+    providerCredentials: ProviderCredentialSettings,
+    onSaveTankerkoenigApiKey: (String) -> Unit,
+) {
+    var tankerkoenigApiKey by rememberSaveable(providerCredentials.tankerkoenigApiKey) {
+        mutableStateOf(providerCredentials.tankerkoenigApiKey)
+    }
+    val isDirty = tankerkoenigApiKey != providerCredentials.tankerkoenigApiKey
+
+    NomadCard {
+        NomadSectionHeader(
+            title = "Provider Credentials",
+            subtitle = "User-supplied keys stay encrypted on this device only and are excluded from Android backup.",
+        )
+        OutlinedTextField(
+            value = tankerkoenigApiKey,
+            onValueChange = { tankerkoenigApiKey = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TankerkoenigApiKeyFieldTag),
+            label = { Text("Tankerkönig API key") },
+            supportingText = {
+                Text("Required only for Germany fuel lookups. Leave blank to disable the Germany provider.")
+            },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            TextButton(
+                enabled = providerCredentials.tankerkoenigApiKey.isNotBlank() || tankerkoenigApiKey.isNotBlank(),
+                onClick = {
+                    tankerkoenigApiKey = ""
+                    onSaveTankerkoenigApiKey("")
+                },
+            ) {
+                Text("Clear key")
+            }
+            Button(
+                enabled = isDirty,
+                modifier = Modifier.testTag(TankerkoenigApiKeySaveButtonTag),
+                onClick = { onSaveTankerkoenigApiKey(tankerkoenigApiKey) },
+            ) {
+                Text("Save key")
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsToggle(
     title: String,
     checked: Boolean,
@@ -159,3 +238,6 @@ private fun AppSettings.moveCard(card: DashboardCardId, delta: Int): AppSettings
     list.add(target, card)
     return copy(dashboardCardOrder = list)
 }
+
+private const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
+private const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"

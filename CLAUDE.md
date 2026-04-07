@@ -42,6 +42,7 @@ Avoid:
 - broad refactors during feature delivery
 - changing unrelated modules while another workstream is active
 - introducing secrets into tracked files
+- compiling user-supplied provider credentials into the app via `BuildConfig`, manifest placeholders, resources, or any other build-time path
 
 ## Best Practices For This Repo
 
@@ -84,6 +85,9 @@ If your task was created as a handoff, keep the handoff doc accurate too.
 - Never remove files without explicit user approval.
 - Never overwrite or revert user work unless explicitly asked.
 - Do not commit secrets, service account files, or keystore materials.
+- Do not store provider credentials in Proto DataStore, Room, plain SharedPreferences, or logs.
+- User-supplied provider credentials must be entered after install and stored only in Android Keystore-backed encrypted local storage.
+- Do not enable Android backup for secret-bearing app data.
 - Do not claim verification you did not run.
 - If blocked by compile failures from another active workstream, document the
   blocker clearly instead of masking it.

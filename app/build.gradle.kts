@@ -28,12 +28,6 @@ android {
         versionName = versionProperties.getProperty("MARKETING_VERSION")
         testInstrumentationRunner = "com.iloapps.nomaddashboard.NomadDashboardTestRunner"
         vectorDrawables.useSupportLibrary = true
-
-        manifestPlaceholders["nomadMapsApiKey"] = env("NOMAD_MAPS_API_KEY")
-        manifestPlaceholders["nomadPlacesApiKey"] = env("NOMAD_PLACES_API_KEY")
-
-        buildConfigField("String", "RELIEFWEB_APP_NAME", "\"${env("NOMAD_RELIEFWEB_APP_NAME")}\"")
-        buildConfigField("String", "TELEMETRYDECK_APP_ID", "\"${env("NOMAD_TELEMETRYDECK_APP_ID")}\"")
     }
 
     signingConfigs {
@@ -133,6 +127,7 @@ dependencies {
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.monitor)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

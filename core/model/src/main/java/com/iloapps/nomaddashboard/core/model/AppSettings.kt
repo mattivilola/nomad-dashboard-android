@@ -57,5 +57,4 @@ data class AppSettings(
     val visitedPlacesEnabled: Boolean = true,
     val projectTimeTrackingEnabled: Boolean = false,
     val surfSpot: SurfSpotConfiguration = SurfSpotConfiguration(name = "Tarifa", latitude = 36.0132, longitude = -5.6069),
-    val tankerkonigApiKey: String = "",
 )

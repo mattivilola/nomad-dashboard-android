@@ -2,6 +2,7 @@ package com.iloapps.nomaddashboard.core.datastore
 
 import androidx.datastore.core.DataStore
 import com.iloapps.nomaddashboard.core.model.AppSettings
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,5 +16,18 @@ class NomadSettingsDataSource(
             transform(current.toExternalModel()).toProto()
         }
     }
-}
 
+    suspend fun legacyTankerkoenigApiKey(): String = dataStore.data.first().tankerkonigApiKey
+
+    suspend fun clearLegacyTankerkoenigApiKey() {
+        dataStore.updateData { current ->
+            if (current.tankerkonigApiKey.isBlank()) {
+                current
+            } else {
+                current.toBuilder()
+                    .clearTankerkonigApiKey()
+                    .build()
+            }
+        }
+    }
+}
