@@ -55,6 +55,23 @@ The build injects the current build type's key into
 That same restricted key powers both the visited map and emergency-care
 hospital lookup, so Places API (New) must also be enabled on the chosen key.
 
+Debug SHA-1 note:
+- repo helper scripts export `ANDROID_USER_HOME` as
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/.android-home`
+- debug builds created through `make build`, `make run`, and other helper
+  scripts therefore use the repo-local debug keystore, not
+  `~/.android/debug.keystore`
+- use this command when registering the debug package
+  `com.iloapps.nomaddashboard.dev` in Google Cloud:
+
+```sh
+keytool -list -v \
+  -alias androiddebugkey \
+  -keystore /Users/matti/Development/ILOapps/nomad-dashboard-android/.android-home/debug.keystore \
+  -storepass android \
+  -keypass android
+```
+
 ## Commands
 
 Print environment summary:

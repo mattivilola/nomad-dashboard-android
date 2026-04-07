@@ -52,14 +52,12 @@ class EmergencyCareSectionCardTest {
                 enabled = true,
                 snapshot = EmergencyCareSnapshot(
                     status = EmergencyCareStatus.CONFIGURATION_REQUIRED,
-                    detail = "Add a local Android Maps/Places key before emergency-care lookups can run.",
+                    detail = "Emergency care is unavailable in this build right now.",
                 ),
             )
         }
 
         composeRule.onNodeWithText("Configuration").assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "Add a local Android Maps/Places key before emergency-care lookups can run.",
-        ).assertIsDisplayed()
+        composeRule.onNodeWithText("Emergency care is unavailable in this build right now.").assertIsDisplayed()
     }
 }

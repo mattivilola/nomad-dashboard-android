@@ -1,6 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.emergency
 
 import android.content.Context
+import android.content.pm.PackageManager
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.Task
 import com.google.android.libraries.places.api.Places
@@ -69,7 +70,7 @@ class GooglePlacesEmergencyCareProvider @Inject constructor(
                 countryName = request.countryName,
                 locationSource = request.locationSource,
                 fetchedAt = fetchedAt,
-                detail = outcome.message,
+                detail = "Emergency care is unavailable in this build right now.",
             )
 
             is PlacesNearbySearchOutcome.Error -> EmergencyCareSnapshot(
@@ -140,7 +141,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
             val apiKey = localPlacesApiKey()
             if (apiKey.isBlank()) {
                 return@withContext PlacesNearbySearchOutcome.ConfigurationRequired(
-                    "Add a local Android Maps/Places key before emergency-care lookups can run.",
+                    "Emergency care is unavailable in this build right now.",
                 )
             }
 
@@ -154,7 +155,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
                     placesClient = created
                 }
             } ?: return@withContext PlacesNearbySearchOutcome.ConfigurationRequired(
-                "Google Places could not initialize from the local Android app key.",
+                "Emergency care is unavailable in this build right now.",
             )
 
             val fields = listOf(
@@ -190,8 +191,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
             } catch (error: Throwable) {
                 when {
                     error.isLikelyConfigurationIssue() -> PlacesNearbySearchOutcome.ConfigurationRequired(
-                        error.localizedMessage?.takeIf(String::isNotBlank)
-                            ?: "Enable Places API (New) for the local Android Maps key.",
+                        "Emergency care is unavailable in this build right now.",
                     )
 
                     else -> PlacesNearbySearchOutcome.Error(
@@ -203,7 +203,12 @@ class GooglePlacesNearbySearchClient @Inject constructor(
         }
 
     private fun localPlacesApiKey(): String {
-        return context.applicationInfo.metaData?.getString(GOOGLE_MAPS_API_KEY_METADATA)
+        @Suppress("DEPRECATION")
+        val applicationInfo = runCatching {
+            context.packageManager.getApplicationInfo(context.packageName, LEGACY_GET_META_DATA_FLAG)
+        }.getOrNull() ?: return ""
+
+        return applicationInfo.metaData?.getString(GOOGLE_MAPS_API_KEY_METADATA)
             ?.trim()
             .orEmpty()
     }
@@ -238,6 +243,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
         }
 
     private companion object {
+        const val LEGACY_GET_META_DATA_FLAG = 128
         const val GOOGLE_MAPS_API_KEY_METADATA = "com.google.android.geo.API_KEY"
         const val HOSPITAL_PRIMARY_TYPE = "hospital"
     }

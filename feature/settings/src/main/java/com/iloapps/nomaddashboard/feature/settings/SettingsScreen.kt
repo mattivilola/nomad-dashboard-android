@@ -257,7 +257,7 @@ private fun ProviderCredentialCard(
         }
 
         Text(
-            text = "Emergency care and the visited map use the app-level Android Maps/Places key from local.properties, Gradle properties, or environment variables. That key is not stored in-app here.",
+            text = "Emergency care and the visited map use app-level map services and are not configured in this screen.",
             modifier = Modifier.padding(top = 16.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),

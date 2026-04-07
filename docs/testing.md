@@ -346,6 +346,23 @@ Notes:
 3. Select your emulator or phone.
 4. Press Run.
 
+Debug-signing note:
+- repo helper scripts set `ANDROID_USER_HOME` to the repo-local
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/.android-home`
+- debug builds launched through `make` therefore use
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/.android-home/debug.keystore`,
+  not `~/.android/debug.keystore`
+- if Google Maps shows a blank grid with logo/zoom controls on a debug build,
+  verify the Android-app-restricted key against the repo-local debug SHA-1:
+
+```sh
+keytool -list -v \
+  -alias androiddebugkey \
+  -keystore /Users/matti/Development/ILOapps/nomad-dashboard-android/.android-home/debug.keystore \
+  -storepass android \
+  -keypass android
+```
+
 ## Emulator Workflow
 
 Preferred default for unattended connected tests:

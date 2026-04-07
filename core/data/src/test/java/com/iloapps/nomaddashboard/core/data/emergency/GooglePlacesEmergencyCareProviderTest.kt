@@ -70,7 +70,7 @@ class GooglePlacesEmergencyCareProviderTest {
         )
 
         assertThat(snapshot.status).isEqualTo(EmergencyCareStatus.CONFIGURATION_REQUIRED)
-        assertThat(snapshot.detail).contains("Maps/Places key")
+        assertThat(snapshot.detail).isEqualTo("Emergency care is unavailable in this build right now.")
     }
 
     @Test
