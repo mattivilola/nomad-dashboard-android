@@ -145,6 +145,8 @@ class DefaultNomadDashboardRepositoryTest {
             fuelPriceProvider = FakeFuelPriceProvider(),
             visitedHistoryStore = visitedStore,
             visitedDeviceLocationProvider = object : VisitedDeviceLocationProvider {
+                override fun hasLocationPermission(): Boolean = false
+
                 override suspend fun currentPlace(): ResolvedVisitedPlace? = error("should not be called")
             },
             applicationScope = backgroundScope,

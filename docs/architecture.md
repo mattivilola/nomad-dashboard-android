@@ -85,6 +85,8 @@ Responsibilities:
 - repository implementation
 - Android telemetry readers
 - encrypted provider credential storage backed by Android Keystore
+- Google Places-backed emergency-care lookup using the app-level Android
+  Maps/Places key from manifest metadata
 - travel-alert provider orchestration and country-coverage resolution
 - orchestration of local and remote data
 
@@ -202,6 +204,22 @@ Travel alerts flow:
    - `stale` when the latest refresh failed but a prior signal exists
    - `unavailable` when no prior signal exists or required context/config is missing
 
+Emergency care flow:
+
+1. `DashboardViewModel` triggers repository refresh.
+2. `DefaultNomadDashboardRepository` resolves emergency-care search context in
+   this order:
+   - current device place when Android location permission is already granted
+   - current public-IP geolocation fallback
+3. The repository publishes a synchronized `loading` emergency-care snapshot,
+   then asks `GooglePlacesEmergencyCareProvider` for the nearest nearby
+   hospital.
+4. The provider uses Places Nearby Search (New) with a fixed `10 km` radius,
+   filtered to the `hospital` primary type.
+5. The dashboard maps provider output into `ready`,
+   `configuration-required`, `permission-required`, `unavailable`, or `error`
+   states and exposes an open-in-maps handoff only when a hospital is resolved.
+
 ## State Management Rules
 
 - ViewModels own screen-level state exposure.
@@ -232,6 +250,7 @@ Travel alerts flow:
 Implemented now:
 - FreeIPAPI
 - Open-Meteo
+- Google Places Nearby Search (New) for emergency care
 - Smartraveller travel advisories
 - ReliefWeb regional security reports
 - Spain fuel prices
@@ -241,7 +260,6 @@ Implemented now:
 
 Configured but not yet feature-complete:
 - package/signature-restricted Google Maps key for the visited map
-- future Places user-provided credentials
 - future analytics ID
 
 ## Background and Runtime Strategy
@@ -268,6 +286,9 @@ Planned:
   the SDK expects an app-level key before map init; this repo reads a local key
   from `local.properties`, Gradle properties, or environment variables and
   injects it only into the app manifest metadata for the current build
+- the same app-level key also backs emergency-care Places lookups, so emergency
+  care requires Places API (New) to be enabled on the local restricted key and
+  does not use an in-app credential field
 
 ## Platform Adaptation Notes
 

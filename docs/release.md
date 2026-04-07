@@ -52,6 +52,8 @@ nomad.mapsApiKey.release=YOUR_RELEASE_ANDROID_MAPS_KEY
 
 The build injects the current build type's key into
 `com.google.android.geo.API_KEY` in the Android manifest.
+That same restricted key powers both the visited map and emergency-care
+hospital lookup, so Places API (New) must also be enabled on the chosen key.
 
 ## Commands
 
@@ -137,8 +139,12 @@ Not yet verified with real credentials:
 - Google Maps SDK for Android requires an app-level key before the map can
   initialize, so it cannot use the same in-app settings flow as private
   provider credentials
+- emergency-care Places lookups use the same manifest-provided app key and do
+  not store any Google credential in the Settings screen or encrypted provider
+  store
 - use a dedicated Android-app-restricted key for debug and another for release,
-  each locked to the matching package name and SHA-1 signing certificate
+  each locked to the matching package name and SHA-1 signing certificate, with
+  both Maps SDK for Android and Places API (New) enabled as needed
 - user-supplied provider credentials, including the ReliefWeb app name, must be
   entered in-app after install and stored only in encrypted device-local
   storage

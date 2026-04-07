@@ -152,18 +152,24 @@ Current verified result:
   `run_gradle -Pksp.incremental=false`
 - `:core:data:testDebugUnitTest` passed on 2026-04-07 with the travel-alert
   provider, resolver, and repository coverage
+- `:core:data:testDebugUnitTest` passed again on 2026-04-07 after the
+  emergency-care provider and repository coverage landed
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-07 for the
   travel-alert card after switching the test to an activity-backed Compose rule
+- `:feature:dashboard:connectedDebugAndroidTest` passed again on 2026-04-07
+  after adding the emergency-care card test
 - `run_gradle -Pksp.incremental=false lintDebug` passed on 2026-04-07 after the
   travel-alert slice
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- on 2026-04-07, repo-level `make build` and `make lint` were restored by
-  disabling KSP incremental output reuse in `gradle.properties`; the root cause
-  was KSP `2.0.21-1.0.27` producing `NoSuchFileException` failures while
-  copying generated output trees such as `build/generated/ksp/debug/java`
-  across Hilt-backed modules
+- on 2026-04-07, `make build` still failed in generated KSP output, now as
+  `FileAlreadyExistsException` under `feature:visited:kspDebugKotlin`,
+  `feature:dashboard:kspDebugKotlin`, and the app module; the emergency-care
+  slice compiled before those generated-artifact failures
+- on 2026-04-07, `make lint` got past the new `core:data` emergency-care issues
+  and then failed in the same app-module KSP generated-file problem under
+  `:app:kspDebugKotlin`
 - on 2026-04-07, `make screenshots` was rerun after that fix and no longer hit
   the KSP/generated-source failure, but it still failed before test execution
   because the local `Pixel_5_API_31` emulator exited with Crashpad permission
@@ -171,16 +177,16 @@ Latest verification attempt:
 - on 2026-04-07, the emulator helper was hardened to print the recent emulator
   log and fail immediately when the emulator process exits before `adb`
   registration or boot completion
-- on 2026-04-07, `make test` got past the prior KSP blocker and reached the
-  normal emulator lane, but then failed in unrelated `core:data`
-  emergency-care / Places code:
-  `NomadDataModule.kt` exposed internal types publicly and
-  `GooglePlacesEmergencyCareProvider.kt` referenced unresolved Places fields
-  such as `ADDRESS` and `LAT_LNG`
-- the same `make test` run also reported follow-on Gradle cache-pack failures in
-  `:core:designsystem:mergeExtDexDebugAndroidTest` and
-  `:feature:about:mergeExtDexDebugAndroidTest` after the upstream
-  `:core:data:compileDebugKotlin` failure
+- on 2026-04-07, `make test` passed the new `:core:data:testDebugUnitTest`
+  emergency-care coverage and the new
+  `:feature:dashboard:connectedDebugAndroidTest` emergency-care card test, then
+  failed in existing `app:connectedDebugAndroidTest` settings smoke tests:
+  `expand_weather_forecast_toggle_persists_across_recreate_and_is_restored`,
+  `reliefweb_app_name_persists_across_recreate_and_can_be_cleared`, and
+  `tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared`
+- the same `make test` run again reported the recurring `ActivityInvoker`
+  instrumentation crash from the app test APK, which is separate from the new
+  emergency-care slice
 - on 2026-04-07, the new screenshot lane was wired behind
   `make screenshots` with a debug-only fixture activity, UIAutomator capture,
   and exports to `output/screenshots/android/phone`
@@ -382,6 +388,16 @@ Perform these checks on the first installed build:
   bundled key
 - without device location and without usable IP location/country, the fuel card
   shows an unavailable state instead of crashing
+- when emergency care is enabled and a local Android Maps/Places key is
+  configured with Places API (New), the emergency-care card shows the nearest
+  hospital from device-location-first, IP-fallback search
+- without a local Android Maps/Places key with Places API (New) enabled, the
+  emergency-care card shows a configuration-required state instead of crashing
+- with emergency care enabled but without a resolved device or IP location, the
+  emergency-care card shows permission-required or unavailable guidance instead
+  of crashing
+- when a hospital is resolved, the emergency-care card exposes an `Open in Maps`
+  action for the selected facility
 
 ### Settings
 
@@ -429,6 +445,9 @@ Implemented now:
 - repository refresh tests for IP capture, device capture, and disabled-state behavior
 - fuel provider tests for Spain, France, Italy, and Germany config handling
 - repository fuel refresh tests for device-first lookup, IP fallback, and unavailable-state wiring
+- emergency-care provider tests for ready/configuration/unavailable mapping
+- repository emergency-care refresh tests for device-first lookup, IP fallback,
+  and permission-required wiring
 - time-tracking repository tests for project creation, start/stop behavior, single-active-session enforcement, and persisted active-session recovery
 - dashboard repository tests for disabled, idle, and active time-tracking summaries
 - foreground-service runtime tests for notification formatting and stop-command handling
@@ -448,11 +467,13 @@ File:
 - [VisitedScreenTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/visited/src/androidTest/java/com/iloapps/nomaddashboard/feature/visited/VisitedScreenTest.kt)
 - [RoomVisitedHistoryStoreTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/visited/RoomVisitedHistoryStoreTest.kt)
 - [DefaultFuelPriceProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/fuel/DefaultFuelPriceProviderTest.kt)
+- [GooglePlacesEmergencyCareProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/emergency/GooglePlacesEmergencyCareProviderTest.kt)
 - [RoomTimeTrackingRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/timetracking/RoomTimeTrackingRepositoryTest.kt)
 - [DefaultNomadDashboardRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepositoryTest.kt)
 - [TimeTrackingForegroundServiceRuntimeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/test/java/com/iloapps/nomaddashboard/feature/timetracking/runtime/TimeTrackingForegroundServiceRuntimeTest.kt)
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
+- [EmergencyCareSectionCardTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/dashboard/src/androidTest/java/com/iloapps/nomaddashboard/feature/dashboard/EmergencyCareSectionCardTest.kt)
 
 Planned next:
 - storage migration tests

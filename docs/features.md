@@ -74,8 +74,8 @@ This document tracks Android parity against the macOS app at the feature level.
 | Fuel card | Implemented | Dashboard card now highlights the cheapest nearby diesel and gasoline stations in a more scan-friendly row layout while keeping the same ready/configuration/unavailable/no-stations states |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
 | Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
-| Emergency care card shell | Bootstrap | Setting and dashboard text exist |
-| Nearby hospitals via Places | Planned | Android replacement for Apple Maps |
+| Emergency care card | Implemented | Dashboard card now renders loading, ready, permission-required, configuration-required, unavailable, and error states with a direct Maps handoff when a nearby hospital is resolved |
+| Nearby hospitals via Places | Implemented | Uses Google Places Nearby Search (New) with device-location first and public-IP geolocation fallback |
 | In-app map preview | Planned | Depends on Maps integration |
 
 ## Visited Places And Travel History

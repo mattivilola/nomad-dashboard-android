@@ -30,6 +30,9 @@ Current repository state:
   credentials and the Settings screen
 - dashboard travel-alert card now renders aggregate, advisory, and regional
   security states from live provider-backed repository data
+- emergency-care provider integration implemented with Google Places Nearby
+  Search (New), device-location-first and public-IP fallback lookup, dashboard
+  card state wiring, and open-in-maps handoff for resolved hospitals
 - Android-versus-macOS screenshot review completed; the highest-value next
   parity work is dashboard and visited UX refinement rather than new visual
   theming alone
@@ -64,11 +67,15 @@ Current repository state:
 - settings route implemented
 - about route implemented
 - dashboard fuel card implemented with device-first / IP-fallback lookup
+- dashboard emergency-care card implemented with loading, ready,
+  permission-required, configuration-required, unavailable, and error states
 - Spain ministry fuel provider implemented
 - France government fuel provider implemented
 - Italy MIMIT fuel provider implemented
 - Germany Tankerkonig fuel provider implemented
 - Germany Tankerkonig key moved to encrypted in-app settings storage
+- Google Places Nearby Search (New) emergency-care provider implemented with
+  local manifest-key configuration checks and hospital-only lookup
 - visited route implemented
 - visited places persistence implemented
 - visited map rendering implemented
@@ -104,7 +111,6 @@ Current repository state:
 - dashboard action parity for fuel/open-map flows and other compact in-card
   actions
 - power/connectivity history visuals and mini-chart parity
-- emergency care / Places integration
 - time-tracking reporting/export parity
 - analytics/privacy parity implementation
 
@@ -125,6 +131,10 @@ Verified:
   `:core:data:testDebugUnitTest`
 - dashboard travel-alert card Android test added and passing via
   `:feature:dashboard:connectedDebugAndroidTest`
+- emergency-care provider/repository coverage now passes inside
+  `:core:data:testDebugUnitTest`
+- dashboard emergency-care card Android test added and passing via
+  `:feature:dashboard:connectedDebugAndroidTest`
 - time-tracking repository/storage/runtime coverage added and passing
 - `make build` passed again on 2026-04-07 after the encrypted credential
   storage and settings hardening slice
@@ -144,13 +154,22 @@ Verified:
   worktree for first-release, later-release, dirty-worktree, and tag-collision
   scenarios
 
-Not yet fully re-verified after the visited map slice in this session:
-- `make test` now gets past the KSP/generated-source failure, but still fails
-  in unrelated `core:data` emergency-care / Places code under
-  `NomadDataModule.kt` and `GooglePlacesEmergencyCareProvider.kt`; the same run
-  also reported follow-on Gradle cache-pack failures in
-  `:core:designsystem:mergeExtDexDebugAndroidTest` and
-  `:feature:about:mergeExtDexDebugAndroidTest`
+Not yet fully re-verified after the emergency-care slice in this session:
+- `make build` currently still fails in generated KSP output, now as
+  `FileAlreadyExistsException` under `feature:visited:kspDebugKotlin`,
+  `feature:dashboard:kspDebugKotlin`, and the app module; the emergency-care
+  slice compiled before those existing generated-source failures
+- `make lint` currently still fails in `:app:kspDebugKotlin` with a generated
+  `FileAlreadyExistsException` under
+  `app/build/generated/ksp/debug/java`; the emergency-care slice's
+  `core:data:lintDebug` issues were fixed before the run hit the existing app
+  KSP blocker
+- `make test` now gets through the emergency-care unit and dashboard-card
+  coverage, but still fails in existing `app:connectedDebugAndroidTest`
+  settings smoke tests (`expand_weather_forecast_toggle_persists_across_recreate_and_is_restored`,
+  `reliefweb_app_name_persists_across_recreate_and_can_be_cleared`, and
+  `tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared`) plus the
+  recurring `ActivityInvoker` instrumentation crash
 - `make screenshots` is no longer blocked by KSP, but it still cannot complete
   reliably when the local `Pixel_5_API_31` emulator exits before `adb` exposes
   a serial; the hardened helper now prints the failing emulator log instead of
@@ -180,9 +199,8 @@ Not yet fully re-verified after the visited map slice in this session:
    `make screenshots` parity pass.
 5. Add the missing action-level parity that is already feasible without new
    providers, especially map/open actions and richer weather presentation.
-6. Treat emergency care / Places integration, time-tracking reporting/export,
-   and power/connectivity history visuals as follow-up slices after the UX
-   foundation is improved.
+6. Treat time-tracking reporting/export and power/connectivity history visuals
+   as follow-up slices after the UX foundation is improved.
 
 ## Parallel-Safe Workstreams
 
