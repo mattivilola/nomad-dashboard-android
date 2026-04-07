@@ -233,6 +233,7 @@ object ScreenshotReviewFixtures {
             settings = fixtureSettings,
             providerCredentials = ProviderCredentialSettings(
                 tankerkoenigApiKey = "tankerkoenig-demo-key-1234",
+                reliefWebAppName = "nomad-dashboard-android",
             ),
         )
 
@@ -309,9 +310,17 @@ object ScreenshotReviewFixtures {
                     project = nomadResearchProject,
                 ),
             ),
-            activeEntry = null,
+            activeEntry = TimeTrackingRecord(
+                entry = TimeTrackingEntry(
+                    id = UUID.fromString("55555555-5555-5555-5555-555555555555"),
+                    projectId = clientWorkProject.id,
+                    startAt = Instant.parse("2026-04-07T07:45:00Z"),
+                    endAt = null,
+                ),
+                project = clientWorkProject,
+            ),
             selectedProjectId = clientWorkProject.id,
             draftProjectName = "",
-            message = "Ready for the next local tracking session.",
+            message = "Foreground tracking resumed after the last app launch.",
         )
 }

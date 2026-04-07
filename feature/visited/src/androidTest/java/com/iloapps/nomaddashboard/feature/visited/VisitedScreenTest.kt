@@ -59,6 +59,7 @@ class VisitedScreenTest {
             }
         }
 
+        composeTestRule.onNodeWithTag("visited_overview_card").assertIsDisplayed()
         composeTestRule.onNodeWithTag("visited_list").performScrollToNode(hasText("World Footprint"))
 
         composeTestRule.onNodeWithTag("visited_world_footprint").assertIsDisplayed()
