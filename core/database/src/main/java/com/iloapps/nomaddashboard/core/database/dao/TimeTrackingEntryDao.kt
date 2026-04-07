@@ -1,0 +1,18 @@
+package com.iloapps.nomaddashboard.core.database.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface TimeTrackingEntryDao {
+    @Query("SELECT * FROM time_tracking_entries ORDER BY startAtEpochMillis DESC")
+    fun observeAll(): Flow<List<TimeTrackingEntryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: TimeTrackingEntryEntity)
+}
+

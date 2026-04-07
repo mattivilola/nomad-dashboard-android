@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option java_package = "com.iloapps.nomaddashboard.core.datastore";
+option java_multiple_files = true;
+
+message AppSettingsProto {
+  string appearance_mode = 1;
+  repeated string dashboard_card_order = 2;
+  map<string, string> dashboard_card_width_modes = 3;
+  bool public_ip_geolocation_enabled = 4;
+  bool share_anonymous_analytics = 5;
+  bool use_current_location_for_weather = 6;
+  bool weather_forecast_expanded = 7;
+  bool fuel_prices_enabled = 8;
+  bool emergency_care_enabled = 9;
+  bool visited_places_enabled = 10;
+  bool project_time_tracking_enabled = 11;
+  string surf_spot_name = 12;
+  double surf_spot_latitude = 13;
+  double surf_spot_longitude = 14;
+  bool has_surf_spot_latitude = 15;
+  bool has_surf_spot_longitude = 16;
+  string tankerkonig_api_key = 17;
+}
+

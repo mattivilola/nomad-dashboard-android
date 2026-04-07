@@ -1,0 +1,16 @@
+.DS_Store
+.gradle/
+.gradle-home/
+.idea/
+.kotlin/
+build/
+captures/
+local.properties
+*.iml
+Config/Signing.env
+Config/AppConfig.env
+Config/*.keystore
+Config/*.jks
+artifacts/
+output/
+**/build/

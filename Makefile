@@ -1,0 +1,61 @@
+APP_NAME := NomadDashboard
+.DEFAULT_GOAL := help
+
+.PHONY: help bootstrap doctor build run rerun test lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
+
+help: ## Print available make targets
+	@printf "\nAvailable commands:\n\n"
+	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9._-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@printf "\n"
+
+bootstrap: ## Verify and prepare local Android development tooling
+	./scripts/bootstrap.sh
+
+doctor: ## Print the resolved Java/SDK/Gradle environment
+	./scripts/doctor.sh
+
+build: ## Build the debug app
+	./scripts/build-dev.sh
+
+run: ## Install and launch the debug app on a connected device or emulator
+	./scripts/run-dev.sh
+
+rerun: ## Reinstall and relaunch the debug app
+	./scripts/rerun-dev.sh
+
+test: ## Run unit tests and connected tests when available
+	./scripts/test.sh
+
+lint: ## Run Kotlin and Android lint checks
+	./scripts/lint.sh
+
+probe-sources: ## Probe external data sources used by the app
+	./scripts/probe-external-sources.sh
+
+bundle-release: ## Build the signed release Android App Bundle
+	./scripts/bundle-release.sh
+
+apk-release: ## Build the signed release APK
+	./scripts/apk-release.sh
+
+release-dry-run: ## Print resolved release configuration without publishing
+	./scripts/release-preflight.sh --dry-run
+
+publish-internal: ## Upload the release bundle to Google Play internal testing
+	./scripts/publish-internal.sh
+
+release: ## Run preflight, build a signed bundle, and publish to internal testing
+	./scripts/release.sh
+
+release-patch: ## Prepare and tag a patch release
+	./scripts/prepare-release.sh --push patch
+
+release-minor: ## Prepare and tag a minor release
+	./scripts/prepare-release.sh --push minor
+
+release-major: ## Prepare and tag a major release
+	./scripts/prepare-release.sh --push major
+
+clean: ## Remove local build artifacts
+	rm -rf .gradle build artifacts output
+
