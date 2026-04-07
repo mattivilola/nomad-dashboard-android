@@ -49,8 +49,13 @@ Current verified result:
 Latest verification attempt:
 - the visited unit-test coverage now compiles and passes during `testDebugUnitTest`
 - with a physical Android device attached, `make test` continues into
-  `connectedDebugAndroidTest`, which is a separate verification lane from the
-  visited unit coverage and was still being rerun in this session
+  `connectedDebugAndroidTest`
+- Hilt-backed Android library modules needed both
+  `testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"` and
+  `androidTestImplementation(libs.androidx.test.runner)` so empty
+  instrumentation APKs do not crash before reporting `0 tests`
+- the app smoke test needed to be updated after replacing the visited
+  placeholder screen with the implemented visited-history UI
 
 ## APK Location
 
@@ -137,6 +142,29 @@ Notes:
 - On some Xiaomi devices, the install confirmation appears as a system prompt or
   notification rather than a full-screen dialog.
 - Wireless debugging still requires the device to allow ADB-driven installs.
+- If repeated install confirmations remain on Xiaomi / Poco / HyperOS devices,
+  prefer Android Studio device mirroring so the prompt can at least be handled
+  from the desktop, or switch routine instrumentation loops to an emulator.
+
+## Lessons Learned
+
+- Physical-device `make test` is only hands-off on devices that allow silent ADB
+  reinstall of both the app APK and the instrumentation APK. Xiaomi / Poco /
+  HyperOS devices may keep prompting for install approval even when debugging is
+  already trusted.
+- Android Studio device mirroring helps with manual approval loops, but it does
+  not remove OEM install restrictions. For unattended local iteration, an
+  emulator is the safer default.
+- Hilt-based Android library modules must package the AndroidX test runner in
+  `androidTestImplementation`, even when they have zero Android tests, because
+  `connectedDebugAndroidTest` still launches an instrumentation APK for those
+  modules.
+- UI smoke assertions should target stable shell labels and durable route
+  content. Placeholder-specific assertions become stale as features move from
+  scaffold to implementation.
+- If a physical device is connected, `make test` becomes slower and more fragile
+  because it enters the connected-test lane automatically. Use no attached
+  device or an emulator when the goal is quick unit-test feedback only.
 
 ## Run From Android Studio
 
@@ -211,6 +239,3 @@ File:
 Planned next:
 - storage migration tests
 - time-tracking ledger tests
-
-Recommended parallel task while visited-data work is in progress:
-- rerun [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md) verification once the active visited-data compile blocker is resolved

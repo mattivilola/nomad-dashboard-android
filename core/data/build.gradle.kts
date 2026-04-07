@@ -50,4 +50,6 @@ dependencies {
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.truth)
+
+    androidTestImplementation(libs.androidx.test.runner)
 }
