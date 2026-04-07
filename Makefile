@@ -1,7 +1,7 @@
 APP_NAME := NomadDashboard
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap doctor build run rerun test lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
+.PHONY: help bootstrap doctor connect-wireless build run rerun test lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
 
 help: ## Print available make targets
 	@printf "\nAvailable commands:\n\n"
@@ -13,6 +13,9 @@ bootstrap: ## Verify and prepare local Android development tooling
 
 doctor: ## Print the resolved Java/SDK/Gradle environment
 	./scripts/doctor.sh
+
+connect-wireless: ## Pair and connect an Android device over Wi-Fi
+	./scripts/connect-wireless-device.sh
 
 build: ## Build the debug app
 	./scripts/build-dev.sh
@@ -58,4 +61,3 @@ release-major: ## Prepare and tag a major release
 
 clean: ## Remove local build artifacts
 	rm -rf .gradle build artifacts output
-

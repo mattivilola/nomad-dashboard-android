@@ -15,9 +15,22 @@ Native Android port scaffold for Nomad Dashboard.
 
 ```sh
 make bootstrap
+make connect-wireless
 make build
 make test
 make lint
 ```
 
 Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env` and `Config/AppConfig.env`.
+
+`make connect-wireless` will prompt for the pairing endpoint and the connect endpoint shown under Android's Wireless debugging screen.
+
+## Documentation
+
+- [Docs index](./docs/README.md)
+- [Android port plan](./docs/android-port-plan.md)
+- [Architecture](./docs/architecture.md)
+- [Features](./docs/features.md)
+- [Status](./docs/status.md)
+- [Testing](./docs/testing.md)
+- [Release](./docs/release.md)
