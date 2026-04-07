@@ -84,6 +84,7 @@ make connect-wireless
 
 The helper will prompt for:
 - `PHONE_IP:PAIR_PORT`
+- pairing code
 - `PHONE_IP:CONNECT_PORT`
 
 Then install and launch:
