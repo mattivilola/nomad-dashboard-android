@@ -62,14 +62,14 @@ publish-internal: ## Upload the release bundle to Google Play internal testing
 release: ## Run preflight, build a signed bundle, and publish to internal testing
 	./scripts/release.sh
 
-release-patch: ## Prepare and tag a patch release
-	./scripts/prepare-release.sh --push patch
+release-patch: ## Prepare a local patch release commit, tag, changelog, and Play notes
+	./scripts/prepare-release.sh patch
 
-release-minor: ## Prepare and tag a minor release
-	./scripts/prepare-release.sh --push minor
+release-minor: ## Prepare a local minor release commit, tag, changelog, and Play notes
+	./scripts/prepare-release.sh minor
 
-release-major: ## Prepare and tag a major release
-	./scripts/prepare-release.sh --push major
+release-major: ## Prepare a local major release commit, tag, changelog, and Play notes
+	./scripts/prepare-release.sh major
 
 clean: ## Remove local build artifacts
 	rm -rf .gradle build artifacts output

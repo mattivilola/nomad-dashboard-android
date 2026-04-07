@@ -108,4 +108,4 @@ This document tracks Android parity against the macOS app at the feature level.
 | Emulator screenshot review workflow | Implemented | `make screenshots` renders deterministic fixture screens and exports PNGs to `output/screenshots/android/phone` |
 | Signed AAB/APK script flow | Implemented | Requires local signing env only; shipped app credentials are not read from local env files |
 | Google Play internal publish script | Implemented | Requires local Play service account |
-| Release version bump helper | Implemented | `prepare-release.sh` |
+| Release version bump helper | Implemented | `prepare-release.sh` now bumps tracked version metadata, prepends `CHANGELOG.md`, writes Play release notes, and creates a local release commit plus tag without auto-pushing |

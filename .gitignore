@@ -15,3 +15,5 @@ Config/*.jks
 artifacts/
 output/
 **/build/
+
+app/src/main/play/release-notes/

@@ -11,6 +11,8 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 MARKETING_VERSION=$(marketing_version)
 VERSION_CODE=$(version_code)
 RELEASE_TAG=$(release_tag)
+CHANGELOG_FILE=$(changelog_file)
+PLAY_RELEASE_NOTES_FILE=$(play_release_notes_file)
 BUNDLE_PATH=$(release_bundle_path)
 APK_PATH=$(release_apk_path)
 PLAY_TRACK=${NOMAD_PLAY_TRACK:-internal}
@@ -24,4 +26,3 @@ assert_clean_worktree
 assert_signing_env
 assert_play_env
 run_gradle :app:validateSigningRelease
-

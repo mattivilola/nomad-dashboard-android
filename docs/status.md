@@ -69,6 +69,7 @@ Current repository state:
   `make screenshots` exports to `output/screenshots/android/phone`
 - physical-device-first `make run` device selection added with `ANDROID_SERIAL` override support
 - release/signing/publish helper scripts scaffolded
+- tracked changelog and Google Play release-notes generation added to the local release bump flow
 - README and docs set added
 
 ## In Progress
@@ -107,6 +108,9 @@ Verified:
   storage and settings hardening slice
 - `run_gradle -Pksp.incremental=false lintDebug` passed on 2026-04-07 after
   the travel-alert slice
+- release changelog/play-notes generator verified on 2026-04-07 in an isolated
+  worktree for first-release, later-release, dirty-worktree, and tag-collision
+  scenarios
 
 Not yet fully re-verified after the visited map slice in this session:
 - `make build` currently fails in `:app:kspDebugKotlin` because generated app
