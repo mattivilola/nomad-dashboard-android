@@ -25,7 +25,7 @@ Android-native APIs, Android lifecycle rules, and Google Play distribution.
 
 ## Scope Model
 
-The Android port is divided into four practical slices so the app stays usable
+The Android port is divided into five practical slices so the app stays usable
 early and parity can be closed incrementally without destabilizing the codebase.
 
 ### Slice 1: Foundation and runnable app shell
@@ -65,15 +65,40 @@ Acceptance criteria:
 Status:
 - Implemented as initial live bootstrap
 
+### Slice 2B: UX parity and interaction density
+
+Deliverables:
+- dashboard header that behaves like a compact travel instrument panel instead
+  of a generic screen title plus route chips
+- real quick actions in the top area for refresh and high-value flows instead
+  of low-value navigation pills
+- metric-led dashboard cards with stronger hierarchy, source badges, and
+  compact secondary actions
+- weather presentation that prioritizes current conditions, forecast drill-down,
+  and surf context in the same section
+- visited screen reworked around a map-first layout with compact stats and
+  subdued capture guidance
+- about/settings polish so those screens feel productized rather than scaffolded
+
+Acceptance criteria:
+- the compact phone dashboard is faster to scan and requires less vertical
+  reading to answer the core questions: "am I connected?", "what is the
+  weather?", and "what matters right now?"
+- the visited screen exposes the world footprint before any explanatory copy
+- Android screenshot reviews show closer parity with the macOS product's
+  information hierarchy and action density while still respecting phone
+  ergonomics
+
+Status:
+- Planned from the 2026-04-07 cross-platform screenshot review
+
 ### Slice 3: Local-first data parity
 
 Deliverables:
-- Metric history retention and history UI support
 - Visited places local persistence
 - Visited country-day aggregation
 - Time-tracking ledger and runtime state
 - Foreground-service time tracking
-- JSON import/export where needed for inspection and recovery
 
 Acceptance criteria:
 - Data survives relaunch
@@ -81,16 +106,32 @@ Acceptance criteria:
 - Time tracking can start, stop, resume, and persist state correctly
 
 Status:
-- Visited history slice implemented; metric history and time tracking remain scaffolded
+- Implemented for visited history and time-tracking runtime; metric history and
+  export remain follow-up work
 
-### Slice 4: Provider-complete parity
+### Slice 4: Local-first data parity expansion
 
 Deliverables:
-- Fuel provider integrations by country
+- Metric history retention and history UI support
+- time-tracking reporting/export
+- JSON import/export where needed for inspection and recovery
+
+Acceptance criteria:
+- local history makes trend-oriented cards materially more useful
+- time-tracking data is inspectable outside the app when needed
+- corruption or missing storage is recoverable without app crash
+
+Status:
+- Partially scaffolded
+
+### Slice 5: Provider-complete parity
+
+Deliverables:
 - Places-based emergency care integration
-- Maps-backed visited view
-- Smartraveller and ReliefWeb parity completion
+- travel-alert parity completion beyond the current aggregate/advisory/security
+  baseline
 - Travel weather alert decision and approved provider implementation
+- surf/weather provider parity where the Android UX needs the same data density
 
 Acceptance criteria:
 - Regional providers behave as documented
@@ -223,27 +264,70 @@ Security policy:
 
 The next substantive milestone after the current bootstrap should deliver:
 
-- foreground-service time tracking skeleton
-- dashboard history series persistence
-- at least one live provider-complete card beyond weather and IP
+- dashboard UX parity pass for the compact phone layout
+- visited map-first UX pass
+- enough screenshot coverage to review the new hierarchy against the macOS app
 
 Definition of done:
 - feature is documented in `features.md`
 - status updated in `status.md`
 - build/test/lint still pass
 - user-visible behavior is testable on a real device
+- `make screenshots` produces updated phone captures for the reworked screens
+
+## Screenshot Gap Review (2026-04-07)
+
+The Android app is currently behind the macOS app more in UX structure than in
+raw feature count. The biggest differences are scan speed, action density, and
+how quickly the UI surfaces the user's current travel situation.
+
+### Highest-value work that is feasible now
+
+- Replace the dashboard's route chips with true quick actions and make the top
+  strip feel operational, not navigational.
+- Recompose the dashboard so each card leads with one or two dominant metrics,
+  then compact supporting detail, rather than several equally weighted text
+  lines.
+- Tighten weather into one coherent section with clear current conditions,
+  forecast expansion affordances, and a compact surf/weather source badge.
+- Reduce explanatory copy on the visited screen and promote the world map,
+  travel counts, and source summary to the top of the screen.
+- Add compact in-card actions where the Android data already exists, especially
+  around fuel/map flows and other high-frequency review actions.
+- Polish about/settings so they reinforce product identity instead of feeling
+  like bootstrap scaffolding.
+
+### Gaps that are real but better handled as separate follow-up work
+
+- power and connectivity mini-chart parity requires retained metric history and
+  history-driven UI, not just card redesign
+- emergency care parity depends on Places integration and should remain its own
+  provider slice
+- time-tracking parity beyond the current local ledger needs reporting/export
+  work and denser breakdown views
+- full surf and travel-weather parity may require additional provider and data
+  modeling decisions beyond the current dashboard scaffold
+- macOS-specific affordances such as menu-bar workflows should be translated
+  into Android-native quick actions rather than copied literally
 
 ## Risks
 
 - Android background execution limits are stricter than macOS
 - Maps/Places integration requires correct local config and restricted keys
 - Travel weather alerts need a provider decision that fits client-side security
+- it is easy to overfit the Android UI to the macOS layout; parity should target
+  scan speed, action placement, and information density rather than desktop
+  chrome
 - wireless and metrics tooling can produce environment-specific warnings under
   sandboxed execution, but those are separate from app correctness
 
 ## Immediate Next Steps
 
-1. Implement time-tracking persistence and foreground-service runtime.
-2. Add release docs for signed internal AAB publishing with a real keystore.
-3. Add manual screenshot capture process for Android parity reviews.
-4. Add map rendering on top of the persisted visited-history slice.
+1. Execute the dashboard UX parity pass first.
+2. Follow immediately with the visited map-first UX pass.
+3. Resolve the app-module KSP instability so screenshot review can stay in the
+   iteration loop.
+4. Re-run `make screenshots` after each parity slice and compare against the
+   macOS reference set.
+5. Queue emergency care, time-tracking reporting/export, and history-driven
+   mini-chart work as separate follow-up tasks.

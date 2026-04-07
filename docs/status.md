@@ -28,6 +28,9 @@ Current repository state:
   ReliefWeb regional security
 - dashboard travel-alert card now renders aggregate, advisory, and regional
   security states from live provider-backed repository data
+- Android-versus-macOS screenshot review completed; the highest-value next
+  parity work is dashboard and visited UX refinement rather than new visual
+  theming alone
 
 ## Completed
 
@@ -78,10 +81,22 @@ Current repository state:
 - repo-level `make build` and `make lint` verification are currently blocked by
   unstable generated KSP app outputs under
   `app/build/generated/ksp/debug/java`
+- UX parity planning is now documented in `android-port-plan.md` from the
+  2026-04-07 screenshot comparison against the macOS app
 
 ## Not Started
 
+- dashboard UX parity pass for stronger hierarchy, real quick actions, and
+  denser metric-led cards
+- visited map UX parity pass that promotes the map and summaries above capture
+  explanation copy
+- weather card parity pass for forecast disclosure, clearer current metrics, and
+  surf sub-section polish
+- dashboard action parity for fuel/open-map flows and other compact in-card
+  actions
+- power/connectivity history visuals and mini-chart parity
 - emergency care / Places integration
+- time-tracking reporting/export parity
 - analytics/privacy parity implementation
 
 ## Verification Status
@@ -123,6 +138,9 @@ Not yet fully re-verified after the visited map slice in this session:
   fixed and passed when rerun directly
 - `make screenshots` could not be run end-to-end for the same reason: the app
   module's generated KSP state makes full app verification unreliable
+- full Android screenshot set after the new UX parity backlog was documented;
+  only `dashboard`, `visited`, and `about` phone captures were available for
+  the 2026-04-07 comparison
 - end-to-end physical-device smoke pass with the explicit `make test-device`
   path
 - signed release AAB generation with real keystore
@@ -130,14 +148,18 @@ Not yet fully re-verified after the visited map slice in this session:
 
 ## Immediate Next Steps
 
-1. Add emergency care / Places provider completion.
-2. Backfill the missing `v0.1.0` git tag before the first incremental release
-   bump so the local changelog diff has a stable anchor.
+1. Rework the dashboard information hierarchy first: replace low-value header
+   pills with quick actions, tighten top-level status cards, and make the
+   weather/travel sections easier to scan on a phone.
+2. Rework the visited screen next so the map and travel footprint become the
+   first thing a user sees, with capture mechanics demoted to secondary help.
 3. Resolve the current app-module KSP generated-source instability, then rerun
-   `make build`, `make lint`, and `make screenshots`.
-4. Fix or isolate the unrelated `feature:visited` connected-test failure, then
-   rerun `make test`.
-5. Extend time tracking beyond the local ledger with reporting/export only after the base slice settles.
+   `make build`, `make lint`, and the full `make screenshots` parity pass.
+4. Add the missing action-level parity that is already feasible without new
+   providers, especially map/open actions and richer weather presentation.
+5. Treat emergency care / Places integration, time-tracking reporting/export,
+   and power/connectivity history visuals as follow-up slices after the UX
+   foundation is improved.
 
 ## Parallel-Safe Workstreams
 
