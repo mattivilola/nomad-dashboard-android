@@ -26,8 +26,10 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
     @ApplicationContext private val context: Context,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : VisitedDeviceLocationProvider {
+    override fun hasLocationPermission(): Boolean = hasLocationPermissionInternal()
+
     override suspend fun currentPlace(): ResolvedVisitedPlace? {
-        if (hasLocationPermission().not()) {
+        if (hasLocationPermissionInternal().not()) {
             return null
         }
 
@@ -121,7 +123,7 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
         }
     }
 
-    private fun hasLocationPermission(): Boolean =
+    private fun hasLocationPermissionInternal(): Boolean =
         hasFineLocationPermission() || ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_COARSE_LOCATION,

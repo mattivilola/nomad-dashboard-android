@@ -10,5 +10,7 @@ data class ResolvedVisitedPlace(
 )
 
 interface VisitedDeviceLocationProvider {
+    fun hasLocationPermission(): Boolean
+
     suspend fun currentPlace(): ResolvedVisitedPlace?
 }

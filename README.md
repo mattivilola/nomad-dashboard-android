@@ -17,6 +17,7 @@ Native Android port scaffold for Nomad Dashboard.
 make bootstrap
 make connect-wireless
 make build
+make screenshot
 make test
 make screenshots
 make lint
@@ -25,6 +26,9 @@ make lint
 Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env`. `Config/AppConfig.env` is only for non-secret helper config such as the ReliefWeb app name. The visited Google Maps view uses an app-level SDK key from local `local.properties`, Gradle properties, or environment variables, not from the in-app Settings screen. User-supplied provider credentials such as the Germany Tankerkonig key and the ReliefWeb app name must be entered in the app's Settings screen after install and are stored only in encrypted device-local storage.
 
 `make screenshots` runs the deterministic emulator review lane and exports local PNGs to `output/screenshots/android/phone`. For faster iteration, use `SCREEN=dashboard make screenshots` or replace `dashboard` with `settings`, `visited`, `timetracking`, or `about`.
+
+`make screenshot` captures the current screen from the selected adb target, prefers a connected physical device over an emulator, and stores a timestamped PNG in `output/screenshots/device`.
+`make screenshot-device` does the same but fails unless a physical Android device is connected.
 
 `make connect-wireless` will prompt for the pairing endpoint and the connect endpoint shown under Android's Wireless debugging screen.
 The flow is: pair endpoint, pairing code, then connect endpoint.

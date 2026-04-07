@@ -149,3 +149,22 @@ require_adb_target_serial() {
 
   fail "No connected Android device or emulator found."
 }
+
+require_physical_adb_target_serial() {
+  if [[ -n "${ANDROID_SERIAL:-}" ]]; then
+    local requested_serial="$ANDROID_SERIAL"
+    adb_connected_device_serials | grep -Fx -- "$requested_serial" >/dev/null 2>&1 || fail "ANDROID_SERIAL is set to '$requested_serial', but that target is not connected in adb."
+    [[ "$requested_serial" != emulator-* ]] || fail "ANDROID_SERIAL is set to emulator target '$requested_serial', but this command requires a physical Android device."
+    printf '%s\n' "$requested_serial"
+    return 0
+  fi
+
+  local physical_serial
+  physical_serial="$(first_physical_device_serial)"
+  if [[ -n "$physical_serial" ]]; then
+    printf '%s\n' "$physical_serial"
+    return 0
+  fi
+
+  fail "No connected physical Android device found."
+}

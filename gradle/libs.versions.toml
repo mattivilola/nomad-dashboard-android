@@ -27,6 +27,7 @@ playPublisher = "3.10.1"
 javaxInject = "1"
 androidxTestRunner = "1.6.2"
 mapsCompose = "6.6.0"
+places = "5.0.0"
 androidxTestMonitor = "1.7.2"
 uiautomator = "2.3.0"
 
@@ -75,6 +76,7 @@ androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", 
 truth = { module = "com.google.truth:truth", version.ref = "truth" }
 javax-inject = { module = "javax.inject:javax.inject", version.ref = "javaxInject" }
 google-maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
+google-places = { module = "com.google.android.libraries.places:places", version.ref = "places" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

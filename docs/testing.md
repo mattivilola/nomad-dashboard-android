@@ -38,6 +38,36 @@ Current behavior:
 - honors an explicit `ANDROID_SERIAL=<serial> make run` override
 - builds the debug APK before install and launch
 
+Capture a timestamped screenshot from the currently selected adb target:
+
+```sh
+make screenshot
+```
+
+Current behavior:
+- prefers the first attached non-emulator Android device when both a phone and
+  an emulator are connected
+- falls back to the first booted emulator when no physical device is attached
+- honors an explicit `ANDROID_SERIAL=<serial> make screenshot` override
+- writes PNG files to
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/output/screenshots/device`
+- names files with a local timestamp and the adb serial for easier debugging history
+
+Capture a timestamped screenshot from a physical Android device only:
+
+```sh
+make screenshot-device
+```
+
+Current behavior:
+- requires a connected non-emulator Android device
+- honors an explicit `ANDROID_SERIAL=<serial> make screenshot-device` override
+  only when the serial belongs to a physical device
+- fails fast when only emulators are connected
+- writes PNG files to the same
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/output/screenshots/device`
+  folder
+
 Run unit tests:
 
 ```sh
@@ -87,6 +117,8 @@ Current behavior:
 - keeps the screenshot tests out of the default `make test` lane by excluding
   `ScreenshotReviewTest` from the normal connected-test helper scripts
 - renders a debug-only fixture host instead of the live Hilt-backed app shell
+- fails fast with the recent emulator log if the emulator process exits before
+  it appears in `adb devices` or finishes booting
 - streams `ScreenshotReview` logcat lines during capture so you can see which
   screen is being rendered
 - exports PNGs to
@@ -112,6 +144,10 @@ make lint
 ```
 
 Current verified result:
+- `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
+  repo-level `gradle.properties`
+- `make lint` passed on 2026-04-07 after setting `ksp.incremental=false` in
+  repo-level `gradle.properties`
 - `:app:assembleDebug` passed on 2026-04-07 with
   `run_gradle -Pksp.incremental=false`
 - `:core:data:testDebugUnitTest` passed on 2026-04-07 with the travel-alert
@@ -123,22 +159,28 @@ Current verified result:
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- on 2026-04-07, `make build` failed in `:app:kspDebugKotlin` because the app
-  module's generated KSP output under `app/build/generated/ksp/debug/java`
-  became unreadable mid-build; this is a generated-artifact state issue rather
-  than a travel-alert compile failure, and the direct
-  `run_gradle -Pksp.incremental=false :app:assembleDebug` path succeeded
-- on 2026-04-07, `make lint` failed for the same `:app:kspDebugKotlin`
-  generated-file problem even though the direct
-  `run_gradle -Pksp.incremental=false lintDebug` path succeeded
-- on 2026-04-07, `make test` reached connected tests on the emulator and
-  failed in existing non-travel-alert suites:
-  `feature:visited:connectedDebugAndroidTest` and
-  `app:connectedDebugAndroidTest`
-- the same `make test` run also captured an earlier failing revision of the new
-  dashboard travel-alert card test, but the follow-up direct rerun of
-  `:feature:dashboard:connectedDebugAndroidTest` passed after the test was
-  switched to an activity-backed Compose rule
+- on 2026-04-07, repo-level `make build` and `make lint` were restored by
+  disabling KSP incremental output reuse in `gradle.properties`; the root cause
+  was KSP `2.0.21-1.0.27` producing `NoSuchFileException` failures while
+  copying generated output trees such as `build/generated/ksp/debug/java`
+  across Hilt-backed modules
+- on 2026-04-07, `make screenshots` was rerun after that fix and no longer hit
+  the KSP/generated-source failure, but it still failed before test execution
+  because the local `Pixel_5_API_31` emulator exited with Crashpad permission
+  errors before `adb devices` exposed a serial
+- on 2026-04-07, the emulator helper was hardened to print the recent emulator
+  log and fail immediately when the emulator process exits before `adb`
+  registration or boot completion
+- on 2026-04-07, `make test` got past the prior KSP blocker and reached the
+  normal emulator lane, but then failed in unrelated `core:data`
+  emergency-care / Places code:
+  `NomadDataModule.kt` exposed internal types publicly and
+  `GooglePlacesEmergencyCareProvider.kt` referenced unresolved Places fields
+  such as `ADDRESS` and `LAT_LNG`
+- the same `make test` run also reported follow-on Gradle cache-pack failures in
+  `:core:designsystem:mergeExtDexDebugAndroidTest` and
+  `:feature:about:mergeExtDexDebugAndroidTest` after the upstream
+  `:core:data:compileDebugKotlin` failure
 - on 2026-04-07, the new screenshot lane was wired behind
   `make screenshots` with a debug-only fixture activity, UIAutomator capture,
   and exports to `output/screenshots/android/phone`
@@ -277,10 +319,14 @@ Notes:
   through local env-file injection into the app build.
 - ReliefWeb now follows the same rule as Tankerkonig: save the approved app
   name in Settings and keep it only in encrypted device-local storage.
-- App-level KSP output can get into a bad incremental state under
-  `app/build/generated/ksp/debug/java`; a direct
-  `run_gradle -Pksp.incremental=false ...` pass can still verify the slice
-  without deleting generated files.
+- The current Kotlin `2.0.21` + KSP `2.0.21-1.0.27` + Hilt combination is not
+  stable enough for incremental KSP output reuse in this repo. The minimal
+  reliable fix was to set `ksp.incremental=false` in repo-level
+  `gradle.properties`, which restores `make build` and `make lint` without
+  deleting generated files or editing feature code.
+- When the local emulator exits before `adb` sees it, fail from the helper with
+  the emulator log tail rather than waiting for the full timeout. The current
+  `Pixel_5_API_31` issue presents as Crashpad permission errors during launch.
 - If a physical device is connected, `make test` becomes slower and more fragile
   on OEM-skinned phones. The default workflow now routes `make test` to the AVD
   so the phone is not part of the normal loop.

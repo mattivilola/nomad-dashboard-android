@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +46,9 @@ import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadPill
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
+import com.iloapps.nomaddashboard.core.model.EmergencyCareFacility
+import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
@@ -158,10 +164,9 @@ fun DashboardScreen(
                     enabled = state.settings.fuelPricesEnabled,
                     snapshot = state.snapshot.fuelPrices,
                 )
-                DashboardCardId.EMERGENCY_CARE -> DashboardNarrativeCard(
-                    title = "Emergency Care",
-                    subtitle = if (state.settings.emergencyCareEnabled) "Enabled" else "Off",
-                    lines = listOf(state.snapshot.emergencyCare.summary),
+                DashboardCardId.EMERGENCY_CARE -> EmergencyCareSectionCard(
+                    enabled = state.settings.emergencyCareEnabled,
+                    snapshot = state.snapshot.emergencyCare,
                 )
                 DashboardCardId.TRAVEL_ALERTS -> TravelAlertsSectionCard(
                     snapshot = state.snapshot.travelAlerts,
@@ -543,6 +548,78 @@ private fun FuelPriceRow(
 }
 
 @Composable
+internal fun EmergencyCareSectionCard(
+    enabled: Boolean,
+    snapshot: EmergencyCareSnapshot,
+) {
+    if (enabled.not()) {
+        DashboardNarrativeCard(
+            title = "Emergency Care",
+            subtitle = "Off",
+            lines = listOf("Enable emergency care in Settings to search nearby hospitals."),
+        )
+        return
+    }
+
+    val context = LocalContext.current
+    NomadCard(modifier = Modifier.testTag(EmergencyCareCardTag)) {
+        NomadSectionHeader(
+            title = "Emergency Care",
+            subtitle = emergencyCareSubtitle(snapshot),
+            trailing = {
+                snapshot.countryName?.let { countryName ->
+                    NomadPill(text = countryName, tint = MaterialTheme.colorScheme.surfaceVariant)
+                }
+            },
+        )
+        when (snapshot.status) {
+            EmergencyCareStatus.READY -> {
+                snapshot.facility?.let { facility ->
+                    Text(
+                        text = facility.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = emergencyCareFacilityLine(facility),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+                    )
+                }
+                listOfNotNull(snapshot.detail.takeIf(String::isNotBlank), snapshot.note).forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                snapshot.facility?.let { facility ->
+                    FilledTonalButton(
+                        onClick = { openEmergencyFacilityInMaps(context, facility) },
+                    ) {
+                        Icon(Icons.Rounded.Map, contentDescription = null)
+                        Text(text = "Open in Maps", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+
+            EmergencyCareStatus.LOADING,
+            EmergencyCareStatus.CONFIGURATION_REQUIRED,
+            EmergencyCareStatus.PERMISSION_REQUIRED,
+            EmergencyCareStatus.UNAVAILABLE,
+            EmergencyCareStatus.ERROR,
+            -> listOfNotNull(snapshot.detail.takeIf(String::isNotBlank), snapshot.note).forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DashboardNarrativeCard(
     title: String,
     subtitle: String,
@@ -753,6 +830,46 @@ private fun TravelAlertKind.displayName(): String = when (this) {
     TravelAlertKind.SECURITY -> "Regional Security"
 }
 
+private fun emergencyCareSubtitle(snapshot: EmergencyCareSnapshot): String =
+    when (snapshot.status) {
+        EmergencyCareStatus.LOADING -> "Loading"
+        EmergencyCareStatus.READY -> "Ready"
+        EmergencyCareStatus.CONFIGURATION_REQUIRED -> "Configuration"
+        EmergencyCareStatus.PERMISSION_REQUIRED -> "Permission"
+        EmergencyCareStatus.UNAVAILABLE -> "Unavailable"
+        EmergencyCareStatus.ERROR -> "Error"
+    }
+
+private fun emergencyCareFacilityLine(facility: EmergencyCareFacility): String =
+    listOfNotNull(
+        facility.address,
+        String.format(Locale.US, "%.1f km away", facility.distanceKilometers),
+    ).joinToString(" · ")
+
+private fun openEmergencyFacilityInMaps(
+    context: android.content.Context,
+    facility: EmergencyCareFacility,
+) {
+    val uri = if (facility.placeId.isNullOrBlank()) {
+        Uri.parse(
+            "geo:${facility.latitude},${facility.longitude}?q=${
+                Uri.encode("${facility.latitude},${facility.longitude} (${facility.name})")
+            }",
+        )
+    } else {
+        Uri.parse(
+            "https://www.google.com/maps/search/?api=1&query=${
+                Uri.encode(facility.name)
+            }&query_place_id=${
+                Uri.encode(facility.placeId)
+            }",
+        )
+    }
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+    }
+}
+
 private fun TravelAlertSeverity.badgeTitle(): String = when (this) {
     TravelAlertSeverity.CLEAR -> "Clear"
     TravelAlertSeverity.INFO -> "Info"
@@ -811,3 +928,4 @@ private data class DashboardMetric(
 )
 
 internal const val TravelAlertsCardTag = "travel-alerts-card"
+internal const val EmergencyCareCardTag = "emergency-care-card"

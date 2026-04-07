@@ -67,8 +67,41 @@ data class WeatherSnapshot(
     val sourceName: String = "Open-Meteo",
 )
 
+enum class EmergencyCareStatus {
+    LOADING,
+    READY,
+    CONFIGURATION_REQUIRED,
+    PERMISSION_REQUIRED,
+    UNAVAILABLE,
+    ERROR,
+}
+
+enum class EmergencyCareLocationSource {
+    DEVICE,
+    IP_GEOLOCATION,
+}
+
+data class EmergencyCareFacility(
+    val placeId: String? = null,
+    val name: String,
+    val address: String? = null,
+    val distanceKilometers: Double,
+    val latitude: Double,
+    val longitude: Double,
+    val primaryType: String? = null,
+)
+
 data class EmergencyCareSnapshot(
-    val summary: String = "Enable emergency care in Settings",
+    val status: EmergencyCareStatus = EmergencyCareStatus.UNAVAILABLE,
+    val sourceName: String = "Google Places",
+    val countryCode: String? = null,
+    val countryName: String? = null,
+    val searchRadiusKilometers: Double = 10.0,
+    val locationSource: EmergencyCareLocationSource? = null,
+    val facility: EmergencyCareFacility? = null,
+    val fetchedAt: Instant? = null,
+    val detail: String = "Enable emergency care in Settings",
+    val note: String? = null,
 )
 
 data class TimeTrackingDashboardState(

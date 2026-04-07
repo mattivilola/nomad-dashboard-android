@@ -5,6 +5,8 @@ import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
+import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
+import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareSearchRequest
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
@@ -25,6 +27,9 @@ import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.datastore.toProto
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
+import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
@@ -259,6 +264,96 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
+    fun `refresh uses device location first for emergency care lookup`() = runTest {
+        val settings = AppSettings(
+            emergencyCareEnabled = true,
+            publicIpGeolocationEnabled = true,
+        )
+        val emergencyCareProvider = FakeEmergencyCareProvider(
+            snapshot = EmergencyCareSnapshot(
+                status = EmergencyCareStatus.READY,
+                countryCode = "ES",
+                countryName = "Spain",
+                detail = "Nearest hospital found within 10 km.",
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            emergencyCareProvider = emergencyCareProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = ResolvedVisitedPlace(
+                    city = "Malaga",
+                    region = "Andalusia",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.72,
+                    longitude = -4.42,
+                ),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = emergencyCareProvider.requests.single()
+        assertThat(request.latitude).isWithin(0.001).of(36.72)
+        assertThat(request.locationSource).isEqualTo(EmergencyCareLocationSource.DEVICE)
+    }
+
+    @Test
+    fun `refresh falls back to ip travel context for emergency care lookup`() = runTest {
+        val settings = AppSettings(
+            emergencyCareEnabled = true,
+            publicIpGeolocationEnabled = true,
+        )
+        val emergencyCareProvider = FakeEmergencyCareProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            emergencyCareProvider = emergencyCareProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(value = null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = emergencyCareProvider.requests.single()
+        assertThat(request.latitude).isWithin(0.001).of(60.1699)
+        assertThat(request.locationSource).isEqualTo(EmergencyCareLocationSource.IP_GEOLOCATION)
+    }
+
+    @Test
+    fun `refresh marks emergency care permission required when no fallback location exists`() = runTest {
+        val settings = AppSettings(
+            emergencyCareEnabled = true,
+            publicIpGeolocationEnabled = false,
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            emergencyCareProvider = FakeEmergencyCareProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                hasLocationPermission = false,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }.emergencyCare
+        assertThat(snapshot.status).isEqualTo(EmergencyCareStatus.PERMISSION_REQUIRED)
+        assertThat(snapshot.detail).contains("Grant location permission")
+    }
+
+    @Test
     fun `refresh forwards provider credentials to fuel provider`() = runTest {
         val settings = AppSettings(
             fuelPricesEnabled = true,
@@ -470,6 +565,7 @@ class DefaultNomadDashboardRepositoryTest {
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
+        emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
         providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
         ),
@@ -489,6 +585,7 @@ class DefaultNomadDashboardRepositoryTest {
             freeIpApiService = FakeFreeIpApiService(),
             openMeteoService = FakeOpenMeteoService(),
             fuelPriceProvider = fuelPriceProvider,
+            emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
             visitedHistoryStore = visitedHistoryStore,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
@@ -646,7 +743,10 @@ private class FakeOpenMeteoService : OpenMeteoService {
 
 private class FakeVisitedDeviceLocationProvider(
     private val value: ResolvedVisitedPlace?,
+    private val hasLocationPermission: Boolean = true,
 ) : VisitedDeviceLocationProvider {
+    override fun hasLocationPermission(): Boolean = hasLocationPermission
+
     override suspend fun currentPlace(): ResolvedVisitedPlace? = value
 }
 
@@ -666,6 +766,20 @@ private class FakeFuelPriceProvider(
     ): FuelPriceSnapshot {
         requests += request
         this.credentials += credentials
+        return snapshot
+    }
+}
+
+private class FakeEmergencyCareProvider(
+    private val snapshot: EmergencyCareSnapshot = EmergencyCareSnapshot(
+        status = EmergencyCareStatus.UNAVAILABLE,
+        detail = "No nearby hospitals found within 10 km.",
+    ),
+) : EmergencyCareProvider {
+    val requests = mutableListOf<EmergencyCareSearchRequest>()
+
+    override suspend fun nearbyHospital(request: EmergencyCareSearchRequest): EmergencyCareSnapshot {
+        requests += request
         return snapshot
     }
 }

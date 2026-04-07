@@ -38,6 +38,10 @@ Current repository state:
   are now implemented in the dashboard UI layer
 - visited UX parity pass started: the screen now opens with an operational
   overview card and keeps capture guidance behind the map/history content
+- repo-level KSP build/lint stability restored by disabling broken KSP
+  incremental output reuse in Gradle
+- emulator startup helper now fails fast with the emulator log when the
+  screenshot/test AVD exits before `adb` can see it
 
 ## Completed
 
@@ -90,9 +94,8 @@ Current repository state:
   map-first screen structure, but screenshot verification and deeper polish are
   still pending
 - physical-device notification smoke verification for the new time-tracking runtime
-- repo-level `make build` and `make lint` verification are currently blocked by
-  unstable generated KSP app outputs under
-  `app/build/generated/ksp/debug/java`
+- emulator-backed screenshot verification remains blocked intermittently by the
+  local `Pixel_5_API_31` emulator exiting before it appears in `adb devices`
 
 ## Not Started
 
@@ -133,27 +136,31 @@ Verified:
   passed on 2026-04-07 after the first dashboard UX parity refactor
 - `run_gradle :feature:visited:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
   passed on 2026-04-07 after the first visited UX parity refactor
+- `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
+  repo-level Gradle properties
+- `make lint` passed on 2026-04-07 after setting `ksp.incremental=false` in
+  repo-level Gradle properties
 - release changelog/play-notes generator verified on 2026-04-07 in an isolated
   worktree for first-release, later-release, dirty-worktree, and tag-collision
   scenarios
 
 Not yet fully re-verified after the visited map slice in this session:
-- `make build` currently fails in `:app:kspDebugKotlin` because generated app
-  KSP output under `app/build/generated/ksp/debug/java` becomes unreadable
-- `make lint` currently fails for the same `:app:kspDebugKotlin`
-  generated-source issue even though direct `lintDebug` with
-  `-Pksp.incremental=false` passed
-- `make test` currently still fails in unrelated emulator connected-test suites
-  under `feature:visited` and `app`; the new dashboard travel-alert test was
-  fixed and passed when rerun directly
-- `make screenshots` could not be run end-to-end for the same reason: the app
-  module's generated KSP state makes full app verification unreliable
+- `make test` now gets past the KSP/generated-source failure, but still fails
+  in unrelated `core:data` emergency-care / Places code under
+  `NomadDataModule.kt` and `GooglePlacesEmergencyCareProvider.kt`; the same run
+  also reported follow-on Gradle cache-pack failures in
+  `:core:designsystem:mergeExtDexDebugAndroidTest` and
+  `:feature:about:mergeExtDexDebugAndroidTest`
+- `make screenshots` is no longer blocked by KSP, but it still cannot complete
+  reliably when the local `Pixel_5_API_31` emulator exits before `adb` exposes
+  a serial; the hardened helper now prints the failing emulator log instead of
+  stalling silently
 - full Android screenshot set after the new UX parity backlog was documented;
   only `dashboard`, `visited`, and `about` phone captures were available for
   the 2026-04-07 comparison
-- rerun of `SCREEN=dashboard make screenshots` after the dashboard UX refactor;
-  the emulator helper stalled before `adb devices` exposed a target, so the new
-  dashboard and visited layouts have not been visually re-reviewed yet
+- rerun of `make screenshots` after the KSP fix still hit an emulator-launch
+  failure with Crashpad permission errors before `adb devices` exposed a target,
+  so the new dashboard and visited layouts have not been visually re-reviewed yet
 - end-to-end physical-device smoke pass with the explicit `make test-device`
   path
 - signed release AAB generation with real keystore
@@ -165,12 +172,12 @@ Not yet fully re-verified after the visited map slice in this session:
    pills with quick actions, tighten top-level status cards, and make the
    weather/travel sections easier to scan on a phone.
 2. Re-run the screenshot review flow against the new dashboard layout once the
-   emulator helper is stable again, then refine spacing and card density from
-   that output.
+   local emulator launch crash is resolved, then refine spacing and card
+   density from that output.
 3. Refine the visited screen from the new map-first baseline, especially the
    country-day summaries and saved-place density once fresh screenshots exist.
-4. Resolve the current app-module KSP generated-source instability, then rerun
-   `make build`, `make lint`, and the full `make screenshots` parity pass.
+4. Resolve the current intermittent emulator launch crash, then rerun the full
+   `make screenshots` parity pass.
 5. Add the missing action-level parity that is already feasible without new
    providers, especially map/open actions and richer weather presentation.
 6. Treat emergency care / Places integration, time-tracking reporting/export,

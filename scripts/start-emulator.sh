@@ -13,6 +13,14 @@ avd_name="${1:-$default_avd}"
 show_window="${NOMAD_ANDROID_EMULATOR_WINDOW:-0}"
 default_sysdir="$ANDROID_SDK_ROOT/system-images/android-34/google_apis_playstore/arm64-v8a"
 sysdir_override="${NOMAD_ANDROID_EMULATOR_SYSDIR:-$default_sysdir}"
+emulator_pid=""
+log_path=""
+
+print_emulator_log_tail() {
+  [[ -n "$log_path" && -f "$log_path" ]] || return 0
+  echo "Recent emulator log output:"
+  tail -n 40 "$log_path"
+}
 
 available_avds="$(emulator -list-avds 2>/dev/null || true)"
 if [[ -z "$available_avds" || "$available_avds" != *"$avd_name"* ]]; then
@@ -50,6 +58,7 @@ else
   fi
 
   nohup emulator "${emulator_args[@]}" >"$log_path" 2>&1 &
+  emulator_pid="$!"
   echo "Starting emulator '$avd_name'..."
   echo "Emulator log: $log_path"
   if [[ "$show_window" != "1" ]]; then
@@ -60,6 +69,10 @@ else
   fi
 
   for _ in {1..120}; do
+    if [[ -n "$emulator_pid" ]] && ! kill -0 "$emulator_pid" >/dev/null 2>&1; then
+      print_emulator_log_tail
+      fail "Emulator process exited before it appeared in adb devices."
+    fi
     existing_serial="$(
       adb devices | awk '
         /^emulator-[0-9]+\t(device|offline)$/ { print $1 }
@@ -69,12 +82,19 @@ else
     sleep 2
   done
 
-  [[ -n "$existing_serial" ]] || fail "Timed out waiting for emulator to appear in adb devices."
+  if [[ -z "$existing_serial" ]]; then
+    print_emulator_log_tail
+    fail "Timed out waiting for emulator to appear in adb devices."
+  fi
 fi
 
 adb -s "$existing_serial" wait-for-device >/dev/null
 
 for _ in {1..180}; do
+  if [[ -n "$emulator_pid" ]] && ! kill -0 "$emulator_pid" >/dev/null 2>&1; then
+    print_emulator_log_tail
+    fail "Emulator process exited before boot completion on $existing_serial."
+  fi
   boot_completed="$(adb -s "$existing_serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
   if [[ "$boot_completed" == "1" ]]; then
     adb -s "$existing_serial" shell input keyevent 82 >/dev/null 2>&1 || true
@@ -84,4 +104,5 @@ for _ in {1..180}; do
   sleep 2
 done
 
+print_emulator_log_tail
 fail "Timed out waiting for emulator boot completion on $existing_serial."

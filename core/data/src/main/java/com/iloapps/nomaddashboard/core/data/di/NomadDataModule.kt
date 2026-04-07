@@ -7,6 +7,10 @@ import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
 import com.iloapps.nomaddashboard.core.data.credentials.EncryptedProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
+import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
+import com.iloapps.nomaddashboard.core.data.emergency.GooglePlacesEmergencyCareProvider
+import com.iloapps.nomaddashboard.core.data.emergency.GooglePlacesNearbySearchClient
+import com.iloapps.nomaddashboard.core.data.emergency.PlacesNearbySearchClient
 import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
@@ -248,6 +252,18 @@ abstract class NomadRepositoryModule {
     abstract fun bindFuelPriceProvider(
         impl: DefaultFuelPriceProvider,
     ): FuelPriceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindEmergencyCareProvider(
+        impl: GooglePlacesEmergencyCareProvider,
+    ): EmergencyCareProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindPlacesNearbySearchClient(
+        impl: GooglePlacesNearbySearchClient,
+    ): PlacesNearbySearchClient
 
     @Binds
     @Singleton

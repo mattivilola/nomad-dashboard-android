@@ -179,7 +179,7 @@ private fun ProviderCredentialCard(
     NomadCard {
         NomadSectionHeader(
             title = "Provider Credentials",
-            subtitle = "User-supplied keys stay encrypted on this device only and are excluded from Android backup.",
+            subtitle = "User-supplied provider secrets stay encrypted on this device only and are excluded from Android backup.",
         )
         OutlinedTextField(
             value = tankerkoenigApiKey,
@@ -255,6 +255,13 @@ private fun ProviderCredentialCard(
                 Text("Save app name")
             }
         }
+
+        Text(
+            text = "Emergency care and the visited map use the app-level Android Maps/Places key from local.properties, Gradle properties, or environment variables. That key is not stored in-app here.",
+            modifier = Modifier.padding(top = 16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        )
     }
 }
 

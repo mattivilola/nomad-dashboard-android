@@ -2,6 +2,8 @@ package com.iloapps.nomaddashboard.core.data.repository
 
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
+import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
+import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareSearchRequest
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
@@ -20,6 +22,8 @@ import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
+import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.SignalLevel
@@ -66,6 +70,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val freeIpApiService: FreeIpApiService,
     private val openMeteoService: OpenMeteoService,
     private val fuelPriceProvider: FuelPriceProvider,
+    private val emergencyCareProvider: EmergencyCareProvider,
     private val timeTrackingRepository: TimeTrackingRepository,
     private val visitedHistoryStore: VisitedHistoryStore,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
@@ -123,6 +128,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
         val currentDevicePlace = if (
             currentSettings.fuelPricesEnabled ||
+            currentSettings.emergencyCareEnabled ||
             (currentSettings.visitedPlacesEnabled && currentSettings.useCurrentLocationForVisitedPlaces)
         ) {
             runCatching { visitedDeviceLocationProvider.currentPlace() }.getOrNull()
@@ -193,6 +199,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
             current.copy(
                 isRefreshing = true,
                 travelAlerts = checkingTravelAlerts,
+                emergencyCare = loadingEmergencyCareSnapshot(
+                    enabled = currentSettings.emergencyCareEnabled,
+                    previous = current.emergencyCare,
+                ),
             )
         }
         val travelAlerts = refreshTravelAlerts(
@@ -201,6 +211,11 @@ class DefaultNomadDashboardRepository @Inject constructor(
             primaryCountryName = primaryTravelAlertCountryName,
             coverageCountryCodes = coverageCountryCodes,
             providerCredentials = currentProviderCredentials,
+        )
+        val emergencyCare = refreshEmergencyCare(
+            currentSettings = currentSettings,
+            currentDevicePlace = currentDevicePlace,
+            travelContext = travelContext,
         )
 
         val overallHeadline = when {
@@ -265,13 +280,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             weather = weather,
             travelAlerts = travelAlerts,
             fuelPrices = fuelPrices,
-            emergencyCare = EmergencyCareSnapshot(
-                summary = if (currentSettings.emergencyCareEnabled) {
-                    "Places/Maps integration is planned next."
-                } else {
-                    "Enable emergency care in Settings"
-                },
-            ),
+            emergencyCare = emergencyCare,
             timeTracking = TimeTrackingDashboardState(
                 enabled = currentSettings.projectTimeTrackingEnabled,
                 headline = when {
@@ -483,6 +492,55 @@ class DefaultNomadDashboardRepository @Inject constructor(
         return if (max != null) "Today tops out at ${max.toInt()}°C" else "Weather unavailable"
     }
 
+    private suspend fun refreshEmergencyCare(
+        currentSettings: AppSettings,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): EmergencyCareSnapshot {
+        if (currentSettings.emergencyCareEnabled.not()) {
+            return EmergencyCareSnapshot(detail = "Enable emergency care in Settings")
+        }
+
+        val request = buildEmergencyCareSearchRequest(
+            currentDevicePlace = currentDevicePlace,
+            travelContext = travelContext,
+        )
+        if (request != null) {
+            return emergencyCareProvider.nearbyHospital(request)
+        }
+
+        val locationPermissionMissing = visitedDeviceLocationProvider.hasLocationPermission().not()
+        return if (locationPermissionMissing) {
+            EmergencyCareSnapshot(
+                status = EmergencyCareStatus.PERMISSION_REQUIRED,
+                countryCode = travelContext.countryCode,
+                countryName = travelContext.country,
+                detail = "Grant location permission or re-enable IP geolocation to search nearby hospitals.",
+            )
+        } else {
+            EmergencyCareSnapshot(
+                status = EmergencyCareStatus.UNAVAILABLE,
+                countryCode = travelContext.countryCode,
+                countryName = travelContext.country,
+                detail = "Nearby hospitals need a resolved current location before the search can run.",
+            )
+        }
+    }
+
+    private fun loadingEmergencyCareSnapshot(
+        enabled: Boolean,
+        previous: EmergencyCareSnapshot,
+    ): EmergencyCareSnapshot =
+        if (enabled.not()) {
+            EmergencyCareSnapshot(detail = "Enable emergency care in Settings")
+        } else {
+            previous.copy(
+                status = EmergencyCareStatus.LOADING,
+                detail = "Searching nearby hospitals...",
+                note = previous.note.takeIf { previous.facility != null },
+            )
+        }
+
     private fun buildIpObservation(
         travelContext: TravelContextSnapshot,
         observedAt: Instant,
@@ -550,6 +608,39 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 longitude = longitude,
                 countryCode = countryCode,
                 countryName = travelContext.country,
+            )
+        }
+
+        return null
+    }
+
+    private fun buildEmergencyCareSearchRequest(
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): EmergencyCareSearchRequest? {
+        currentDevicePlace?.let { place ->
+            val latitude = place.latitude
+            val longitude = place.longitude
+            if (latitude != null && longitude != null) {
+                return EmergencyCareSearchRequest(
+                    latitude = latitude,
+                    longitude = longitude,
+                    countryCode = place.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+                    countryName = place.country,
+                    locationSource = EmergencyCareLocationSource.DEVICE,
+                )
+            }
+        }
+
+        val latitude = travelContext.latitude
+        val longitude = travelContext.longitude
+        if (latitude != null && longitude != null) {
+            return EmergencyCareSearchRequest(
+                latitude = latitude,
+                longitude = longitude,
+                countryCode = travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+                countryName = travelContext.country,
+                locationSource = EmergencyCareLocationSource.IP_GEOLOCATION,
             )
         }
 

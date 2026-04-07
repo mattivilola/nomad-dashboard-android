@@ -3,7 +3,10 @@ package com.iloapps.nomaddashboard.review
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareFacility
+import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
+import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
@@ -200,7 +203,22 @@ object ScreenshotReviewFixtures {
                     note = "Prices update from the ministry feed.",
                 ),
                 emergencyCare = EmergencyCareSnapshot(
-                    summary = "Hospital and urgent care provider hookup is the next parity slice.",
+                    status = EmergencyCareStatus.READY,
+                    countryCode = "ES",
+                    countryName = "Spain",
+                    locationSource = EmergencyCareLocationSource.DEVICE,
+                    facility = EmergencyCareFacility(
+                        placeId = "fixture-hospital",
+                        name = "Hospital Punta Europa",
+                        address = "Carretera Getares, Algeciras",
+                        distanceKilometers = 18.6,
+                        latitude = 36.1184,
+                        longitude = -5.4534,
+                        primaryType = "hospital",
+                    ),
+                    fetchedAt = fixtureNow,
+                    detail = "Nearest hospital found within 10 km.",
+                    note = "Using device location.",
                 ),
                 timeTracking = TimeTrackingDashboardState(
                     enabled = true,
