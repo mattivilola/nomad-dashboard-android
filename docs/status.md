@@ -33,6 +33,11 @@ Current repository state:
 - Android-versus-macOS screenshot review completed; the highest-value next
   parity work is dashboard and visited UX refinement rather than new visual
   theming alone
+- dashboard UX parity pass started: compact quick actions, denser top-level
+  summary strip, weather-first default ordering, and metric-led detail cards
+  are now implemented in the dashboard UI layer
+- visited UX parity pass started: the screen now opens with an operational
+  overview card and keeps capture guidance behind the map/history content
 
 ## Completed
 
@@ -79,19 +84,18 @@ Current repository state:
 
 ## In Progress
 
+- dashboard UX parity pass is underway; the first implementation landed for the
+  compact phone dashboard, but screenshot verification is still pending
+- visited UX parity pass is underway; the first implementation landed for a
+  map-first screen structure, but screenshot verification and deeper polish are
+  still pending
 - physical-device notification smoke verification for the new time-tracking runtime
 - repo-level `make build` and `make lint` verification are currently blocked by
   unstable generated KSP app outputs under
   `app/build/generated/ksp/debug/java`
-- UX parity planning is now documented in `android-port-plan.md` from the
-  2026-04-07 screenshot comparison against the macOS app
 
 ## Not Started
 
-- dashboard UX parity pass for stronger hierarchy, real quick actions, and
-  denser metric-led cards
-- visited map UX parity pass that promotes the map and summaries above capture
-  explanation copy
 - weather card parity pass for forecast disclosure, clearer current metrics, and
   surf sub-section polish
 - dashboard action parity for fuel/open-map flows and other compact in-card
@@ -125,6 +129,10 @@ Verified:
   storage and settings hardening slice
 - `run_gradle -Pksp.incremental=false lintDebug` passed on 2026-04-07 after
   the travel-alert slice
+- `run_gradle :core:model:compileDebugKotlin :feature:dashboard:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-07 after the first dashboard UX parity refactor
+- `run_gradle :feature:visited:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-07 after the first visited UX parity refactor
 - release changelog/play-notes generator verified on 2026-04-07 in an isolated
   worktree for first-release, later-release, dirty-worktree, and tag-collision
   scenarios
@@ -143,6 +151,9 @@ Not yet fully re-verified after the visited map slice in this session:
 - full Android screenshot set after the new UX parity backlog was documented;
   only `dashboard`, `visited`, and `about` phone captures were available for
   the 2026-04-07 comparison
+- rerun of `SCREEN=dashboard make screenshots` after the dashboard UX refactor;
+  the emulator helper stalled before `adb devices` exposed a target, so the new
+  dashboard and visited layouts have not been visually re-reviewed yet
 - end-to-end physical-device smoke pass with the explicit `make test-device`
   path
 - signed release AAB generation with real keystore
@@ -153,13 +164,16 @@ Not yet fully re-verified after the visited map slice in this session:
 1. Rework the dashboard information hierarchy first: replace low-value header
    pills with quick actions, tighten top-level status cards, and make the
    weather/travel sections easier to scan on a phone.
-2. Rework the visited screen next so the map and travel footprint become the
-   first thing a user sees, with capture mechanics demoted to secondary help.
-3. Resolve the current app-module KSP generated-source instability, then rerun
+2. Re-run the screenshot review flow against the new dashboard layout once the
+   emulator helper is stable again, then refine spacing and card density from
+   that output.
+3. Refine the visited screen from the new map-first baseline, especially the
+   country-day summaries and saved-place density once fresh screenshots exist.
+4. Resolve the current app-module KSP generated-source instability, then rerun
    `make build`, `make lint`, and the full `make screenshots` parity pass.
-4. Add the missing action-level parity that is already feasible without new
+5. Add the missing action-level parity that is already feasible without new
    providers, especially map/open actions and richer weather presentation.
-5. Treat emergency care / Places integration, time-tracking reporting/export,
+6. Treat emergency care / Places integration, time-tracking reporting/export,
    and power/connectivity history visuals as follow-up slices after the UX
    foundation is improved.
 

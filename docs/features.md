@@ -16,13 +16,14 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Single main dashboard screen | Implemented | Adaptive Compose route is live |
+| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now has an action-first header, a denser summary strip, and metric-led detail cards |
 | Settings screen | Implemented | Settings persist via Proto DataStore |
 | About screen | Implemented | Minimal bootstrap content |
-| Visited screen route | Implemented | Route shows the visited world map, local history summaries, saved places, and country-day breakdowns |
+| Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Bootstrap | Route exists, runtime not complete |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
+| Compact dashboard UX parity pass | Implemented | Default dashboard order now starts with weather and travel alerts; quick actions replace the old non-interactive route pills |
 
 ## Connectivity And Travel Context
 
@@ -52,7 +53,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Current weather | Implemented | Open-Meteo |
-| Daily forecast summary | Implemented | Open-Meteo daily data |
+| Daily forecast summary | Implemented | Open-Meteo daily data with a metric-led dashboard presentation and compact 3-day list |
 | Weather expand/collapse preference | Implemented | Setting is wired |
 | Surf spot settings model | Implemented | Persisted in settings |
 | Surf card parity | Bootstrap | Data model and settings are present; dedicated UI is next |
@@ -61,7 +62,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Travel alerts card | Implemented | Dashboard card now shows an aggregate status plus dedicated Travel Advisory and Regional Security rows with checking, ready, stale, and unavailable states |
+| Travel alerts card | Implemented | Dashboard card now shows an aggregate status plus dedicated Travel Advisory and Regional Security rows with checking, ready, stale, and unavailable states, compact status pills, and coverage context |
 | Smartraveller advisory | Implemented | Uses Smartraveller destination export data with tolerant country-name matching and Level 1/2/3/4 severity mapping |
 | ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires an approved ReliefWeb app name saved in Settings |
 | Weather alerts | Deferred | Provider decision still pending |
@@ -70,7 +71,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Fuel card | Implemented | Dashboard card now shows ready/configuration/unavailable/no-stations states with the cheapest nearby diesel and gasoline rows |
+| Fuel card | Implemented | Dashboard card now highlights the cheapest nearby diesel and gasoline stations in a more scan-friendly row layout while keeping the same ready/configuration/unavailable/no-stations states |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
 | Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
 | Emergency care card shell | Bootstrap | Setting and dashboard text exist |
@@ -81,7 +82,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Visited screen route | Implemented | UI route shows the visited world map, saved places, permission state, and country-day summaries |
+| Visited screen route | Implemented | UI route now leads with the travel footprint and capture controls instead of explanatory copy, then shows the world map, saved places, permission state, and country-day summaries |
 | Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |

@@ -19,14 +19,14 @@ enum class DashboardCardId {
 
     companion object {
         val defaultOrder = listOf(
+            WEATHER,
+            TRAVEL_ALERTS,
             CONNECTIVITY,
-            POWER,
-            TIME_TRACKING,
             TRAVEL_CONTEXT,
             FUEL_PRICES,
+            POWER,
+            TIME_TRACKING,
             EMERGENCY_CARE,
-            TRAVEL_ALERTS,
-            WEATHER,
         )
     }
 }

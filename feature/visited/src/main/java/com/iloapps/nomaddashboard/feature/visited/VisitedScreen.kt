@@ -179,77 +179,14 @@ fun VisitedScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            NomadCard {
-                NomadSectionHeader(
-                    title = "Visited Places",
-                    subtitle = headerSubtitle(state.settings, placeSummary, state.countryDays),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    NomadPill(text = trackingModeLabel(state.settings))
-                    NomadPill(text = "Tracked days: ${state.countryDays.size}")
-                }
-            }
-        }
-
-        item {
-            NomadCard {
-                NomadSectionHeader(
-                    title = "How Capture Works",
-                    subtitle = "Saved locally on this device only.",
-                )
-                Text(
-                    text = "The app records travel history during refresh. Device location replaces same-day IP captures, the first resolved country wins for a day, and missing in-between days are inferred by splitting gaps between the surrounding countries.",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-        }
-
-        item {
-            NomadCard {
-                NomadSectionHeader(
-                    title = "Capture Status",
-                    subtitle = captureSubtitle(state.settings, hasLocationPermission),
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    state.settings.publicIpGeolocationEnabled.takeIf { it }?.let {
-                        NomadPill(text = "IP enabled")
-                    }
-                    state.settings.useCurrentLocationForVisitedPlaces.takeIf { it }?.let {
-                        NomadPill(text = if (hasLocationPermission) "Device ready" else "Device permission needed")
-                    }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Button(
-                        onClick = onRefresh,
-                        enabled = state.settings.visitedPlacesEnabled,
-                    ) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = null)
-                        Text("Capture now", modifier = Modifier.padding(start = 8.dp))
-                    }
-                    if (
-                        state.settings.visitedPlacesEnabled &&
-                        state.settings.useCurrentLocationForVisitedPlaces &&
-                        hasLocationPermission.not()
-                    ) {
-                        Button(onClick = onRequestLocationPermission) {
-                            Icon(Icons.Rounded.MyLocation, contentDescription = null)
-                            Text("Allow location", modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
-                }
-            }
+            VisitedOverviewCard(
+                settings = state.settings,
+                placeSummary = placeSummary,
+                countryDays = state.countryDays,
+                hasLocationPermission = hasLocationPermission,
+                onRefresh = onRefresh,
+                onRequestLocationPermission = onRequestLocationPermission,
+            )
         }
 
         if (state.settings.visitedPlacesEnabled.not()) {
@@ -335,7 +272,111 @@ fun VisitedScreen(
                     }
                 }
             }
+
+            item {
+                HowCaptureWorksCard()
+            }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VisitedOverviewCard(
+    settings: AppSettings,
+    placeSummary: com.iloapps.nomaddashboard.core.model.VisitedPlaceSummary,
+    countryDays: List<VisitedCountryDay>,
+    hasLocationPermission: Boolean,
+    onRefresh: () -> Unit,
+    onRequestLocationPermission: () -> Unit,
+) {
+    NomadCard {
+        NomadSectionHeader(
+            title = "Visited Places",
+            subtitle = headerSubtitle(settings, placeSummary, countryDays),
+        )
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            maxItemsInEachRow = 3,
+        ) {
+            VisitedOverviewMetric(label = "Cities", value = placeSummary.citiesVisited.toString())
+            VisitedOverviewMetric(label = "Countries", value = placeSummary.countriesVisited.toString())
+            VisitedOverviewMetric(label = "Tracked Days", value = countryDays.size.toString())
+        }
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            NomadPill(text = trackingModeLabel(settings))
+            NomadPill(text = if (settings.visitedPlacesEnabled) "Saved locally only" else "Capture off")
+            if (settings.publicIpGeolocationEnabled) {
+                NomadPill(text = "IP enabled")
+            }
+            if (settings.useCurrentLocationForVisitedPlaces) {
+                NomadPill(text = if (hasLocationPermission) "Device ready" else "Device permission needed")
+            }
+        }
+
+        Text(
+            text = captureSubtitle(settings, hasLocationPermission),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Button(
+                onClick = onRefresh,
+                enabled = settings.visitedPlacesEnabled,
+            ) {
+                Icon(Icons.Rounded.Refresh, contentDescription = null)
+                Text("Capture now", modifier = Modifier.padding(start = 8.dp))
+            }
+            if (settings.visitedPlacesEnabled && settings.useCurrentLocationForVisitedPlaces && hasLocationPermission.not()) {
+                Button(onClick = onRequestLocationPermission) {
+                    Icon(Icons.Rounded.MyLocation, contentDescription = null)
+                    Text("Allow location", modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisitedOverviewMetric(
+    label: String,
+    value: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun HowCaptureWorksCard() {
+    NomadCard {
+        NomadSectionHeader(
+            title = "How Capture Works",
+            subtitle = "Saved locally on this device only.",
+        )
+        Text(
+            text = "The app records travel history during refresh. Device location replaces same-day IP captures, the first resolved country wins for a day, and missing in-between days are inferred by splitting gaps between the surrounding countries.",
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 

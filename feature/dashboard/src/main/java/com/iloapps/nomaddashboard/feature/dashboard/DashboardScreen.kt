@@ -1,25 +1,39 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,18 +42,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadPill
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadSummaryTile
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.SignalLevel
+import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
 import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalState
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
+import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
 import java.util.Locale
 
 @Composable
@@ -77,99 +93,72 @@ fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "Nomad Dashboard",
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            text = state.snapshot.travelContext.city?.let { "$it instrument panel" } ?: "Travel-ready system telemetry",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
-                        )
-                    }
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
-                    }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NomadPill(text = "Settings", tint = MaterialTheme.colorScheme.surfaceVariant)
-                    NomadPill(text = "Visited Map")
-                    NomadPill(text = "Time Tracking")
-                    NomadPill(text = "About")
-                }
-            }
+            DashboardHeader(
+                state = state,
+                onRefresh = onRefresh,
+                onOpenSettings = onOpenSettings,
+                onOpenVisited = onOpenVisited,
+                onOpenTimeTracking = onOpenTimeTracking,
+                onOpenAbout = onOpenAbout,
+            )
         }
 
         item {
-            BoxWithConstraints {
-                val wide = maxWidth > 700.dp
-                if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        NomadSummaryTile(state.snapshot.overallSummary, Modifier.weight(1f))
-                        NomadSummaryTile(state.snapshot.networkSummary, Modifier.weight(1f))
-                        NomadSummaryTile(state.snapshot.powerSummary, Modifier.weight(1f))
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        NomadSummaryTile(state.snapshot.overallSummary)
-                        NomadSummaryTile(state.snapshot.networkSummary)
-                        NomadSummaryTile(state.snapshot.powerSummary)
-                    }
-                }
-            }
+            DashboardSummaryStrip(
+                overall = state.snapshot.overallSummary,
+                network = state.snapshot.networkSummary,
+                power = state.snapshot.powerSummary,
+            )
         }
 
         items(state.settings.dashboardCardOrder, key = { it.name }) { cardId ->
             when (cardId) {
-                DashboardCardId.CONNECTIVITY -> DashboardSectionCard(
-                    title = "Travel Context",
-                    subtitle = state.snapshot.travelContext.publicIp ?: "Network context",
-                    lines = listOf(
-                        "Internet: ${state.snapshot.connectivity.internetState}",
-                        "Latency: ${state.snapshot.connectivity.latencyMs?.toInt()?.toString() ?: "n/a"} ms",
-                        "Wi-Fi: ${state.snapshot.connectivity.wifiName ?: "Unavailable"}",
-                        "VPN: ${if (state.snapshot.connectivity.vpnActive) "Active" else "Inactive"}",
+                DashboardCardId.CONNECTIVITY -> DashboardMetricCard(
+                    title = "Network Detail",
+                    subtitle = state.snapshot.connectivity.internetState,
+                    metrics = listOf(
+                        DashboardMetric("Latency", state.snapshot.connectivity.latencyMs?.toInt()?.let { "$it ms" } ?: "n/a"),
+                        DashboardMetric("Jitter", state.snapshot.connectivity.jitterMs?.toInt()?.let { "$it ms" } ?: "n/a"),
+                        DashboardMetric("Wi-Fi", state.snapshot.connectivity.wifiName ?: "Unavailable"),
+                        DashboardMetric("VPN", if (state.snapshot.connectivity.vpnActive) "Active" else "Inactive"),
+                    ),
+                    supportingLines = listOfNotNull(
+                        state.snapshot.connectivity.downloadMbps?.let { "Down ${it.toInt()} Mbps" },
+                        state.snapshot.connectivity.uploadMbps?.let { "Up ${it.toInt()} Mbps" },
                     ),
                 )
-                DashboardCardId.POWER -> DashboardSectionCard(
+                DashboardCardId.POWER -> DashboardMetricCard(
                     title = "Power",
                     subtitle = state.snapshot.power.batteryHealthSummary,
-                    lines = listOf(
-                        "Battery: ${state.snapshot.power.batteryPercent?.let { "$it%" } ?: "Estimating"}",
-                        "Charging: ${if (state.snapshot.power.charging) "Yes" else "No"}",
-                        "Drain: ${state.snapshot.power.dischargeWatts?.let { "%.1fW".format(it) } ?: "Unavailable"}",
+                    metrics = listOf(
+                        DashboardMetric("Battery", state.snapshot.power.batteryPercent?.let { "$it%" } ?: "Estimating"),
+                        DashboardMetric("Charging", if (state.snapshot.power.charging) "Yes" else "No"),
+                        DashboardMetric("Drain", state.snapshot.power.dischargeWatts?.let { "%.1f W".format(it) } ?: "Unavailable"),
                     ),
                 )
-                DashboardCardId.TIME_TRACKING -> DashboardSectionCard(
+                DashboardCardId.TIME_TRACKING -> DashboardNarrativeCard(
                     title = "Time Tracking",
                     subtitle = state.snapshot.timeTracking.headline,
                     lines = listOf(state.snapshot.timeTracking.detail),
                 )
-                DashboardCardId.TRAVEL_CONTEXT -> DashboardSectionCard(
+                DashboardCardId.TRAVEL_CONTEXT -> DashboardMetricCard(
                     title = "Travel Context",
-                    subtitle = state.snapshot.travelContext.city ?: "Locating",
-                    lines = listOf(
-                        "Public IP: ${state.snapshot.travelContext.publicIp ?: "Unavailable"}",
-                        "Country: ${state.snapshot.travelContext.country ?: "Unavailable"}",
-                        "Time Zone: ${state.snapshot.travelContext.timeZoneId ?: state.snapshot.connectivity.timeZoneId}",
+                    subtitle = dashboardLocationLabel(state),
+                    metrics = listOf(
+                        DashboardMetric("Public IP", state.snapshot.travelContext.publicIp ?: "Unavailable"),
+                        DashboardMetric("Country", state.snapshot.travelContext.country ?: "Unavailable"),
+                        DashboardMetric("Region", state.snapshot.travelContext.region ?: "Unavailable"),
+                        DashboardMetric(
+                            "Time Zone",
+                            state.snapshot.travelContext.timeZoneId ?: state.snapshot.connectivity.timeZoneId,
+                        ),
                     ),
                 )
-                DashboardCardId.FUEL_PRICES -> DashboardSectionCard(
-                    title = "Fuel Prices",
-                    subtitle = fuelPricesSubtitle(
-                        enabled = state.settings.fuelPricesEnabled,
-                        snapshot = state.snapshot.fuelPrices,
-                    ),
-                    lines = fuelPriceLines(
-                        enabled = state.settings.fuelPricesEnabled,
-                        snapshot = state.snapshot.fuelPrices,
-                    ),
+                DashboardCardId.FUEL_PRICES -> FuelPricesSectionCard(
+                    enabled = state.settings.fuelPricesEnabled,
+                    snapshot = state.snapshot.fuelPrices,
                 )
-                DashboardCardId.EMERGENCY_CARE -> DashboardSectionCard(
+                DashboardCardId.EMERGENCY_CARE -> DashboardNarrativeCard(
                     title = "Emergency Care",
                     subtitle = if (state.settings.emergencyCareEnabled) "Enabled" else "Off",
                     lines = listOf(state.snapshot.emergencyCare.summary),
@@ -177,22 +166,467 @@ fun DashboardScreen(
                 DashboardCardId.TRAVEL_ALERTS -> TravelAlertsSectionCard(
                     snapshot = state.snapshot.travelAlerts,
                 )
-                DashboardCardId.WEATHER -> DashboardSectionCard(
-                    title = "Weather",
-                    subtitle = state.snapshot.weather.summary,
-                    lines = buildList {
-                        add("Temperature: ${state.snapshot.weather.currentTemperatureCelsius?.let { "%.1f°C".format(it) } ?: "Unavailable"}")
-                        add("Feels like: ${state.snapshot.weather.apparentTemperatureCelsius?.let { "%.1f°C".format(it) } ?: "Unavailable"}")
-                        add("Wind: ${state.snapshot.weather.windSpeedKph?.let { "%.1f km/h".format(it) } ?: "Unavailable"}")
-                        if (state.settings.weatherForecastExpanded) {
-                            addAll(state.snapshot.weather.dailyForecast.take(3).map {
-                                "${it.date.dayOfWeek.name.lowercase().replaceFirstChar(Char::titlecase)}: ${it.summary}, ${it.minCelsius?.toInt() ?: 0}°/${it.maxCelsius?.toInt() ?: 0}°"
-                            })
-                        }
-                    },
+                DashboardCardId.WEATHER -> WeatherSectionCard(
+                    snapshot = state.snapshot.weather,
+                    forecastExpanded = state.settings.weatherForecastExpanded,
                 )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DashboardHeader(
+    state: DashboardUiState,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenVisited: () -> Unit,
+    onOpenTimeTracking: () -> Unit,
+    onOpenAbout: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Nomad Dashboard",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NomadPill(
+                        text = state.snapshot.overallSummary.headline,
+                        tint = levelTint(state.snapshot.overallSummary.level),
+                    )
+                    Text(
+                        text = dashboardLocationLabel(state),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Text(
+                    text = dashboardHeaderSupportLine(state),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.72f),
+                )
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+            }
+        }
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            DashboardQuickAction(
+                label = "Visited",
+                icon = Icons.Rounded.Map,
+                onClick = onOpenVisited,
+            )
+            DashboardQuickAction(
+                label = "Tracking",
+                icon = Icons.Rounded.Timer,
+                onClick = onOpenTimeTracking,
+            )
+            DashboardQuickAction(
+                label = "Settings",
+                icon = Icons.Rounded.Settings,
+                onClick = onOpenSettings,
+            )
+            DashboardQuickAction(
+                label = "About",
+                icon = Icons.Rounded.Info,
+                onClick = onOpenAbout,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DashboardSummaryStrip(
+    overall: SummaryTile,
+    network: SummaryTile,
+    power: SummaryTile,
+) {
+    BoxWithConstraints {
+        val spacing = 12.dp
+        val columns = if (maxWidth > 330.dp) 3 else 2
+        val tileWidth = (maxWidth - spacing * (columns - 1)) / columns
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            maxItemsInEachRow = columns,
+        ) {
+            CompactSummaryTile(tile = overall, modifier = Modifier.width(tileWidth))
+            CompactSummaryTile(tile = network, modifier = Modifier.width(tileWidth))
+            CompactSummaryTile(tile = power, modifier = Modifier.width(tileWidth))
+        }
+    }
+}
+
+@Composable
+private fun CompactSummaryTile(
+    tile: SummaryTile,
+    modifier: Modifier = Modifier,
+) {
+    NomadCard(modifier = modifier.heightIn(min = 132.dp)) {
+        Text(
+            text = tile.title.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(levelDotColor(tile.level))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = tile.headline,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                )
+            }
+        }
+        Text(
+            text = tile.detail,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+        )
+    }
+}
+
+@Composable
+private fun DashboardQuickAction(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Icon(icon, contentDescription = null)
+        Text(text = label, modifier = Modifier.padding(start = 8.dp))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DashboardMetricCard(
+    title: String,
+    subtitle: String,
+    metrics: List<DashboardMetric>,
+    supportingLines: List<String> = emptyList(),
+) {
+    NomadCard {
+        NomadSectionHeader(title = title, subtitle = subtitle)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            maxItemsInEachRow = 2,
+        ) {
+            metrics.forEach { metric ->
+                DashboardMetricCell(metric = metric, modifier = Modifier.fillMaxWidth(0.48f))
+            }
+        }
+        supportingLines.forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardMetricCell(
+    metric: DashboardMetric,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = metric.label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Text(
+            text = metric.value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WeatherSectionCard(
+    snapshot: WeatherSnapshot,
+    forecastExpanded: Boolean,
+) {
+    NomadCard {
+        NomadSectionHeader(
+            title = "Weather",
+            subtitle = snapshot.summary,
+            trailing = {
+                NomadPill(text = snapshot.sourceName, tint = MaterialTheme.colorScheme.surfaceVariant)
+            },
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            maxItemsInEachRow = 3,
+        ) {
+            WeatherMetric("Current", snapshot.currentTemperatureCelsius?.let { "%.0f C".format(it) } ?: "Unavailable")
+            WeatherMetric("Feels Like", snapshot.apparentTemperatureCelsius?.let { "%.0f C".format(it) } ?: "Unavailable")
+            WeatherMetric("Wind", snapshot.windSpeedKph?.let { "%.0f km/h".format(it) } ?: "Unavailable")
+            WeatherMetric("Rain Chance", snapshot.rainChancePercent?.let { "$it%" } ?: "n/a")
+        }
+        if (forecastExpanded && snapshot.dailyForecast.isNotEmpty()) {
+            Text(
+                text = "Forecast",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+            )
+            snapshot.dailyForecast.take(3).forEach { day ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = day.date.dayOfWeek.name.lowercase().replaceFirstChar(Char::titlecase),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = day.summary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        )
+                    }
+                    Text(
+                        text = "${day.minCelsius?.toInt() ?: 0}° / ${day.maxCelsius?.toInt() ?: 0}°",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherMetric(
+    label: String,
+    value: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
+        )
+    }
+}
+
+@Composable
+private fun FuelPricesSectionCard(
+    enabled: Boolean,
+    snapshot: FuelPriceSnapshot,
+) {
+    if (enabled.not()) {
+        DashboardNarrativeCard(
+            title = "Fuel Prices",
+            subtitle = "Off",
+            lines = listOf("Enable fuel prices in Settings to compare nearby diesel and gasoline stations."),
+        )
+        return
+    }
+
+    NomadCard {
+        NomadSectionHeader(
+            title = "Fuel Prices",
+            subtitle = fuelPricesSubtitle(enabled = true, snapshot = snapshot),
+        )
+        when (snapshot.status) {
+            FuelPriceStatus.READY -> {
+                snapshot.diesel?.let { FuelPriceRow(price = it) }
+                snapshot.gasoline?.let { FuelPriceRow(price = it) }
+                listOfNotNull(snapshot.detail.takeIf(String::isNotBlank), snapshot.note).forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+            }
+            FuelPriceStatus.NO_STATIONS_FOUND,
+            FuelPriceStatus.CONFIGURATION_REQUIRED,
+            FuelPriceStatus.UNAVAILABLE,
+            FuelPriceStatus.UNSUPPORTED,
+            -> fuelPriceLines(enabled = true, snapshot = snapshot).forEach { line ->
+                Text(
+                    text = line,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FuelPriceRow(
+    price: FuelStationPrice,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            Text(
+                text = when (price.fuelType) {
+                    FuelType.DIESEL -> "Diesel"
+                    FuelType.GASOLINE -> "Gasoline"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = buildString {
+                    append(price.stationName)
+                    price.locality?.let {
+                        append(" · ")
+                        append(it)
+                    }
+                    append(" · ")
+                    append(String.format(Locale.US, "%.1f km", price.distanceKilometers))
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+        Text(
+            text = String.format(Locale.US, "%.3f %s/L", price.pricePerLiter, price.currencyCode),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun DashboardNarrativeCard(
+    title: String,
+    subtitle: String,
+    lines: List<String>,
+) {
+    NomadCard {
+        NomadSectionHeader(title = title, subtitle = subtitle)
+        lines.forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun TravelAlertsSectionCard(
+    snapshot: TravelAlertsSnapshot,
+    modifier: Modifier = Modifier,
+) {
+    NomadCard(modifier = modifier.testTag(TravelAlertsCardTag)) {
+        NomadSectionHeader(
+            title = "Travel Alerts",
+            subtitle = travelAlertsSubtitle(snapshot),
+            trailing = {
+                snapshot.primaryCountryName?.let {
+                    NomadPill(text = it, tint = MaterialTheme.colorScheme.surfaceVariant)
+                }
+            },
+        )
+        snapshot.primaryCountryName?.let { countryName ->
+            Text(
+                text = travelAlertsCoverageText(snapshot, countryName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+        snapshot.enabledKinds.forEach { kind ->
+            snapshot.state(kind)?.let { state ->
+                TravelAlertRow(
+                    state = state,
+                    modifier = Modifier.testTag("travel-alert-row-${kind.name.lowercase()}"),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TravelAlertRow(
+    state: TravelAlertSignalState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = state.kind.displayName(),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            NomadPill(
+                text = travelAlertStatusLabel(state),
+                tint = travelAlertTint(state),
+            )
+        }
+        Text(
+            text = travelAlertSummary(state),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+        )
+        Text(
+            text = state.signal?.sourceName ?: state.sourceName,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        )
     }
 }
 
@@ -252,66 +686,23 @@ private fun FuelStationPrice.toFuelLine(): String {
     return "$label: $price $currencyCode/L · $stationName · $distance km$localityText"
 }
 
-@Composable
-internal fun TravelAlertsSectionCard(
-    snapshot: TravelAlertsSnapshot,
-    modifier: Modifier = Modifier,
-) {
-    NomadCard(modifier = modifier.testTag(TravelAlertsCardTag)) {
-        NomadSectionHeader(
-            title = "Travel Alerts",
-            subtitle = travelAlertsSubtitle(snapshot),
-        )
-        snapshot.primaryCountryName?.let { countryName ->
-            Text(
-                text = travelAlertsCoverageText(snapshot, countryName),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-            )
-        }
-        snapshot.enabledKinds.forEach { kind ->
-            snapshot.state(kind)?.let { state ->
-                TravelAlertRow(
-                    state = state,
-                    modifier = Modifier.testTag("travel-alert-row-${kind.name.lowercase()}"),
-                )
-            }
-        }
-    }
-}
+private fun dashboardLocationLabel(state: DashboardUiState): String =
+    listOfNotNull(
+        state.snapshot.travelContext.city,
+        state.snapshot.travelContext.country,
+    ).joinToString(", ").ifBlank { "Travel-ready system telemetry" }
 
-@Composable
-private fun TravelAlertRow(
-    state: TravelAlertSignalState,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = state.kind.displayName(),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = travelAlertStatusLabel(state),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                modifier = Modifier.width(72.dp),
-            )
+private fun dashboardHeaderSupportLine(state: DashboardUiState): String {
+    val contextBits = listOfNotNull(
+        state.snapshot.travelContext.region,
+        state.snapshot.travelContext.timeZoneId ?: state.snapshot.connectivity.timeZoneId,
+    )
+    return buildString {
+        append(state.snapshot.overallSummary.detail)
+        if (contextBits.isNotEmpty()) {
+            append(" · ")
+            append(contextBits.joinToString(" · "))
         }
-        Text(
-            text = travelAlertSummary(state),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
-        )
-        Text(
-            text = state.signal?.sourceName ?: state.sourceName,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-        )
     }
 }
 
@@ -378,22 +769,45 @@ private fun TravelAlertUnavailableReason.summary(): String = when (this) {
 }
 
 @Composable
-private fun DashboardSectionCard(
-    title: String,
-    subtitle: String,
-    lines: List<String>,
-) {
-    NomadCard {
-        NomadSectionHeader(title = title, subtitle = subtitle)
-        lines.forEach { line ->
-            Text(
-                text = line,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
-                modifier = Modifier.padding(top = 2.dp),
-            )
+private fun levelTint(level: SignalLevel): Color =
+    when (level) {
+        SignalLevel.GOOD -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        SignalLevel.WARNING -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)
+        SignalLevel.BAD -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.24f)
+        SignalLevel.NEUTRAL -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+@Composable
+private fun levelDotColor(level: SignalLevel): Color =
+    when (level) {
+        SignalLevel.GOOD -> MaterialTheme.colorScheme.primary
+        SignalLevel.WARNING -> MaterialTheme.colorScheme.secondary
+        SignalLevel.BAD -> MaterialTheme.colorScheme.secondary
+        SignalLevel.NEUTRAL -> MaterialTheme.colorScheme.outline
+    }
+
+@Composable
+private fun travelAlertTint(state: TravelAlertSignalState): Color =
+    when (state.status) {
+        TravelAlertSignalStatus.CHECKING,
+        TravelAlertSignalStatus.STALE,
+        TravelAlertSignalStatus.UNAVAILABLE,
+        -> MaterialTheme.colorScheme.surfaceVariant
+        TravelAlertSignalStatus.READY -> when (state.signal?.severity) {
+            TravelAlertSeverity.WARNING,
+            TravelAlertSeverity.CRITICAL,
+            TravelAlertSeverity.CAUTION,
+            -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)
+            TravelAlertSeverity.INFO,
+            TravelAlertSeverity.CLEAR,
+            null,
+            -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         }
     }
-}
+
+private data class DashboardMetric(
+    val label: String,
+    val value: String,
+)
 
 internal const val TravelAlertsCardTag = "travel-alerts-card"
