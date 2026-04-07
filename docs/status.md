@@ -8,9 +8,10 @@ Current phase: `Foundation + Core bootstrap complete`
 
 Current repository state:
 - initial Android port scaffold implemented
-- initial Git commit created
+- initial Android scaffold committed
+- documentation and wireless helper follow-up committed
 - build/test/lint verified locally
-- no real-device install verified from this repo session yet
+- real-device debug install verified on Android phone via wireless debugging
 
 ## Completed
 
@@ -59,17 +60,18 @@ Verified:
 - `make build`
 - `make test`
 - `make lint`
+- wireless ADB pairing and reconnect flow
+- debug APK install on physical Android phone
+- app launch on physical Android phone
 
 Not yet verified in this session:
-- install on physical Android phone
 - run on emulator
-- wireless ADB pairing end-to-end
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
 
 ## Immediate Next Steps
 
-1. Install the debug APK on a real device and capture first Android screenshots.
+1. Capture first Android screenshots from the running app for parity review.
 2. Implement visited place persistence and visited-country-day logic.
 3. Implement local time-tracking runtime and storage.
 4. Add provider-complete fuel and emergency-care slices.
@@ -81,4 +83,3 @@ When work lands:
 - add any active work to `In Progress`
 - record new verification results
 - keep this file chronological and factual rather than aspirational
-

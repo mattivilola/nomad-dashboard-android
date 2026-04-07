@@ -39,6 +39,7 @@ make lint
 
 Current verified result:
 - all three commands pass in this repo
+- debug APK was installed and launched on a physical Android phone over wireless debugging
 
 ## APK Location
 
@@ -92,6 +93,9 @@ Then install and launch:
 ```sh
 make run
 ```
+
+Current repo status:
+- verified working on a physical device after wireless ADB reconnect
 
 ## Troubleshooting Install Failures
 
