@@ -140,6 +140,20 @@ Visited history flow:
 5. `VisitedViewModel` combines settings, visited places, and country days into
    UI state for the visited screen.
 
+Time tracking flow:
+
+1. `TimeTrackingViewModel` combines `AppSettings` with `TimeTrackingRepository`
+   flows for projects, the current active entry, and recent completed entries.
+2. `RoomTimeTrackingRepository` owns local project creation plus the
+   start/stop commands for entries stored in Room.
+3. A single active session is represented only by an entry with `endAt == null`;
+   repository transactions reject starting a second session while one is active.
+4. `MainActivity` and the tracking route start or stop the app-owned foreground
+   service from explicit user-visible tracking actions only.
+5. `TimeTrackingForegroundService` reloads the active entry from persistence and
+   rebuilds the persistent notification after app relaunch or service
+   recreation, but not after device reboot.
+
 Fuel prices flow:
 
 1. `DashboardViewModel` triggers repository refresh.
@@ -171,12 +185,14 @@ Fuel prices flow:
 - Proto DataStore for app settings
 - Room-backed visited places with merged source provenance
 - Room-backed visited country days with observed and inferred rows
+- Room-backed time-tracking projects
+- Room-backed time-tracking entries with project linkage and a single active
+  entry invariant
 
 ### Scaffolded
 
 - Room database and DAOs for:
   - metric points
-  - time-tracking entries
 
 ## Current External Integrations
 
@@ -197,10 +213,11 @@ Configured but not yet feature-complete:
 
 Implemented now:
 - foreground-only manual refresh model
+- foreground service for active time tracking with a persistent notification and
+  app-relaunch recovery
 
 Planned:
 - WorkManager for allowed periodic refresh work
-- foreground service for time tracking
 - careful opt-in policy for any background location-history work beyond the
   current foreground refresh model
 

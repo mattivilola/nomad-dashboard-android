@@ -91,11 +91,11 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Time tracking screen route | Bootstrap | UI route exists |
-| Project list and settings | Planned | Model exists but no management UI yet |
-| Ledger persistence | Planned | Room entities scaffolded |
-| Foreground-service runtime | Planned | Not implemented yet |
-| Allocation workflow | Planned | Not implemented yet |
+| Time tracking screen route | Implemented | Route now shows disabled guidance, local projects, active session state, and recent entries |
+| Project list and settings | Implemented | Add-only local project list with inline creation and project selection before start |
+| Ledger persistence | Implemented | Room-backed projects and entries with a single active session invariant |
+| Foreground-service runtime | Implemented | Persistent special-use notification runs while tracking and resumes after app relaunch or service recreation |
+| Allocation workflow | Implemented | Start/stop tracking per selected project with recent completed sessions shown in-app |
 | Reporting/export | Planned | Not implemented yet |
 
 ## Build, Release, And Distribution

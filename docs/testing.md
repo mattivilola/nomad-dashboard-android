@@ -25,6 +25,19 @@ Build debug APK:
 make build
 ```
 
+Install and launch the debug app:
+
+```sh
+make run
+```
+
+Current behavior:
+- prefers the first attached non-emulator Android device when both a phone and
+  an emulator are connected
+- falls back to the first booted emulator when no physical device is attached
+- honors an explicit `ANDROID_SERIAL=<serial> make run` override
+- builds the debug APK before install and launch
+
 Run unit tests:
 
 ```sh
@@ -69,31 +82,26 @@ make lint
 ```
 
 Current verified result:
-- `make build` passed on 2026-04-07 after the fuel slice
+- `make build` passed on 2026-04-07 after the time-tracking slice
+- `make test` passed on 2026-04-07 through the default emulator workflow
+- `make lint` passed on 2026-04-07 after the time-tracking slice
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- on 2026-04-07, targeted compile verification succeeded for
-  `:core:data:compileDebugKotlin` and `:feature:dashboard:compileDebugKotlin`
-- on 2026-04-07, `make lint` failed outside the fuel slice because
-  `:app:lintDebug` still reports existing `MissingPermission` errors in
-  `TimeTrackingForegroundService.kt`
-- on 2026-04-07, `make test` remained blocked outside the fuel slice:
-  - `:core:data:compileDebugUnitTestKotlin` failed because unrelated
-    `RoomTimeTrackingRepositoryTest` compilation errors are already present in
-    the current worktree
-  - connected tests still hit the earlier
-    `:feature:dashboard:connectedDebugAndroidTest` output-path failure and
-    `:app:connectedDebugAndroidTest` instrumentation crash
-- the visited unit-test coverage now compiles and passes during `testDebugUnitTest`
-- the default workflow is being switched so `make test` uses the emulator path
-  and the phone is reserved for explicit smoke checks via `make test-device`
+- on 2026-04-07, `make build` passed after wiring the Room-backed
+  time-tracking repository, screen, and foreground service
+- on 2026-04-07, `make test` passed with `scripts/test-emulator.sh` as the
+  default path, including app smoke tests and the new time-tracking unit tests
+- on 2026-04-07, `make lint` passed after the foreground-service permission
+  guards and notification runtime wiring were finalized
+- the default workflow now routes `make test` through the emulator path and
+  reserves the phone for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both
   `testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"` and
   `androidTestImplementation(libs.androidx.test.runner)` so empty
   instrumentation APKs do not crash before reporting `0 tests`
-- the app smoke test needed to be updated after replacing the visited
-  placeholder screen with the implemented visited-history UI
+- the app smoke tests now use stable shell navigation tags instead of depending
+  on every bottom-bar label remaining visible at emulator width
 
 ## APK Location
 
@@ -121,6 +129,9 @@ adb devices -l
 make run
 ```
 
+If both a phone and an emulator are attached, `make run` targets the phone by
+default.
+
 Or install manually:
 
 ```sh
@@ -147,6 +158,10 @@ Then install and launch:
 ```sh
 make run
 ```
+
+If both a wireless-debugged phone and an emulator are attached, `make run`
+targets the phone by default. Use `ANDROID_SERIAL=<emulator-serial> make run`
+when you explicitly want the emulator.
 
 Current repo status:
 - verified working on a physical device after wireless ADB reconnect
@@ -272,6 +287,14 @@ Perform these checks on the first installed build:
 - granting location permission and refreshing records a device-based visit
 - country-day summaries show yearly totals, monthly totals, and inferred gap days
 
+### Time tracking
+
+- time-tracking screen shows disabled guidance when project tracking is off
+- adding a local project makes it immediately selectable for tracking
+- starting tracking requires a selected project
+- an active session shows elapsed time in-app and posts a persistent notification
+- stopping tracking closes the active session and moves it into recent entries
+
 ### Build and environment
 
 - `make build` still succeeds after app launch
@@ -287,9 +310,13 @@ Implemented now:
 - repository refresh tests for IP capture, device capture, and disabled-state behavior
 - fuel provider tests for Spain, France, Italy, and Germany config handling
 - repository fuel refresh tests for device-first lookup, IP fallback, and unavailable-state wiring
+- time-tracking repository tests for project creation, start/stop behavior, single-active-session enforcement, and persisted active-session recovery
+- dashboard repository tests for disabled, idle, and active time-tracking summaries
+- foreground-service runtime tests for notification formatting and stop-command handling
 - Compose UI smoke tests for:
   - app launch into dashboard
   - top-level navigation across all five shell destinations
+  - time-tracking disabled guidance on the tracking route
   - stable dashboard shell rendering without live-network assertions
   - persisted `Expand weather forecast` toggle across activity recreation
 
@@ -298,10 +325,12 @@ File:
 - [VisitedModelsTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/test/java/com/iloapps/nomaddashboard/core/model/VisitedModelsTest.kt)
 - [RoomVisitedHistoryStoreTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/visited/RoomVisitedHistoryStoreTest.kt)
 - [DefaultFuelPriceProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/fuel/DefaultFuelPriceProviderTest.kt)
+- [RoomTimeTrackingRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/timetracking/RoomTimeTrackingRepositoryTest.kt)
 - [DefaultNomadDashboardRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepositoryTest.kt)
+- [TimeTrackingForegroundServiceRuntimeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/test/java/com/iloapps/nomaddashboard/feature/timetracking/runtime/TimeTrackingForegroundServiceRuntimeTest.kt)
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
 
 Planned next:
 - storage migration tests
-- time-tracking ledger tests
+- physical-device notification smoke verification for the time-tracking foreground service

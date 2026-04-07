@@ -5,11 +5,7 @@ source "$(dirname "$0")/android-env.sh"
 
 require_command adb
 
-physical_device_serial="$(
-  adb devices | awk '
-    NR > 1 && $2 == "device" && $1 !~ /^emulator-/ { print $1 }
-  ' | head -n 1
-)"
+physical_device_serial="$(first_physical_device_serial)"
 
 [[ -n "$physical_device_serial" ]] || fail "No connected physical Android device found."
 

@@ -10,7 +10,14 @@ require_command adb
 apk_path="$REPO_ROOT/app/build/outputs/apk/debug/app-debug.apk"
 [[ -f "$apk_path" ]] || fail "Debug APK not found at $apk_path"
 
-install_output="$(adb install -r "$apk_path" 2>&1)" || {
+target_serial="$(require_adb_target_serial)"
+if [[ "$target_serial" == emulator-* ]]; then
+  echo "Installing and launching on emulator $target_serial"
+else
+  echo "Installing and launching on physical device $target_serial"
+fi
+
+install_output="$(adb -s "$target_serial" install -r "$apk_path" 2>&1)" || {
   echo "$install_output" >&2
   if [[ "$install_output" == *"INSTALL_FAILED_USER_RESTRICTED"* ]]; then
     cat >&2 <<'EOF'
@@ -32,4 +39,4 @@ EOF
 }
 
 echo "$install_output"
-adb shell am start -n com.iloapps.nomaddashboard.dev/com.iloapps.nomaddashboard.MainActivity
+adb -s "$target_serial" shell am start -n com.iloapps.nomaddashboard.dev/com.iloapps.nomaddashboard.MainActivity

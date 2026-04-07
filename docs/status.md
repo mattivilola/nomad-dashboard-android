@@ -12,10 +12,12 @@ Current repository state:
 - documentation and wireless helper follow-up committed
 - prior build/test/lint baseline verified locally
 - real-device debug install verified on Android phone via wireless debugging
+- physical-device-first `make run` targeting added for mixed phone + emulator setups
 - fuel provider implementations and dashboard fuel card wiring implemented
 - visited places persistence and country-day aggregation implemented
 - visited screen history UI implemented
 - visited device-location opt-in and permission CTA implemented
+- time-tracking persistence, screen state, and foreground runtime implemented
 - Compose UI smoke test suite added for the Android shell
 - emulator-first connected-test workflow added
 
@@ -47,20 +49,23 @@ Current repository state:
 - visited route implemented
 - visited places persistence implemented
 - country-day aggregation logic implemented
-- time-tracking route placeholder implemented
+- time-tracking route implemented with local project creation, start/stop flow, and recent-session history
+- time-tracking Room persistence implemented for projects and entries
+- time-tracking foreground service and persistent notification implemented
+- time-tracking repository/storage/runtime tests implemented
 - Compose UI smoke tests added for app launch, top-level navigation, dashboard shell render, and one settings persistence flow
 - emulator boot and emulator-targeted test helper scripts added
+- physical-device-first `make run` device selection added with `ANDROID_SERIAL` override support
 - release/signing/publish helper scripts scaffolded
 - README and docs set added
 
 ## In Progress
 
-- verification rerun for build/lint/test after the fuel slice
+- physical-device notification smoke verification for the new time-tracking runtime
 
 ## Not Started
 
 - visited map rendering
-- time-tracking persistence and foreground-service runtime
 - emergency care / Places integration
 - Smartraveller and ReliefWeb Android provider implementation
 - analytics/privacy parity implementation
@@ -70,42 +75,34 @@ Current repository state:
 
 Verified:
 - `make build`
+- `make test`
+- `make lint`
 - wireless ADB pairing and reconnect flow
 - debug APK install on physical Android phone
 - app launch on physical Android phone
+- ADB target selection now prefers a connected physical device before any booted emulator
 - visited model/store/repository unit coverage added and passing via `testDebugUnitTest`
 - targeted compile verification for `:core:data` and `:feature:dashboard`
+- time-tracking repository/storage/runtime coverage added and passing
+- emulator-first connected smoke tests passing through `make test` on 2026-04-07
 
-Blocked in this session:
-- `make lint` on 2026-04-07 still fails outside the fuel slice
-  - `:app:lintDebug` reports existing time-tracking service permission errors in
-    `TimeTrackingForegroundService.kt`
-- `make test` on 2026-04-07 still fails outside the fuel slice
-  - `:core:data:compileDebugUnitTestKotlin` fails on unrelated
-    `RoomTimeTrackingRepositoryTest` errors already present in the worktree
-  - connected tests still hit the earlier
-    `:feature:dashboard:connectedDebugAndroidTest` and
-    `:app:connectedDebugAndroidTest` failures
-
-Not yet fully re-verified after the fuel slice in this session:
-- full `make lint`
-- full `make test` completion with the new default emulator path
+Not yet fully re-verified after the time-tracking slice in this session:
 - end-to-end physical-device smoke pass with the explicit `make test-device` path
 - signed release AAB generation with real keystore
 - Play internal upload with real service account
 
 ## Immediate Next Steps
 
-1. Implement local time-tracking runtime and storage.
-2. Add emergency care / Places provider completion.
-3. Capture first Android screenshots from the running app for parity review.
-4. Add visited map rendering on top of the persisted history slice.
+1. Add emergency care / Places provider completion.
+2. Capture first Android screenshots from the running app for parity review.
+3. Add visited map rendering on top of the persisted history slice.
+4. Extend time tracking beyond the local ledger with reporting/export only after the base slice settles.
 
 ## Parallel-Safe Workstreams
 
-Recommended secondary task while visited-data verification is active:
-- rerun the emulator-first test flow end to end, then keep the phone for
-  explicit smoke checks only
+Recommended secondary task while provider work is active:
+- keep the emulator-first `make test` loop as default, then use `make test-device`
+  only for explicit phone-side smoke checks
 
 Handoff doc:
 - [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)
