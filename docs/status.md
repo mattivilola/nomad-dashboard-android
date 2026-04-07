@@ -39,6 +39,8 @@ Current repository state:
 - dashboard UX parity pass started: compact quick actions, denser top-level
   summary strip, weather-first default ordering, and metric-led detail cards
   are now implemented in the dashboard UI layer
+- weather refresh now honors the existing device-location weather setting and
+  falls back to IP geolocation when device coordinates are unavailable
 - visited UX parity pass started: the screen now opens with an operational
   overview card and keeps capture guidance behind the map/history content
 - repo-level KSP build/lint stability restored by disabling broken KSP
@@ -64,6 +66,8 @@ Current repository state:
 - live public IP / IP geolocation bootstrap implemented
 - live Open-Meteo weather bootstrap implemented
 - dashboard route implemented
+- weather location sourcing now respects the weather settings toggle and no
+  longer depends only on IP geolocation
 - settings route implemented
 - about route implemented
 - dashboard fuel card implemented with device-first / IP-fallback lookup

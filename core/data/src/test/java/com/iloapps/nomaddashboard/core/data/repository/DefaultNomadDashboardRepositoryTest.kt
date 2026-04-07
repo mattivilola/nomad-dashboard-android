@@ -50,6 +50,8 @@ import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
 import com.iloapps.nomaddashboard.core.network.model.ReliefWebReportsRequest
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
+import com.iloapps.nomaddashboard.core.network.model.OpenMeteoCurrent
+import com.iloapps.nomaddashboard.core.network.model.OpenMeteoDaily
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import java.time.Instant
 import java.time.LocalDate
@@ -263,6 +265,111 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(fuelPriceProvider.requests).isEmpty()
         assertThat(repository.snapshot.first { it.lastRefresh != null }.fuelPrices.status)
             .isEqualTo(FuelPriceStatus.UNAVAILABLE)
+    }
+
+    @Test
+    fun `refresh uses device location first for weather lookup when enabled`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = false,
+            useCurrentLocationForWeather = true,
+        )
+        val openMeteoService = FakeOpenMeteoService(
+            response = OpenMeteoResponse(
+                current = OpenMeteoCurrent(
+                    temperatureCelsius = 19.4,
+                    apparentTemperatureCelsius = 18.7,
+                    precipitationProbability = 15,
+                    windSpeedKph = 12.3,
+                    windDirectionDegrees = 270.0,
+                ),
+                daily = OpenMeteoDaily(
+                    dates = listOf("2026-04-07"),
+                    minTemperatures = listOf(13.0),
+                    maxTemperatures = listOf(21.0),
+                    rainChance = listOf(20),
+                    weatherCodes = listOf(1),
+                ),
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            openMeteoService = openMeteoService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace(
+                    city = "Paris",
+                    region = "Ile-de-France",
+                    country = "France",
+                    countryCode = "FR",
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                ),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = openMeteoService.requests.single()
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }.weather
+
+        assertThat(request.latitude).isWithin(0.001).of(48.8566)
+        assertThat(request.longitude).isWithin(0.001).of(2.3522)
+        assertThat(snapshot.currentTemperatureCelsius).isWithin(0.001).of(19.4)
+        assertThat(snapshot.summary).isEqualTo("Today tops out at 21°C")
+    }
+
+    @Test
+    fun `refresh falls back to ip weather lookup when device weather location is unavailable`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForWeather = true,
+        )
+        val openMeteoService = FakeOpenMeteoService()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            openMeteoService = openMeteoService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(value = null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = openMeteoService.requests.single()
+        assertThat(request.latitude).isWithin(0.001).of(60.1699)
+        assertThat(request.longitude).isWithin(0.001).of(24.9384)
+    }
+
+    @Test
+    fun `refresh shows weather permission guidance when no weather location source resolves`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = false,
+            useCurrentLocationForWeather = true,
+        )
+        val openMeteoService = FakeOpenMeteoService()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            openMeteoService = openMeteoService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                hasLocationPermission = false,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val weather = repository.snapshot.first { it.lastRefresh != null }.weather
+        assertThat(openMeteoService.requests).isEmpty()
+        assertThat(weather.summary).isEqualTo("Grant location permission for weather.")
     }
 
     @Test
@@ -567,6 +674,7 @@ class DefaultNomadDashboardRepositoryTest {
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
+        openMeteoService: OpenMeteoService = FakeOpenMeteoService(),
         emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
         providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
@@ -585,7 +693,7 @@ class DefaultNomadDashboardRepositoryTest {
             settingsDataSource = settingsDataSource,
             telemetryReader = FakeTelemetryReader(),
             freeIpApiService = FakeFreeIpApiService(),
-            openMeteoService = FakeOpenMeteoService(),
+            openMeteoService = openMeteoService,
             fuelPriceProvider = fuelPriceProvider,
             emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
@@ -733,14 +841,35 @@ private class FakeFreeIpApiService : FreeIpApiService {
         )
 }
 
-private class FakeOpenMeteoService : OpenMeteoService {
+private class FakeOpenMeteoService(
+    private val response: OpenMeteoResponse = OpenMeteoResponse(),
+) : OpenMeteoService {
+    data class Request(
+        val latitude: Double,
+        val longitude: Double,
+        val current: String,
+        val daily: String,
+        val timezone: String,
+    )
+
+    val requests = mutableListOf<Request>()
+
     override suspend fun forecast(
         latitude: Double,
         longitude: Double,
         current: String,
         daily: String,
         timezone: String,
-    ): OpenMeteoResponse = OpenMeteoResponse()
+    ): OpenMeteoResponse {
+        requests += Request(
+            latitude = latitude,
+            longitude = longitude,
+            current = current,
+            daily = daily,
+            timezone = timezone,
+        )
+        return response
+    }
 }
 
 private class FakeVisitedDeviceLocationProvider(

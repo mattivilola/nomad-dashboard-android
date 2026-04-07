@@ -127,6 +127,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         val currentDevicePlace = if (
+            currentSettings.useCurrentLocationForWeather ||
             currentSettings.fuelPricesEnabled ||
             currentSettings.emergencyCareEnabled ||
             (currentSettings.visitedPlacesEnabled && currentSettings.useCurrentLocationForVisitedPlaces)
@@ -152,14 +153,16 @@ class DefaultNomadDashboardRepository @Inject constructor(
             }
         }
 
-        val latitude = travelContext.latitude
-        val longitude = travelContext.longitude
-
-        val weather = if (latitude != null && longitude != null) {
+        val weatherLocation = buildWeatherLocation(
+            currentSettings = currentSettings,
+            currentDevicePlace = currentDevicePlace,
+            travelContext = travelContext,
+        )
+        val weather = if (weatherLocation != null) {
             runCatching {
                 openMeteoService.forecast(
-                    latitude = latitude,
-                    longitude = longitude,
+                    latitude = weatherLocation.first,
+                    longitude = weatherLocation.second,
                 )
             }.map { response ->
                 WeatherSnapshot(
@@ -175,7 +178,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 WeatherSnapshot(summary = "Weather unavailable")
             }
         } else {
-            WeatherSnapshot(summary = "Weather data unavailable")
+            WeatherSnapshot(summary = unavailableWeatherSummary(currentSettings))
         }
 
         val previousTravelAlerts = internalSnapshot.value.travelAlerts
@@ -612,6 +615,47 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         return null
+    }
+
+    private fun buildWeatherLocation(
+        currentSettings: AppSettings,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): Pair<Double, Double>? {
+        if (currentSettings.useCurrentLocationForWeather) {
+            val latitude = currentDevicePlace?.latitude
+            val longitude = currentDevicePlace?.longitude
+            if (latitude != null && longitude != null) {
+                return latitude to longitude
+            }
+        }
+
+        val latitude = travelContext.latitude
+        val longitude = travelContext.longitude
+        return if (latitude != null && longitude != null) {
+            latitude to longitude
+        } else {
+            null
+        }
+    }
+
+    private fun unavailableWeatherSummary(
+        currentSettings: AppSettings,
+    ): String = when {
+        currentSettings.useCurrentLocationForWeather &&
+            visitedDeviceLocationProvider.hasLocationPermission().not() &&
+            currentSettings.publicIpGeolocationEnabled ->
+            "Grant location permission or re-enable IP geolocation for weather."
+
+        currentSettings.useCurrentLocationForWeather &&
+            visitedDeviceLocationProvider.hasLocationPermission().not() ->
+            "Grant location permission for weather."
+
+        currentSettings.useCurrentLocationForWeather ||
+            currentSettings.publicIpGeolocationEnabled ->
+            "Weather data unavailable"
+
+        else -> "Enable IP geolocation or current location for weather."
     }
 
     private fun buildEmergencyCareSearchRequest(

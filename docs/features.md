@@ -52,7 +52,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Current weather | Implemented | Open-Meteo |
+| Current weather | Implemented | Open-Meteo with device-location-first lookup when enabled in Settings, otherwise IP geolocation fallback |
 | Daily forecast summary | Implemented | Open-Meteo daily data with a metric-led dashboard presentation and compact 3-day list |
 | Weather expand/collapse preference | Implemented | Setting is wired |
 | Surf spot settings model | Implemented | Persisted in settings |

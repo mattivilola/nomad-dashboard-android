@@ -123,7 +123,8 @@ Current dashboard data flow:
    - device-place-first, IP-country-fallback travel-alert context
    - Smartraveller advisory lookup for the resolved primary country
    - ReliefWeb regional security lookup for the primary country plus bordering countries
-   - Open-Meteo weather using the resolved coordinate
+   - Open-Meteo weather using the current device coordinate when the weather
+     location toggle is enabled, otherwise the resolved IP-geolocation fallback
 4. Repository emits a `DashboardSnapshot`.
 5. Compose renders the snapshot through feature and design-system components.
 

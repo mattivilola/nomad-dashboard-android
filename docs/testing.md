@@ -154,6 +154,8 @@ Current verified result:
   provider, resolver, and repository coverage
 - `:core:data:testDebugUnitTest` passed again on 2026-04-07 after the
   emergency-care provider and repository coverage landed
+- `:core:data:testDebugUnitTest` targeted weather repository coverage passed on
+  2026-04-07 after wiring device-location weather lookup with IP fallback
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-07 for the
   travel-alert card after switching the test to an activity-backed Compose rule
 - `:feature:dashboard:connectedDebugAndroidTest` passed again on 2026-04-07
