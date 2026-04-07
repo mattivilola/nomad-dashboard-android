@@ -290,7 +290,7 @@ private fun VisitedOverviewCard(
     onRefresh: () -> Unit,
     onRequestLocationPermission: () -> Unit,
 ) {
-    NomadCard {
+    NomadCard(modifier = Modifier.testTag("visited_overview_card")) {
         NomadSectionHeader(
             title = "Visited Places",
             subtitle = headerSubtitle(settings, placeSummary, countryDays),
