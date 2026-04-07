@@ -1,0 +1,1 @@
+First Android release with visited places history and country-day aggregation, dashboard fuel prices across Spain, France, Italy, and Germany, local time tracking with session history and a persistent timer, encrypted on-device provider credential storage, and travel alerts plus a visited world map with saved-place pins and yearly country shading.

@@ -39,7 +39,7 @@ test-device: ## Run unit tests and connected tests against a physical device
 	./scripts/test-device.sh
 
 screenshots: ## Capture deterministic Android UI review screenshots from the emulator
-	./scripts/capture-screenshots.sh
+	SCREEN="$(SCREEN)" ./scripts/capture-screenshots.sh
 
 lint: ## Run Kotlin and Android lint checks
 	./scripts/lint.sh

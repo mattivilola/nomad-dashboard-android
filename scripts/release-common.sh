@@ -38,7 +38,9 @@ latest_release_tag() {
 assert_tag_absent() {
   local tag_name="$1"
 
-  git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$tag_name" >/dev/null 2>&1 && fail "Git tag already exists: $tag_name"
+  if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$tag_name" >/dev/null 2>&1; then
+    fail "Git tag already exists: $tag_name"
+  fi
 }
 
 assert_clean_worktree() {

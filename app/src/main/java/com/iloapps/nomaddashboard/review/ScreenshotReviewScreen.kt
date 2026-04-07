@@ -35,6 +35,7 @@ enum class ScreenshotReviewScreen(
     companion object {
         const val ExtraScreen = "screenshot_review_screen"
         const val RelativeDirectoryName = "review-screenshots"
+        const val SharedExportDirectory = "/sdcard/Download/nomad-dashboard-review-screenshots"
 
         fun fromRouteName(value: String?): ScreenshotReviewScreen =
             entries.firstOrNull { it.routeName == value } ?: Dashboard

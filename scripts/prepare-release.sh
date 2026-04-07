@@ -29,8 +29,13 @@ next_version="$major.$minor.$patch"
 next_code=$((current_code + 1))
 next_tag="v$next_version"
 release_date="$(date +%F)"
+current_tag="$(release_tag)"
 
 assert_tag_absent "$next_tag"
+
+if [[ -z "$(latest_release_tag)" ]] && [[ -f "$(changelog_file)" ]] && grep -Fq "## [$current_version] -" "$(changelog_file)"; then
+  fail "No git release tag exists for the current changelog baseline. Backfill $current_tag before preparing $next_version."
+fi
 
 python3 "$(dirname "$0")/generate-release-artifacts.py" \
   --version "$next_version" \

@@ -84,11 +84,26 @@ make screenshots
 Current behavior:
 - boots `Pixel_5_API_31` by default, or `NOMAD_ANDROID_AVD=<name> make screenshots`
 - runs only `ScreenshotReviewTest`
-- keeps the screenshot tests out of the default `make test` lane unless
-  `captureScreenshots=true` is passed explicitly
+- keeps the screenshot tests out of the default `make test` lane by excluding
+  `ScreenshotReviewTest` from the normal connected-test helper scripts
 - renders a debug-only fixture host instead of the live Hilt-backed app shell
+- streams `ScreenshotReview` logcat lines during capture so you can see which
+  screen is being rendered
 - exports PNGs to
   `/Users/matti/Development/ILOapps/nomad-dashboard-android/output/screenshots/android/phone`
+
+For faster local iteration, capture a single screen:
+
+```sh
+SCREEN=dashboard make screenshots
+```
+
+Supported screen filters:
+- `dashboard`
+- `settings`
+- `visited`
+- `timetracking`
+- `about`
 
 Run lint:
 
@@ -127,6 +142,9 @@ Latest verification attempt:
 - on 2026-04-07, the new screenshot lane was wired behind
   `make screenshots` with a debug-only fixture activity, UIAutomator capture,
   and exports to `output/screenshots/android/phone`
+- on 2026-04-07, the local-dev path was tightened so
+  `SCREEN=<name> make screenshots` runs just one screenshot method and streams
+  `ScreenshotReview` logcat progress while the emulator test is running
 - the default workflow now routes `make test` through the emulator path and
   reserves the phone for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both
@@ -252,9 +270,9 @@ Notes:
 - UI smoke assertions should target stable shell labels and durable route
   content. Placeholder-specific assertions become stale as features move from
   scaffold to implementation.
-- Keep review screenshots out of the default smoke loop. The screenshot class is
-  opt-in and only runs when the instrumentation argument
-  `captureScreenshots=true` is supplied by `make screenshots`.
+- Keep review screenshots out of the default smoke loop. The helper scripts now
+  exclude `ScreenshotReviewTest` from the standard connected-test path, and the
+  dedicated screenshot target runs it explicitly.
 - Provider credentials must be verified through the in-app Settings flow, not
   through local env-file injection into the app build.
 - App-level KSP output can get into a bad incremental state under

@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
-import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,7 +23,6 @@ import com.iloapps.nomaddashboard.feature.dashboard.DashboardScreen
 import com.iloapps.nomaddashboard.feature.settings.SettingsScreen
 import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingScreen
 import com.iloapps.nomaddashboard.feature.visited.VisitedScreen
-import java.io.File
 
 class ScreenshotReviewActivity : ComponentActivity() {
     private var currentScreen by mutableStateOf(ScreenshotReviewScreen.Dashboard)
@@ -100,15 +98,6 @@ class ScreenshotReviewActivity : ComponentActivity() {
     fun showScreen(screen: ScreenshotReviewScreen) {
         currentScreen = screen
     }
-
-    fun screenshotOutputFile(fileName: String): File {
-        val directory = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-            ?.resolve(ScreenshotReviewScreen.RelativeDirectoryName)
-            ?: File(filesDir, ScreenshotReviewScreen.RelativeDirectoryName)
-        directory.mkdirs()
-        return File(directory, fileName)
-    }
-
     private fun updateScreen(intent: Intent?) {
         currentScreen = ScreenshotReviewScreen.fromRouteName(
             intent?.getStringExtra(ScreenshotReviewScreen.ExtraScreen),

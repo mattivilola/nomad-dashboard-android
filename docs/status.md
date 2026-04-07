@@ -131,11 +131,13 @@ Not yet fully re-verified after the visited map slice in this session:
 ## Immediate Next Steps
 
 1. Add emergency care / Places provider completion.
-2. Resolve the current app-module KSP generated-source instability, then rerun
+2. Backfill the missing `v0.1.0` git tag before the first incremental release
+   bump so the local changelog diff has a stable anchor.
+3. Resolve the current app-module KSP generated-source instability, then rerun
    `make build`, `make lint`, and `make screenshots`.
-3. Fix or isolate the unrelated `feature:visited` connected-test failure, then
+4. Fix or isolate the unrelated `feature:visited` connected-test failure, then
    rerun `make test`.
-4. Extend time tracking beyond the local ledger with reporting/export only after the base slice settles.
+5. Extend time tracking beyond the local ledger with reporting/export only after the base slice settles.
 
 ## Parallel-Safe Workstreams
 

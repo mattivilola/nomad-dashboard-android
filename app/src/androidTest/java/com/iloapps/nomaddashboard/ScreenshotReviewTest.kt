@@ -12,7 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Assume.assumeTrue
 
 @RunWith(AndroidJUnit4::class)
 class ScreenshotReviewTest {
@@ -47,10 +46,6 @@ class ScreenshotReviewTest {
     }
 
     private fun capture(screen: ScreenshotReviewScreen) {
-        assumeTrue(
-            "Screenshot capture is disabled for the default connected-test lane.",
-            InstrumentationRegistry.getArguments().getString(CaptureEnabledArgument) == "true",
-        )
         composeTestRule.runOnUiThread {
             composeTestRule.activity.showScreen(screen)
         }
@@ -58,14 +53,19 @@ class ScreenshotReviewTest {
         composeTestRule.onNodeWithTag(screen.rootTag).assertIsDisplayed()
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-        val screenshotFile = composeTestRule.activity.screenshotOutputFile(screen.fileName)
+        val screenshotPath = "${ScreenshotReviewScreen.SharedExportDirectory}/${screen.fileName}"
+        device.executeShellCommand("mkdir -p ${ScreenshotReviewScreen.SharedExportDirectory}")
+        device.executeShellCommand("rm -f $screenshotPath")
+        android.util.Log.i("ScreenshotReview", "Capturing ${screen.routeName} -> $screenshotPath")
         assertTrue(
             "Expected screenshot capture to succeed for ${screen.routeName}",
-            device.takeScreenshot(screenshotFile),
+            device.executeShellCommand("screencap -p $screenshotPath").isBlank(),
         )
-    }
-
-    private companion object {
-        const val CaptureEnabledArgument = "captureScreenshots"
+        val statOutput = device.executeShellCommand("stat -c %s $screenshotPath").trim()
+        assertTrue(
+            "Expected screenshot file to exist for ${screen.routeName}",
+            statOutput.toLongOrNull()?.let { it > 0L } == true,
+        )
+        android.util.Log.i("ScreenshotReview", "Saved ${screen.fileName}")
     }
 }

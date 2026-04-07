@@ -16,4 +16,8 @@ emulator_serial="$(
 [[ -n "$emulator_serial" ]] || fail "No booted emulator found after startup."
 
 echo "Running tests on emulator $emulator_serial"
-ANDROID_SERIAL="$emulator_serial" run_gradle testDebugUnitTest connectedDebugAndroidTest
+screenshot_test_class="com.iloapps.nomaddashboard.ScreenshotReviewTest"
+ANDROID_SERIAL="$emulator_serial" run_gradle \
+  testDebugUnitTest \
+  connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.notClass="$screenshot_test_class"
