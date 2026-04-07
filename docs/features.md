@@ -85,7 +85,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |
-| World map rendering | Implemented with config blocker | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries, but Android Maps SDK still requires an app-level manifest API key and is not currently configurable from the in-app Settings flow |
+| World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
 
 ## Time Tracking
 

@@ -352,7 +352,7 @@ Perform these checks on the first installed build:
 - visited screen shows empty state before any capture is stored
 - visited screen shows location-permission CTA when visited device capture is on but permission is missing
 - visited screen shows the `World Footprint` card once saved history exists
-- without a configured Android Maps SDK manifest key, the visited screen shows map setup guidance instead of crashing
+- without a configured Android Maps SDK manifest key from `local.properties`, Gradle properties, or environment variables, the visited screen shows map setup guidance instead of crashing
 - when a map key is configured, the visited map shows all-time saved-place pins and shades countries from the selected country-day year
 - changing the selected year updates both the country summary and the map camera target
 - dashboard refresh records an IP-based place and country day when external IP location resolves

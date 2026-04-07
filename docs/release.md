@@ -18,8 +18,10 @@ The Android port uses a local-first release process similar to the macOS repo:
 Create these local files from examples:
 
 - `Config/Signing.env`
-- `Config/AppConfig.env` for local helper scripts and app-level keys such as
-  Maps; it is not used for provider credentials
+- `Config/AppConfig.env` for local helper scripts and non-secret helper config;
+  it is not used for provider credentials or Google Maps SDK keys
+- `local.properties` for local Android SDK paths and optional Maps SDK key
+  properties
 
 ## Required Values
 
@@ -34,7 +36,22 @@ From `Config/Signing.env`:
 - `NOMAD_PLAY_TRACK`
 
 From `Config/AppConfig.env` as needed:
-- no provider credentials; keep this file for future app-level local config only
+- no provider credentials; keep this file for non-secret helper config only
+
+From `local.properties`, Gradle properties, or environment variables as needed:
+- debug map key: `nomad.mapsApiKey.debug` or `NOMAD_MAPS_API_KEY_DEBUG`
+- release map key: `nomad.mapsApiKey.release` or `NOMAD_MAPS_API_KEY_RELEASE`
+- fallback shared map key: `nomad.mapsApiKey` or `NOMAD_MAPS_API_KEY`
+
+Recommended local `local.properties` example:
+
+```properties
+nomad.mapsApiKey.debug=YOUR_DEBUG_ANDROID_MAPS_KEY
+nomad.mapsApiKey.release=YOUR_RELEASE_ANDROID_MAPS_KEY
+```
+
+The build injects the current build type's key into
+`com.google.android.geo.API_KEY` in the Android manifest.
 
 ## Commands
 
@@ -120,6 +137,8 @@ Not yet verified with real credentials:
 - Google Maps SDK for Android requires an app-level key before the map can
   initialize, so it cannot use the same in-app settings flow as private
   provider credentials
+- use a dedicated Android-app-restricted key for debug and another for release,
+  each locked to the matching package name and SHA-1 signing certificate
 - user-supplied provider credentials, including the ReliefWeb app name, must be
   entered in-app after install and stored only in encrypted device-local
   storage

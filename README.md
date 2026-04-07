@@ -22,7 +22,7 @@ make screenshots
 make lint
 ```
 
-Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env`. `Config/AppConfig.env` is only for app-level local config such as package-restricted Maps keys. User-supplied provider credentials such as the Germany Tankerkonig key and the ReliefWeb app name must be entered in the app's Settings screen after install and are stored only in encrypted device-local storage.
+Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env`. `Config/AppConfig.env` is only for non-secret helper config such as the ReliefWeb app name. The visited Google Maps view uses an app-level SDK key from local `local.properties`, Gradle properties, or environment variables, not from the in-app Settings screen. User-supplied provider credentials such as the Germany Tankerkonig key and the ReliefWeb app name must be entered in the app's Settings screen after install and are stored only in encrypted device-local storage.
 
 `make screenshots` runs the deterministic emulator review lane and exports local PNGs to `output/screenshots/android/phone`. For faster iteration, use `SCREEN=dashboard make screenshots` or replace `dashboard` with `settings`, `visited`, `timetracking`, or `about`.
 

@@ -264,9 +264,10 @@ Planned:
   manifest placeholders, or resources
 - user-supplied provider credentials remain local in Android Keystore-backed
   encrypted storage and are excluded from Android backup
-- Android Maps/Places SDK keys cannot be treated like user-entered provider
-  credentials because the SDK expects an app-level key before map init; if that
-  constraint is unacceptable, the app needs a different map stack
+- Android Maps SDK keys cannot use the in-app provider-credential flow because
+  the SDK expects an app-level key before map init; this repo reads a local key
+  from `local.properties`, Gradle properties, or environment variables and
+  injects it only into the app manifest metadata for the current build
 
 ## Platform Adaptation Notes
 
