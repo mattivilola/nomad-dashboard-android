@@ -550,17 +550,18 @@ private fun FuelPriceRow(
 }
 
 @Composable
-private fun EmergencyCareSectionCard(
+internal fun EmergencyCareSectionCard(
     enabled: Boolean,
     snapshot: EmergencyCareSnapshot,
-    onOpenMap: () -> Unit,
+    onOpenMap: () -> Unit = {},
 ) {
     val subtitle = when {
         enabled.not() -> "Off"
+        snapshot.status == EmergencyCareStatus.CONFIGURATION_REQUIRED -> "Configuration"
         snapshot.countryName != null -> "${snapshot.countryName} · within ${snapshot.searchRadiusKilometers.toInt()} km"
         else -> snapshot.detail
     }
-    NomadCard {
+    NomadCard(modifier = Modifier.testTag(EmergencyCareCardTag)) {
         NomadSectionClusterHeader(
             title = "Emergency Care",
             subtitle = subtitle,
@@ -568,7 +569,7 @@ private fun EmergencyCareSectionCard(
             actions = {
                 val hasFacility = snapshot.facility != null
                 NomadActionChip(
-                    label = "Map",
+                    label = "Open in Maps",
                     icon = Icons.Rounded.Map,
                     onClick = onOpenMap,
                     enabled = hasFacility,
@@ -929,3 +930,4 @@ private fun Instant.formatDashboardTimestamp(): String =
         .format(this)
 
 internal const val TravelAlertsCardTag = "travel-alerts-card"
+internal const val EmergencyCareCardTag = "emergency-care-card"
