@@ -180,3 +180,6 @@ Planned next:
 - visited-country-day logic tests
 - time-tracking ledger tests
 - Compose UI route smoke tests
+
+Recommended parallel task while visited-data work is in progress:
+- [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)

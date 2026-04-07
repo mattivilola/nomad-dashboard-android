@@ -12,6 +12,7 @@ Current repository state:
 - documentation and wireless helper follow-up committed
 - build/test/lint verified locally
 - real-device debug install verified on Android phone via wireless debugging
+- visited places persistence and country-day aggregation work has started
 
 ## Completed
 
@@ -40,12 +41,11 @@ Current repository state:
 
 ## In Progress
 
-- none
+- visited places persistence
+- country-day aggregation logic
 
 ## Not Started
 
-- visited places persistence
-- country-day aggregation logic
 - visited map rendering
 - time-tracking persistence and foreground-service runtime
 - fuel provider implementations
@@ -71,10 +71,19 @@ Not yet verified in this session:
 
 ## Immediate Next Steps
 
-1. Capture first Android screenshots from the running app for parity review.
-2. Implement visited place persistence and visited-country-day logic.
+1. Finish visited place persistence and visited-country-day logic.
+2. Capture first Android screenshots from the running app for parity review.
 3. Implement local time-tracking runtime and storage.
 4. Add provider-complete fuel and emergency-care slices.
+
+## Parallel-Safe Workstreams
+
+Recommended secondary task while visited-data work is active:
+- add Compose UI smoke tests for app launch, top-level navigation, and one
+  settings interaction
+
+Handoff doc:
+- [parallel-task-ui-smoke-tests.md](./parallel-task-ui-smoke-tests.md)
 
 ## Update Instructions
 
