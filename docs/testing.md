@@ -69,10 +69,22 @@ make lint
 ```
 
 Current verified result:
-- all three commands pass in this repo
+- `make build` passed on 2026-04-07 after the fuel slice
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
+- on 2026-04-07, targeted compile verification succeeded for
+  `:core:data:compileDebugKotlin` and `:feature:dashboard:compileDebugKotlin`
+- on 2026-04-07, `make lint` failed outside the fuel slice because
+  `:app:lintDebug` still reports existing `MissingPermission` errors in
+  `TimeTrackingForegroundService.kt`
+- on 2026-04-07, `make test` remained blocked outside the fuel slice:
+  - `:core:data:compileDebugUnitTestKotlin` failed because unrelated
+    `RoomTimeTrackingRepositoryTest` compilation errors are already present in
+    the current worktree
+  - connected tests still hit the earlier
+    `:feature:dashboard:connectedDebugAndroidTest` output-path failure and
+    `:app:connectedDebugAndroidTest` instrumentation crash
 - the visited unit-test coverage now compiles and passes during `testDebugUnitTest`
 - the default workflow is being switched so `make test` uses the emulator path
   and the phone is reserved for explicit smoke checks via `make test-device`
@@ -236,6 +248,12 @@ Perform these checks on the first installed build:
 - battery information renders
 - public IP or travel context is shown when network is available
 - weather section shows data when IP geolocation returns coordinates
+- when fuel prices are enabled, the fuel card shows the cheapest nearby diesel
+  and gasoline rows for Spain, France, Italy, or Germany
+- in Germany without local `NOMAD_TANKERKOENIG_API_KEY`, the fuel card shows a
+  configuration-required message instead of using any shared bundled key
+- without device location and without usable IP location/country, the fuel card
+  shows an unavailable state instead of crashing
 
 ### Settings
 
@@ -267,6 +285,8 @@ Implemented now:
 - visited model summary tests
 - visited history store merge and country-day logic tests
 - repository refresh tests for IP capture, device capture, and disabled-state behavior
+- fuel provider tests for Spain, France, Italy, and Germany config handling
+- repository fuel refresh tests for device-first lookup, IP fallback, and unavailable-state wiring
 - Compose UI smoke tests for:
   - app launch into dashboard
   - top-level navigation across all five shell destinations
@@ -277,6 +297,7 @@ File:
 - [SettingsProtoMapperTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/datastore/src/test/java/com/iloapps/nomaddashboard/core/datastore/SettingsProtoMapperTest.kt)
 - [VisitedModelsTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/test/java/com/iloapps/nomaddashboard/core/model/VisitedModelsTest.kt)
 - [RoomVisitedHistoryStoreTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/visited/RoomVisitedHistoryStoreTest.kt)
+- [DefaultFuelPriceProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/fuel/DefaultFuelPriceProviderTest.kt)
 - [DefaultNomadDashboardRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepositoryTest.kt)
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)

@@ -12,7 +12,15 @@ interface TimeTrackingEntryDao {
     @Query("SELECT * FROM time_tracking_entries ORDER BY startAtEpochMillis DESC")
     fun observeAll(): Flow<List<TimeTrackingEntryEntity>>
 
+    @Query("SELECT * FROM time_tracking_entries WHERE endAtEpochMillis IS NOT NULL ORDER BY startAtEpochMillis DESC")
+    fun observeCompleted(): Flow<List<TimeTrackingEntryEntity>>
+
+    @Query("SELECT * FROM time_tracking_entries WHERE endAtEpochMillis IS NULL ORDER BY startAtEpochMillis DESC LIMIT 1")
+    fun observeActive(): Flow<TimeTrackingEntryEntity?>
+
+    @Query("SELECT * FROM time_tracking_entries WHERE endAtEpochMillis IS NULL ORDER BY startAtEpochMillis DESC LIMIT 1")
+    suspend fun getActive(): TimeTrackingEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: TimeTrackingEntryEntity)
 }
-

@@ -72,10 +72,6 @@ data class TravelAlertsSnapshot(
     val level: SignalLevel = SignalLevel.NEUTRAL,
 )
 
-data class FuelPriceSnapshot(
-    val summary: String = "Enable fuel prices in Settings",
-)
-
 data class EmergencyCareSnapshot(
     val summary: String = "Enable emergency care in Settings",
 )
@@ -109,4 +105,3 @@ data class DashboardSnapshot(
     val timeTracking: TimeTrackingDashboardState = TimeTrackingDashboardState(),
     val visited: VisitedSummary = VisitedSummary(),
 )
-

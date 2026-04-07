@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -20,7 +21,9 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -31,19 +34,34 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.feature.about.AboutScreen
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardRoute
 import com.iloapps.nomaddashboard.feature.settings.SettingsRoute
-import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingScreen
+import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingRoute
+import com.iloapps.nomaddashboard.feature.timetracking.runtime.TimeTrackingForegroundService
 import com.iloapps.nomaddashboard.feature.visited.VisitedRoute
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject
+    lateinit var timeTrackingRepository: TimeTrackingRepository
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            if (
+                TimeTrackingForegroundService.hasNotificationPermission(this@MainActivity) &&
+                timeTrackingRepository.currentActiveEntry() != null
+            ) {
+                TimeTrackingForegroundService.start(this@MainActivity)
+            }
+        }
         enableEdgeToEdge()
         setContent {
             NomadTheme {
@@ -81,6 +99,7 @@ private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
                 NavigationBar {
                     destinations.forEach { destination ->
                         NavigationBarItem(
+                            modifier = Modifier.testTag("nav-${destination.route}"),
                             selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
                             onClick = {
                                 navController.navigate(destination.route) {
@@ -102,6 +121,7 @@ private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
                 NavigationRail {
                     destinations.forEach { destination ->
                         NavigationRailItem(
+                            modifier = Modifier.testTag("nav-${destination.route}"),
                             selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
                             onClick = {
                                 navController.navigate(destination.route) {
@@ -139,6 +159,7 @@ private fun AppNavHost(
     modifier: Modifier,
     navController: androidx.navigation.NavHostController,
 ) {
+    val context = LocalContext.current
     NavHost(navController = navController, startDestination = TopDestination.Dashboard.route, modifier = modifier) {
         composable(TopDestination.Dashboard.route) {
             DashboardRoute(
@@ -150,7 +171,12 @@ private fun AppNavHost(
         }
         composable(TopDestination.Settings.route) { SettingsRoute() }
         composable(TopDestination.Visited.route) { VisitedRoute() }
-        composable(TopDestination.TimeTracking.route) { TimeTrackingScreen() }
+        composable(TopDestination.TimeTracking.route) {
+            TimeTrackingRoute(
+                onStartForegroundTracking = { TimeTrackingForegroundService.start(context) },
+                onStopForegroundTracking = { TimeTrackingForegroundService.stop(context) },
+            )
+        }
         composable(TopDestination.About.route) { AboutScreen() }
     }
 }
