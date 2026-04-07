@@ -28,6 +28,8 @@ android {
         versionName = versionProperties.getProperty("MARKETING_VERSION")
         testInstrumentationRunner = "com.iloapps.nomaddashboard.NomadDashboardTestRunner"
         vectorDrawables.useSupportLibrary = true
+
+        buildConfigField("String", "RELIEFWEB_APP_NAME", "\"${env("NOMAD_RELIEFWEB_APP_NAME")}\"")
     }
 
     signingConfigs {

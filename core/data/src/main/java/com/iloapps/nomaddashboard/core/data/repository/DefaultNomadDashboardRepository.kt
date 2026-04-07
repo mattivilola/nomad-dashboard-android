@@ -9,6 +9,11 @@ import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryResolver
+import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebProviderError
+import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebSecurityProvider
+import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryProvider
+import com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertDiagnosticError
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
@@ -23,6 +28,11 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
+import com.iloapps.nomaddashboard.core.model.TravelAlertKind
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalSnapshot
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalState
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
+import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedSummary
@@ -60,6 +70,9 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val visitedHistoryStore: VisitedHistoryStore,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
     private val providerCredentialStore: ProviderCredentialStore,
+    private val smartravellerAdvisoryProvider: SmartravellerAdvisoryProvider,
+    private val reliefWebSecurityProvider: ReliefWebSecurityProvider,
+    private val neighborCountryResolver: BundledNeighborCountryResolver,
     @ApplicationScope
     private val applicationScope: CoroutineScope,
 ) : NomadDashboardRepository {
@@ -159,6 +172,36 @@ class DefaultNomadDashboardRepository @Inject constructor(
             WeatherSnapshot(summary = "Weather data unavailable")
         }
 
+        val previousTravelAlerts = internalSnapshot.value.travelAlerts
+        val primaryTravelAlertCountryCode = currentDevicePlace?.countryCode
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+            ?.uppercase()
+            ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+        val primaryTravelAlertCountryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
+            ?: travelContext.country?.trim()?.takeIf(String::isNotBlank)
+        val coverageCountryCodes = primaryTravelAlertCountryCode?.let { primaryCountryCode ->
+            listOf(primaryCountryCode) + neighborCountryResolver.neighboringCountryCodes(primaryCountryCode)
+        }.orEmpty().map { it.uppercase() }.distinct()
+        val checkingTravelAlerts = synchronizedTravelAlertsSnapshot(
+            previous = previousTravelAlerts,
+            primaryCountryCode = primaryTravelAlertCountryCode,
+            primaryCountryName = primaryTravelAlertCountryName,
+            coverageCountryCodes = coverageCountryCodes,
+        )
+        internalSnapshot.update { current ->
+            current.copy(
+                isRefreshing = true,
+                travelAlerts = checkingTravelAlerts,
+            )
+        }
+        val travelAlerts = refreshTravelAlerts(
+            previous = previousTravelAlerts,
+            primaryCountryCode = primaryTravelAlertCountryCode,
+            primaryCountryName = primaryTravelAlertCountryName,
+            coverageCountryCodes = coverageCountryCodes,
+        )
+
         val overallHeadline = when {
             connectivity.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
             connectivity.isOnline -> "Connected"
@@ -219,7 +262,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             power = power,
             travelContext = travelContext,
             weather = weather,
-            travelAlerts = TravelAlertsSnapshot(summary = "Travel alerts contract is ready; Android provider is deferred."),
+            travelAlerts = travelAlerts,
             fuelPrices = fuelPrices,
             emergencyCare = EmergencyCareSnapshot(
                 summary = if (currentSettings.emergencyCareEnabled) {
@@ -282,6 +325,154 @@ class DefaultNomadDashboardRepository @Inject constructor(
             }
         }
         settingsDataSource.clearLegacyTankerkoenigApiKey()
+    }
+
+    private suspend fun refreshTravelAlerts(
+        previous: TravelAlertsSnapshot,
+        primaryCountryCode: String?,
+        primaryCountryName: String?,
+        coverageCountryCodes: List<String>,
+    ): TravelAlertsSnapshot {
+        val attemptedAt = Instant.now()
+        val advisoryState = refreshAlertState(
+            kind = TravelAlertKind.ADVISORY,
+            previous = previous.state(TravelAlertKind.ADVISORY),
+            primaryCountryCode = primaryCountryCode,
+            attemptedAt = attemptedAt,
+        ) {
+            smartravellerAdvisoryProvider.advisory(
+                countryCodes = coverageCountryCodes,
+                primaryCountryCode = primaryCountryCode ?: error("primary country required"),
+            )
+        }
+        val securityState = refreshAlertState(
+            kind = TravelAlertKind.SECURITY,
+            previous = previous.state(TravelAlertKind.SECURITY),
+            primaryCountryCode = primaryCountryCode,
+            attemptedAt = attemptedAt,
+        ) {
+            reliefWebSecurityProvider.security(
+                countryCodes = coverageCountryCodes,
+                primaryCountryCode = primaryCountryCode ?: error("primary country required"),
+            )
+        }
+
+        return TravelAlertsSnapshot(
+            primaryCountryCode = primaryCountryCode,
+            primaryCountryName = primaryCountryName,
+            coverageCountryCodes = coverageCountryCodes,
+            states = listOf(advisoryState, securityState),
+            fetchedAt = attemptedAt,
+        )
+    }
+
+    private fun synchronizedTravelAlertsSnapshot(
+        previous: TravelAlertsSnapshot,
+        primaryCountryCode: String?,
+        primaryCountryName: String?,
+        coverageCountryCodes: List<String>,
+    ): TravelAlertsSnapshot =
+        TravelAlertsSnapshot(
+            primaryCountryCode = primaryCountryCode,
+            primaryCountryName = primaryCountryName,
+            coverageCountryCodes = coverageCountryCodes,
+            states = TravelAlertKind.entries.map { kind ->
+                val previousState = previous.state(kind)
+                TravelAlertSignalState(
+                    kind = kind,
+                    status = TravelAlertSignalStatus.CHECKING,
+                    sourceName = previousState?.sourceName ?: sourceName(kind),
+                    sourceUrl = previousState?.sourceUrl ?: sourceUrl(kind),
+                    lastAttemptedAt = previousState?.lastAttemptedAt,
+                    lastSuccessAt = previousState?.lastSuccessAt,
+                )
+            },
+            fetchedAt = previous.fetchedAt,
+        )
+
+    private suspend fun refreshAlertState(
+        kind: TravelAlertKind,
+        previous: TravelAlertSignalState?,
+        primaryCountryCode: String?,
+        attemptedAt: Instant,
+        fetch: suspend () -> TravelAlertSignalSnapshot,
+    ): TravelAlertSignalState {
+        val retainedSourceName = previous?.sourceName ?: sourceName(kind)
+        val retainedSourceUrl = previous?.sourceUrl ?: sourceUrl(kind)
+
+        if (primaryCountryCode.isNullOrBlank()) {
+            return TravelAlertSignalState(
+                kind = kind,
+                status = TravelAlertSignalStatus.UNAVAILABLE,
+                reason = TravelAlertUnavailableReason.COUNTRY_REQUIRED,
+                sourceName = retainedSourceName,
+                sourceUrl = retainedSourceUrl,
+                lastAttemptedAt = attemptedAt,
+                lastSuccessAt = previous?.lastSuccessAt,
+            )
+        }
+
+        return try {
+            val signal = fetch()
+            TravelAlertSignalState(
+                kind = kind,
+                status = TravelAlertSignalStatus.READY,
+                signal = signal,
+                sourceName = signal.sourceName,
+                sourceUrl = signal.sourceUrl ?: retainedSourceUrl,
+                lastAttemptedAt = attemptedAt,
+                lastSuccessAt = attemptedAt,
+            )
+        } catch (error: Throwable) {
+            val reason = unavailableReason(error)
+            val diagnosticSummary = diagnosticSummary(error)
+            val previousSignal = previous?.signal
+            if (previousSignal != null) {
+                TravelAlertSignalState(
+                    kind = kind,
+                    status = TravelAlertSignalStatus.STALE,
+                    signal = previousSignal,
+                    reason = reason,
+                    diagnosticSummary = diagnosticSummary,
+                    sourceName = retainedSourceName,
+                    sourceUrl = retainedSourceUrl,
+                    lastAttemptedAt = attemptedAt,
+                    lastSuccessAt = previous.lastSuccessAt,
+                )
+            } else {
+                TravelAlertSignalState(
+                    kind = kind,
+                    status = TravelAlertSignalStatus.UNAVAILABLE,
+                    reason = reason,
+                    diagnosticSummary = diagnosticSummary,
+                    sourceName = retainedSourceName,
+                    sourceUrl = retainedSourceUrl,
+                    lastAttemptedAt = attemptedAt,
+                    lastSuccessAt = previous?.lastSuccessAt,
+                )
+            }
+        }
+    }
+
+    private fun unavailableReason(error: Throwable): TravelAlertUnavailableReason =
+        when (error) {
+            is ReliefWebProviderError.AppNameApprovalRequired,
+            is ReliefWebProviderError.AppNameMissing,
+            -> TravelAlertUnavailableReason.SOURCE_CONFIGURATION_REQUIRED
+            else -> TravelAlertUnavailableReason.SOURCE_UNAVAILABLE
+        }
+
+    private fun diagnosticSummary(error: Throwable): String? =
+        (error as? TravelAlertDiagnosticError)?.diagnosticSummary
+
+    private fun sourceName(kind: TravelAlertKind): String = when (kind) {
+        TravelAlertKind.ADVISORY -> "Smartraveller"
+        TravelAlertKind.SECURITY -> "ReliefWeb"
+    }
+
+    private fun sourceUrl(kind: TravelAlertKind): String = when (kind) {
+        TravelAlertKind.ADVISORY -> "https://www.smartraveller.gov.au"
+        TravelAlertKind.SECURITY -> "https://reliefweb.int"
     }
 
     private fun weatherSummary(daily: OpenMeteoDaily?): String {

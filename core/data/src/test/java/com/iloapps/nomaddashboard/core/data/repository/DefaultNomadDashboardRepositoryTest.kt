@@ -14,6 +14,11 @@ import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
+import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryResolver
+import com.iloapps.nomaddashboard.core.data.travelalerts.CountryNameResolver
+import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebSecurityProvider
+import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryProvider
+import com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProviderAppConfig
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
@@ -27,6 +32,8 @@ import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
+import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
@@ -35,6 +42,9 @@ import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
+import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
+import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
+import com.iloapps.nomaddashboard.core.network.model.ReliefWebReportsRequest
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import java.time.Instant
@@ -46,7 +56,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
+import retrofit2.Response
 
 class DefaultNomadDashboardRepositoryTest {
     @Test
@@ -311,6 +327,144 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(snapshot.timeTracking.detail).contains("Client Work")
     }
 
+    @Test
+    fun `refresh resolves travel alerts and prefers device country coverage`() = runTest {
+        val securityRequests = mutableListOf<List<String>>()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(
+                FakeAppSettingsDataStore(
+                    AppSettings(
+                        fuelPricesEnabled = true,
+                        publicIpGeolocationEnabled = true,
+                    ).toProto(),
+                ),
+            ),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace(
+                    city = "Berlin",
+                    region = "Berlin",
+                    country = "Germany",
+                    countryCode = "DE",
+                    latitude = 52.52,
+                    longitude = 13.405,
+                ),
+            ),
+            smartravellerAdvisoryProvider = smartravellerProvider(
+            ),
+            reliefWebSecurityProvider = reliefWebProvider(
+                onRequest = { securityRequests += it },
+            ),
+            neighborCountryResolver = BundledNeighborCountryResolver.fromRecords(
+                mapOf("DE" to listOf("PL", "FR")),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }.travelAlerts
+        assertThat(snapshot.primaryCountryCode).isEqualTo("DE")
+        assertThat(snapshot.coverageCountryCodes).containsExactly("DE", "PL", "FR").inOrder()
+        assertThat(snapshot.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.ADVISORY)?.status)
+            .isEqualTo(TravelAlertSignalStatus.READY)
+        assertThat(snapshot.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.SECURITY)?.status)
+            .isEqualTo(TravelAlertSignalStatus.READY)
+        assertThat(securityRequests.single()).containsExactly("Germany", "Poland", "France").inOrder()
+    }
+
+    @Test
+    fun `refresh marks travel alerts unavailable when no country context exists`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(
+                FakeAppSettingsDataStore(
+                    AppSettings(publicIpGeolocationEnabled = false).toProto(),
+                ),
+            ),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }.travelAlerts
+        assertThat(snapshot.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.ADVISORY)?.reason)
+            .isEqualTo(TravelAlertUnavailableReason.COUNTRY_REQUIRED)
+        assertThat(snapshot.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.SECURITY)?.reason)
+            .isEqualTo(TravelAlertUnavailableReason.COUNTRY_REQUIRED)
+    }
+
+    @Test
+    fun `refresh maps reliefweb configuration failures to unavailable state`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            reliefWebSecurityProvider = reliefWebProvider(appName = ""),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val securityState = repository.snapshot.first { it.lastRefresh != null }
+            .travelAlerts
+            .state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.SECURITY)
+
+        assertThat(securityState?.status).isEqualTo(TravelAlertSignalStatus.UNAVAILABLE)
+        assertThat(securityState?.reason).isEqualTo(TravelAlertUnavailableReason.SOURCE_CONFIGURATION_REQUIRED)
+    }
+
+    @Test
+    fun `refresh keeps stale travel alert signal visible after a later provider failure`() = runTest {
+        val responseState = MutableStateFlow(
+            """
+            {
+              "data": [
+                {
+                  "fields": {
+                    "title": "Transit disruption advisory",
+                    "date": {"created": "2026-04-07T09:00:00Z"},
+                    "primary_country": {"shortname": "France"},
+                    "source": [{"shortname": "ReliefWeb"}],
+                    "url_alias": "/report/france/transit"
+                  }
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        val provider = reliefWebProvider(responseBody = responseState)
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            reliefWebSecurityProvider = provider,
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+        responseState.value = "__INVALID_JSON__"
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val securityState = repository.snapshot.first { it.lastRefresh != null }
+            .travelAlerts
+            .state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.SECURITY)
+
+        assertThat(securityState?.status).isEqualTo(TravelAlertSignalStatus.STALE)
+        assertThat(securityState?.signal?.summary).contains("nearby security bulletin")
+    }
+
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
@@ -319,6 +473,11 @@ class DefaultNomadDashboardRepositoryTest {
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
         timeTrackingRepository: TimeTrackingRepository = FakeTimeTrackingRepository(),
+        smartravellerAdvisoryProvider: SmartravellerAdvisoryProvider = smartravellerProvider(),
+        reliefWebSecurityProvider: ReliefWebSecurityProvider = reliefWebProvider(),
+        neighborCountryResolver: BundledNeighborCountryResolver = BundledNeighborCountryResolver.fromRecords(
+            mapOf("FI" to listOf("SE", "NO"), "DE" to listOf("PL", "FR")),
+        ),
     ): DefaultNomadDashboardRepository =
         DefaultNomadDashboardRepository(
             settingsDataSource = settingsDataSource,
@@ -330,7 +489,102 @@ class DefaultNomadDashboardRepositoryTest {
             visitedHistoryStore = visitedHistoryStore,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
             providerCredentialStore = providerCredentialStore,
+            smartravellerAdvisoryProvider = smartravellerAdvisoryProvider,
+            reliefWebSecurityProvider = reliefWebSecurityProvider,
+            neighborCountryResolver = neighborCountryResolver,
             applicationScope = applicationScope,
+        )
+
+    private fun smartravellerProvider(
+    ): SmartravellerAdvisoryProvider =
+        SmartravellerAdvisoryProvider(
+            service = object : SmartravellerService {
+                override suspend fun destinations(): JsonElement = TestJson.parseToJsonElement(
+                    """
+                    {
+                      "data": [
+                        {
+                          "title": "Finland",
+                          "advice_level": 1,
+                          "canonical_url": "https://example.com/finland",
+                          "updated_at": "2026-04-07T10:00:00Z"
+                        },
+                        {
+                          "title": "Germany",
+                          "advice_level": 1,
+                          "canonical_url": "https://example.com/germany",
+                          "updated_at": "2026-04-07T10:00:00Z"
+                        },
+                        {
+                          "name": "France",
+                          "adviceLevel": "2",
+                          "link": "https://example.com/france",
+                          "updatedAt": "2026-04-07T10:00:00Z"
+                        },
+                        {
+                          "name": "Poland",
+                          "adviceLevel": "1",
+                          "link": "https://example.com/poland",
+                          "updatedAt": "2026-04-07T10:00:00Z"
+                        }
+                      ]
+                    }
+                    """.trimIndent(),
+                )
+            },
+            countryNameResolver = CountryNameResolver(),
+        )
+
+    private fun reliefWebProvider(
+        appName: String = "NomadDashboardTests",
+        onRequest: (List<String>) -> Unit = {},
+        responseBody: MutableStateFlow<String> = MutableStateFlow(
+            """
+            {
+              "data": [
+                {
+                  "fields": {
+                    "title": "Border protest update",
+                    "date": {"created": "2026-04-07T09:00:00Z"},
+                    "primary_country": {"shortname": "France"},
+                    "source": [{"shortname": "ReliefWeb"}],
+                    "url_alias": "/report/france/border-protest"
+                  }
+                },
+                {
+                  "fields": {
+                    "title": "Transit disruption advisory",
+                    "date": {"created": "2026-04-07T08:00:00Z"},
+                    "primary_country": {"shortname": "Poland"},
+                    "source": [{"shortname": "ReliefWeb"}],
+                    "url_alias": "/report/poland/transit"
+                  }
+                }
+              ]
+            }
+            """.trimIndent(),
+        ),
+    ): ReliefWebSecurityProvider =
+        ReliefWebSecurityProvider(
+            service = object : ReliefWebReportsService {
+                override suspend fun reports(
+                    appName: String,
+                    request: ReliefWebReportsRequest,
+                ): Response<ResponseBody> {
+                    onRequest(request.filter.conditions.single().value)
+                    if (appName.isBlank()) {
+                        return Response.error(
+                            400,
+                            """{"status":400,"error":{"message":"Missing appname parameter"}}"""
+                                .toResponseBody(JsonMediaType),
+                        )
+                    }
+                    return Response.success(responseBody.value.toResponseBody(JsonMediaType))
+                }
+            },
+            appConfig = TravelAlertProviderAppConfig(reliefWebAppName = appName),
+            countryNameResolver = CountryNameResolver(),
+            json = TestJson,
         )
 }
 
@@ -444,6 +698,13 @@ private class FakeTimeTrackingRepository(
 
     override suspend fun stopTracking(): StopTrackingResult = StopTrackingResult.NotTracking
 }
+
+private val TestJson = Json {
+    ignoreUnknownKeys = true
+    explicitNulls = false
+}
+
+private val JsonMediaType = "application/json".toMediaType()
 
 private class FakeVisitedHistoryStore : VisitedHistoryStore {
     private val _visitedPlaces = MutableStateFlow<List<VisitedPlace>>(emptyList())

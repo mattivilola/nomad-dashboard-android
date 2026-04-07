@@ -33,6 +33,8 @@ import com.iloapps.nomaddashboard.core.network.api.FranceFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
+import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
+import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
 import com.iloapps.nomaddashboard.core.network.api.SpainFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.TankerkoenigService
 import dagger.Binds
@@ -143,6 +145,32 @@ object NomadInfrastructureModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(TankerkoenigService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideSmartravellerService(
+        client: OkHttpClient,
+        json: Json,
+    ): SmartravellerService =
+        Retrofit.Builder()
+            .baseUrl("https://www.smartraveller.gov.au/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(SmartravellerService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideReliefWebReportsService(
+        client: OkHttpClient,
+        json: Json,
+    ): ReliefWebReportsService =
+        Retrofit.Builder()
+            .baseUrl("https://api.reliefweb.int/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(ReliefWebReportsService::class.java)
 
     @Provides
     @Singleton

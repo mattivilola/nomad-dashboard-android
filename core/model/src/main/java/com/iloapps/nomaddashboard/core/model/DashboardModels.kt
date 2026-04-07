@@ -67,11 +67,6 @@ data class WeatherSnapshot(
     val sourceName: String = "Open-Meteo",
 )
 
-data class TravelAlertsSnapshot(
-    val summary: String = "Alerts disabled in this bootstrap",
-    val level: SignalLevel = SignalLevel.NEUTRAL,
-)
-
 data class EmergencyCareSnapshot(
     val summary: String = "Enable emergency care in Settings",
 )

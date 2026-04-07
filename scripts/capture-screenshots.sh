@@ -31,6 +31,7 @@ adb -s "$emulator_serial" shell settings put global animator_duration_scale 0 >/
 echo "Running screenshot tests on emulator $emulator_serial"
 ANDROID_SERIAL="$emulator_serial" run_gradle \
   :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.captureScreenshots=true \
   -Pandroid.testInstrumentationRunnerArguments.class="$screenshot_test_class"
 
 for filename in \

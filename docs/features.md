@@ -19,7 +19,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Single main dashboard screen | Implemented | Adaptive Compose route is live |
 | Settings screen | Implemented | Settings persist via Proto DataStore |
 | About screen | Implemented | Minimal bootstrap content |
-| Visited screen route | Implemented | Route shows local history summaries, saved places, and country-day breakdowns |
+| Visited screen route | Implemented | Route shows the visited world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Bootstrap | Route exists, runtime not complete |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
@@ -61,9 +61,9 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Travel alerts card | Bootstrap | UI contract exists |
-| Smartraveller advisory | Planned | Planned provider parity |
-| ReliefWeb regional security | Planned | App config path is ready |
+| Travel alerts card | Implemented | Dashboard card now shows an aggregate status plus dedicated Travel Advisory and Regional Security rows with checking, ready, stale, and unavailable states |
+| Smartraveller advisory | Implemented | Uses Smartraveller destination export data with tolerant country-name matching and Level 1/2/3/4 severity mapping |
+| ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires local `NOMAD_RELIEFWEB_APP_NAME` in `Config/AppConfig.env` |
 | Weather alerts | Deferred | Provider decision still pending |
 
 ## Fuel Prices And Emergency Care
@@ -81,11 +81,11 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Visited screen route | Implemented | UI route shows saved places, permission state, and country-day summaries |
+| Visited screen route | Implemented | UI route shows the visited world map, saved places, permission state, and country-day summaries |
 | Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |
-| World map rendering | Planned | Google Maps integration planned |
+| World map rendering | Implemented | Google Maps Compose shows all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; local `NOMAD_MAPS_API_KEY` required |
 
 ## Time Tracking
 
@@ -105,6 +105,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Gradle wrapper project | Implemented | Android Studio-compatible |
 | Make targets | Implemented | Build/test/lint/run/release helper targets |
 | Wireless ADB helper | Implemented | `make connect-wireless` |
+| Emulator screenshot review workflow | Implemented | `make screenshots` renders deterministic fixture screens and exports PNGs to `output/screenshots/android/phone` |
 | Signed AAB/APK script flow | Implemented | Requires local signing env only; shipped app credentials are not read from local env files |
 | Google Play internal publish script | Implemented | Requires local Play service account |
 | Release version bump helper | Implemented | `prepare-release.sh` |

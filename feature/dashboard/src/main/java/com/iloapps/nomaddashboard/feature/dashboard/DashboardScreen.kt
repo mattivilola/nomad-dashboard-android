@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -32,6 +34,12 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.TravelAlertKind
+import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalState
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
+import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
+import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import java.util.Locale
 
 @Composable
@@ -166,10 +174,8 @@ fun DashboardScreen(
                     subtitle = if (state.settings.emergencyCareEnabled) "Enabled" else "Off",
                     lines = listOf(state.snapshot.emergencyCare.summary),
                 )
-                DashboardCardId.TRAVEL_ALERTS -> DashboardSectionCard(
-                    title = "Travel Alerts",
-                    subtitle = "Provider-ready",
-                    lines = listOf(state.snapshot.travelAlerts.summary),
+                DashboardCardId.TRAVEL_ALERTS -> TravelAlertsSectionCard(
+                    snapshot = state.snapshot.travelAlerts,
                 )
                 DashboardCardId.WEATHER -> DashboardSectionCard(
                     title = "Weather",
@@ -247,6 +253,131 @@ private fun FuelStationPrice.toFuelLine(): String {
 }
 
 @Composable
+internal fun TravelAlertsSectionCard(
+    snapshot: TravelAlertsSnapshot,
+    modifier: Modifier = Modifier,
+) {
+    NomadCard(modifier = modifier.testTag(TravelAlertsCardTag)) {
+        NomadSectionHeader(
+            title = "Travel Alerts",
+            subtitle = travelAlertsSubtitle(snapshot),
+        )
+        snapshot.primaryCountryName?.let { countryName ->
+            Text(
+                text = travelAlertsCoverageText(snapshot, countryName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+        snapshot.enabledKinds.forEach { kind ->
+            snapshot.state(kind)?.let { state ->
+                TravelAlertRow(
+                    state = state,
+                    modifier = Modifier.testTag("travel-alert-row-${kind.name.lowercase()}"),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TravelAlertRow(
+    state: TravelAlertSignalState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = state.kind.displayName(),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = travelAlertStatusLabel(state),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                modifier = Modifier.width(72.dp),
+            )
+        }
+        Text(
+            text = travelAlertSummary(state),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+        )
+        Text(
+            text = state.signal?.sourceName ?: state.sourceName,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        )
+    }
+}
+
+private fun travelAlertsSubtitle(snapshot: TravelAlertsSnapshot): String {
+    val highestSeverity = snapshot.highestSeverity
+    return when {
+        highestSeverity != null && highestSeverity.rank >= TravelAlertSeverity.WARNING.rank -> highestSeverity.badgeTitle()
+        snapshot.hasStaleStates -> "Stale"
+        snapshot.hasUnavailableStates -> "Limited"
+        highestSeverity != null -> highestSeverity.badgeTitle()
+        else -> "Checking"
+    }
+}
+
+private fun travelAlertsCoverageText(
+    snapshot: TravelAlertsSnapshot,
+    primaryCountryName: String,
+): String {
+    val nearbyCountries = (snapshot.coverageCountryCodes.size - 1).coerceAtLeast(0)
+    return if (nearbyCountries > 0) {
+        "Monitoring: $primaryCountryName + $nearbyCountries nearby countries"
+    } else {
+        "Monitoring: $primaryCountryName"
+    }
+}
+
+private fun travelAlertStatusLabel(state: TravelAlertSignalState): String =
+    when (state.status) {
+        TravelAlertSignalStatus.CHECKING -> "Checking"
+        TravelAlertSignalStatus.READY -> state.signal?.severity?.badgeTitle() ?: "Ready"
+        TravelAlertSignalStatus.STALE -> "Stale"
+        TravelAlertSignalStatus.UNAVAILABLE -> "Unavailable"
+    }
+
+private fun travelAlertSummary(state: TravelAlertSignalState): String =
+    when (state.status) {
+        TravelAlertSignalStatus.CHECKING -> "Checking alerts..."
+        TravelAlertSignalStatus.READY -> state.signal?.summary ?: "No current alerts."
+        TravelAlertSignalStatus.STALE -> state.signal?.summary?.let { "Last known: $it" }
+            ?: "Last known alert status unavailable."
+        TravelAlertSignalStatus.UNAVAILABLE -> state.diagnosticSummary
+            ?: state.reason?.summary()
+            ?: "Source unavailable"
+    }
+
+private fun TravelAlertKind.displayName(): String = when (this) {
+    TravelAlertKind.ADVISORY -> "Travel Advisory"
+    TravelAlertKind.SECURITY -> "Regional Security"
+}
+
+private fun TravelAlertSeverity.badgeTitle(): String = when (this) {
+    TravelAlertSeverity.CLEAR -> "Clear"
+    TravelAlertSeverity.INFO -> "Info"
+    TravelAlertSeverity.CAUTION -> "Caution"
+    TravelAlertSeverity.WARNING -> "Warning"
+    TravelAlertSeverity.CRITICAL -> "Critical"
+}
+
+private fun TravelAlertUnavailableReason.summary(): String = when (this) {
+    TravelAlertUnavailableReason.COUNTRY_REQUIRED -> "Country needed for nearby alerts"
+    TravelAlertUnavailableReason.LOCATION_REQUIRED -> "Location needed for local alerts"
+    TravelAlertUnavailableReason.SOURCE_UNAVAILABLE -> "Source unavailable"
+    TravelAlertUnavailableReason.SOURCE_CONFIGURATION_REQUIRED -> "Source setup required"
+}
+
+@Composable
 private fun DashboardSectionCard(
     title: String,
     subtitle: String,
@@ -264,3 +395,5 @@ private fun DashboardSectionCard(
         }
     }
 }
+
+internal const val TravelAlertsCardTag = "travel-alerts-card"

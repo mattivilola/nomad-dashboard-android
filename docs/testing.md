@@ -75,6 +75,21 @@ Current behavior:
 - selects the first attached non-emulator Android target
 - intended for occasional smoke verification, not the default unattended loop
 
+Capture deterministic emulator screenshots for UX review:
+
+```sh
+make screenshots
+```
+
+Current behavior:
+- boots `Pixel_5_API_31` by default, or `NOMAD_ANDROID_AVD=<name> make screenshots`
+- runs only `ScreenshotReviewTest`
+- keeps the screenshot tests out of the default `make test` lane unless
+  `captureScreenshots=true` is passed explicitly
+- renders a debug-only fixture host instead of the live Hilt-backed app shell
+- exports PNGs to
+  `/Users/matti/Development/ILOapps/nomad-dashboard-android/output/screenshots/android/phone`
+
 Run lint:
 
 ```sh
@@ -82,18 +97,36 @@ make lint
 ```
 
 Current verified result:
-- `make build` passed on 2026-04-07 after the credential-hardening slice
-- `make lint` passed on 2026-04-07 after the credential-hardening slice
+- `:app:assembleDebug` passed on 2026-04-07 with
+  `run_gradle -Pksp.incremental=false`
+- `:core:data:testDebugUnitTest` passed on 2026-04-07 with the travel-alert
+  provider, resolver, and repository coverage
+- `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-07 for the
+  travel-alert card after switching the test to an activity-backed Compose rule
+- `run_gradle -Pksp.incremental=false lintDebug` passed on 2026-04-07 after the
+  travel-alert slice
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
-- on 2026-04-07, `make build` passed after removing build-time provider
-  credential injection and adding encrypted device-local storage plus settings UI
-- on 2026-04-07, `make lint` passed after the credential-hardening slice
-- on 2026-04-07, `make test` failed in `:app:connectedDebugAndroidTest`
-  because the instrumentation runtime could not resolve
-  `androidx.test.internal.platform.app.ActivityInvoker` while the existing app
-  smoke tests were trying to launch `MainActivity`
+- on 2026-04-07, `make build` failed in `:app:kspDebugKotlin` because the app
+  module's generated KSP output under `app/build/generated/ksp/debug/java`
+  became unreadable mid-build; this is a generated-artifact state issue rather
+  than a travel-alert compile failure, and the direct
+  `run_gradle -Pksp.incremental=false :app:assembleDebug` path succeeded
+- on 2026-04-07, `make lint` failed for the same `:app:kspDebugKotlin`
+  generated-file problem even though the direct
+  `run_gradle -Pksp.incremental=false lintDebug` path succeeded
+- on 2026-04-07, `make test` reached connected tests on the emulator and
+  failed in existing non-travel-alert suites:
+  `feature:visited:connectedDebugAndroidTest` and
+  `app:connectedDebugAndroidTest`
+- the same `make test` run also captured an earlier failing revision of the new
+  dashboard travel-alert card test, but the follow-up direct rerun of
+  `:feature:dashboard:connectedDebugAndroidTest` passed after the test was
+  switched to an activity-backed Compose rule
+- on 2026-04-07, the new screenshot lane was wired behind
+  `make screenshots` with a debug-only fixture activity, UIAutomator capture,
+  and exports to `output/screenshots/android/phone`
 - the default workflow now routes `make test` through the emulator path and
   reserves the phone for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both
@@ -104,6 +137,8 @@ Latest verification attempt:
   on every bottom-bar label remaining visible at emulator width
 - the settings smoke flow now also covers the masked Tankerkonig API key field
   persisting across activity recreation
+- the screenshot review lane uses deterministic fixture data and writes
+  full-device PNGs from the emulator into a gitignored local output folder
 
 ## APK Location
 
@@ -217,8 +252,15 @@ Notes:
 - UI smoke assertions should target stable shell labels and durable route
   content. Placeholder-specific assertions become stale as features move from
   scaffold to implementation.
+- Keep review screenshots out of the default smoke loop. The screenshot class is
+  opt-in and only runs when the instrumentation argument
+  `captureScreenshots=true` is supplied by `make screenshots`.
 - Provider credentials must be verified through the in-app Settings flow, not
   through local env-file injection into the app build.
+- App-level KSP output can get into a bad incremental state under
+  `app/build/generated/ksp/debug/java`; a direct
+  `run_gradle -Pksp.incremental=false ...` pass can still verify the slice
+  without deleting generated files.
 - If a physical device is connected, `make test` becomes slower and more fragile
   on OEM-skinned phones. The default workflow now routes `make test` to the AVD
   so the phone is not part of the normal loop.
@@ -289,6 +331,10 @@ Perform these checks on the first installed build:
 - visited screen shows disabled state when visited places are off
 - visited screen shows empty state before any capture is stored
 - visited screen shows location-permission CTA when visited device capture is on but permission is missing
+- visited screen shows the `World Footprint` card once saved history exists
+- with a blank local `NOMAD_MAPS_API_KEY`, the visited screen shows map setup guidance instead of crashing
+- when a map key is configured, the visited map shows all-time saved-place pins and shades countries from the selected country-day year
+- changing the selected year updates both the country summary and the map camera target
 - dashboard refresh records an IP-based place and country day when external IP location resolves
 - granting location permission and refreshing records a device-based visit
 - country-day summaries show yearly totals, monthly totals, and inferred gap days
@@ -312,6 +358,7 @@ Perform these checks on the first installed build:
 Implemented now:
 - settings proto round-trip unit test
 - visited model summary tests
+- visited map presentation tests for highlighted-country selection, marker extraction, and viewport fallback
 - visited history store merge and country-day logic tests
 - repository refresh tests for IP capture, device capture, and disabled-state behavior
 - fuel provider tests for Spain, France, Italy, and Germany config handling
@@ -325,10 +372,14 @@ Implemented now:
   - time-tracking disabled guidance on the tracking route
   - stable dashboard shell rendering without live-network assertions
   - persisted `Expand weather forecast` toggle across activity recreation
+- visited screen Compose coverage for world-footprint rendering, year switching,
+  and the no-map-key fallback
 
 File:
 - [SettingsProtoMapperTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/datastore/src/test/java/com/iloapps/nomaddashboard/core/datastore/SettingsProtoMapperTest.kt)
 - [VisitedModelsTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/test/java/com/iloapps/nomaddashboard/core/model/VisitedModelsTest.kt)
+- [VisitedMapPresentationTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/visited/src/test/java/com/iloapps/nomaddashboard/feature/visited/VisitedMapPresentationTest.kt)
+- [VisitedScreenTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/visited/src/androidTest/java/com/iloapps/nomaddashboard/feature/visited/VisitedScreenTest.kt)
 - [RoomVisitedHistoryStoreTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/visited/RoomVisitedHistoryStoreTest.kt)
 - [DefaultFuelPriceProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/fuel/DefaultFuelPriceProviderTest.kt)
 - [RoomTimeTrackingRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/timetracking/RoomTimeTrackingRepositoryTest.kt)

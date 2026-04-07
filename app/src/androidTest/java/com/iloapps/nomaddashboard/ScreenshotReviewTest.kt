@@ -12,6 +12,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assume.assumeTrue
 
 @RunWith(AndroidJUnit4::class)
 class ScreenshotReviewTest {
@@ -46,6 +47,10 @@ class ScreenshotReviewTest {
     }
 
     private fun capture(screen: ScreenshotReviewScreen) {
+        assumeTrue(
+            "Screenshot capture is disabled for the default connected-test lane.",
+            InstrumentationRegistry.getArguments().getString(CaptureEnabledArgument) == "true",
+        )
         composeTestRule.runOnUiThread {
             composeTestRule.activity.showScreen(screen)
         }
@@ -58,5 +63,9 @@ class ScreenshotReviewTest {
             "Expected screenshot capture to succeed for ${screen.routeName}",
             device.takeScreenshot(screenshotFile),
         )
+    }
+
+    private companion object {
+        const val CaptureEnabledArgument = "captureScreenshots"
     }
 }

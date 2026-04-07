@@ -8,6 +8,7 @@ import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -60,13 +61,15 @@ class ScreenshotReviewActivity : ComponentActivity() {
                             modifier = screenModifier,
                         )
 
-                        ScreenshotReviewScreen.Visited -> VisitedScreen(
-                            state = ScreenshotReviewFixtures.visitedState(),
-                            hasLocationPermission = true,
-                            onRefresh = {},
-                            onRequestLocationPermission = {},
-                            modifier = screenModifier,
-                        )
+                        ScreenshotReviewScreen.Visited -> Box(modifier = screenModifier) {
+                            VisitedScreen(
+                                state = ScreenshotReviewFixtures.visitedState(),
+                                hasLocationPermission = true,
+                                hasMapsApiKey = false,
+                                onRefresh = {},
+                                onRequestLocationPermission = {},
+                            )
+                        }
 
                         ScreenshotReviewScreen.TimeTracking -> TimeTrackingScreen(
                             state = ScreenshotReviewFixtures.timeTrackingState(),

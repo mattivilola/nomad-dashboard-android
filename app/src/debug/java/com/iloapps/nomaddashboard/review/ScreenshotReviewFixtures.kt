@@ -16,6 +16,11 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
+import com.iloapps.nomaddashboard.core.model.TravelAlertKind
+import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalSnapshot
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalState
+import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
@@ -119,8 +124,50 @@ object ScreenshotReviewFixtures {
                     ),
                 ),
                 travelAlerts = TravelAlertsSnapshot(
-                    summary = "Travel alerts provider still pending Android parity work.",
-                    level = SignalLevel.NEUTRAL,
+                    primaryCountryCode = "ES",
+                    primaryCountryName = "Spain",
+                    coverageCountryCodes = listOf("ES", "PT", "FR"),
+                    states = listOf(
+                        TravelAlertSignalState(
+                            kind = TravelAlertKind.ADVISORY,
+                            status = TravelAlertSignalStatus.READY,
+                            signal = TravelAlertSignalSnapshot(
+                                kind = TravelAlertKind.ADVISORY,
+                                severity = TravelAlertSeverity.CAUTION,
+                                title = "Exercise normal caution",
+                                summary = "Monitor transport disruptions and coastal wind advisories.",
+                                sourceName = "Smartraveller",
+                                sourceUrl = "https://www.smartraveller.gov.au",
+                                updatedAt = fixtureNow,
+                                affectedCountryCodes = listOf("ES"),
+                                itemCount = 1,
+                            ),
+                            sourceName = "Smartraveller",
+                            sourceUrl = "https://www.smartraveller.gov.au",
+                            lastAttemptedAt = fixtureNow,
+                            lastSuccessAt = fixtureNow,
+                        ),
+                        TravelAlertSignalState(
+                            kind = TravelAlertKind.SECURITY,
+                            status = TravelAlertSignalStatus.READY,
+                            signal = TravelAlertSignalSnapshot(
+                                kind = TravelAlertKind.SECURITY,
+                                severity = TravelAlertSeverity.INFO,
+                                title = "Regional security low",
+                                summary = "No high-severity incidents nearby in the current review region.",
+                                sourceName = "ReliefWeb",
+                                sourceUrl = "https://reliefweb.int",
+                                updatedAt = fixtureNow,
+                                affectedCountryCodes = listOf("ES", "PT", "FR"),
+                                itemCount = 0,
+                            ),
+                            sourceName = "ReliefWeb",
+                            sourceUrl = "https://reliefweb.int",
+                            lastAttemptedAt = fixtureNow,
+                            lastSuccessAt = fixtureNow,
+                        ),
+                    ),
+                    fetchedAt = fixtureNow,
                 ),
                 fuelPrices = FuelPriceSnapshot(
                     status = FuelPriceStatus.READY,

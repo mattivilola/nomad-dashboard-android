@@ -36,6 +36,7 @@ Key files:
 Responsibilities:
 - app settings models
 - dashboard snapshot models
+- structured travel-alert domain vocabulary
 - visited/time tracking domain vocabulary
 
 Purpose:
@@ -84,6 +85,7 @@ Responsibilities:
 - repository implementation
 - Android telemetry readers
 - encrypted provider credential storage backed by Android Keystore
+- travel-alert provider orchestration and country-coverage resolution
 - orchestration of local and remote data
 
 Key files:
@@ -116,6 +118,9 @@ Current dashboard data flow:
    - FreeIPAPI public IP and geolocation
    - device-first, IP-fallback fuel lookup context when fuel prices are enabled
    - country-specific fuel provider selection for Spain, France, Italy, and Germany
+   - device-place-first, IP-country-fallback travel-alert context
+   - Smartraveller advisory lookup for the resolved primary country
+   - ReliefWeb regional security lookup for the primary country plus bordering countries
    - Open-Meteo weather using the resolved coordinate
 4. Repository emits a `DashboardSnapshot`.
 5. Compose renders the snapshot through feature and design-system components.
@@ -144,6 +149,9 @@ Visited history flow:
    inferred country-day rows.
 5. `VisitedViewModel` combines settings, visited places, and country days into
    UI state for the visited screen.
+6. `feature:visited` derives a feature-local map presentation from the existing
+   places and country days, then renders all-time place markers plus
+   selected-year country shading from a bundled world-country GeoJSON asset.
 
 Time tracking flow:
 
@@ -175,6 +183,25 @@ Fuel prices flow:
 5. The provider returns the cheapest nearby diesel and gasoline stations, or an
    explicit unsupported/configuration/unavailable state.
 
+Travel alerts flow:
+
+1. `DashboardViewModel` triggers repository refresh.
+2. `DefaultNomadDashboardRepository` resolves the travel-alert country context
+   in this order:
+   - current device place already available from the same refresh cycle
+   - current public-IP geolocation country fallback
+3. The repository expands the resolved primary country into a coverage set of
+   `primary + bordering countries` using a bundled border dataset.
+4. The repository first publishes a synchronized `checking` travel-alert
+   snapshot, then resolves each provider independently:
+   - `SmartravellerAdvisoryProvider` for advisory severity on the primary country
+   - `ReliefWebSecurityProvider` for regional security severity across the
+     coverage set using the last `72 hours` of reports
+5. Provider results are mapped into structured per-signal states:
+   - `ready` when fresh data was resolved
+   - `stale` when the latest refresh failed but a prior signal exists
+   - `unavailable` when no prior signal exists or required context/config is missing
+
 ## State Management Rules
 
 - ViewModels own screen-level state exposure.
@@ -205,14 +232,16 @@ Fuel prices flow:
 Implemented now:
 - FreeIPAPI
 - Open-Meteo
+- Smartraveller travel advisories
+- ReliefWeb regional security reports
 - Spain fuel prices
 - France fuel prices
 - Italy fuel prices
 - Germany Tankerkonig fuel prices with encrypted in-app key storage
 
 Configured but not yet feature-complete:
-- ReliefWeb app name local config
-- future Maps/Places user-provided credentials
+- package/signature-restricted Google Maps key for the visited map
+- future Places user-provided credentials
 - future analytics ID
 
 ## Background and Runtime Strategy
@@ -233,10 +262,12 @@ Planned:
 - Release credentials only in gitignored local env files
 - User-supplied provider credentials must never be compiled into `BuildConfig`,
   manifest placeholders, or resources
+- the ReliefWeb app name is a non-secret provider identifier and is injected
+  from local `Config/AppConfig.env` into app `BuildConfig`
 - user-supplied provider credentials remain local in Android Keystore-backed
   encrypted storage and are excluded from Android backup
-- Android Maps/Places keys, if added later, must be user-managed in-app or
-  package/signature-restricted and must not be treated as shared repo secrets
+- Android Maps/Places keys must be package/signature-restricted and must not be
+  treated as shared repo secrets
 
 ## Platform Adaptation Notes
 
