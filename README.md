@@ -21,7 +21,7 @@ make test
 make lint
 ```
 
-Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env` and `Config/AppConfig.env`.
+Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env` and `Config/AppConfig.env`. Germany fuel support reads the user-supplied `NOMAD_TANKERKOENIG_API_KEY` from local `Config/AppConfig.env` and must never be committed.
 
 `make connect-wireless` will prompt for the pairing endpoint and the connect endpoint shown under Android's Wireless debugging screen.
 The flow is: pair endpoint, pairing code, then connect endpoint.

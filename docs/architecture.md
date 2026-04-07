@@ -113,6 +113,8 @@ Current dashboard data flow:
    - Android connectivity and Wi-Fi state
    - battery and charging state
    - FreeIPAPI public IP and geolocation
+   - device-first, IP-fallback fuel lookup context when fuel prices are enabled
+   - country-specific fuel provider selection for Spain, France, Italy, and Germany
    - Open-Meteo weather using the resolved coordinate
 4. Repository emits a `DashboardSnapshot`.
 5. Compose renders the snapshot through feature and design-system components.
@@ -137,6 +139,22 @@ Visited history flow:
    inferred country-day rows.
 5. `VisitedViewModel` combines settings, visited places, and country days into
    UI state for the visited screen.
+
+Fuel prices flow:
+
+1. `DashboardViewModel` triggers repository refresh.
+2. `DefaultNomadDashboardRepository` resolves location context in this order:
+   - current device location when Android permission is already granted
+   - current public-IP geolocation fallback
+3. The repository creates a `FuelSearchRequest` with the resolved coordinate,
+   ISO country code, and a fixed `50 km` radius.
+4. `FuelPriceProvider` selects the matching source:
+   - Spain ministry REST JSON
+   - France government records API
+   - Italy MIMIT daily CSV datasets
+   - Germany Tankerkonig with local-only key config
+5. The provider returns the cheapest nearby diesel and gasoline stations, or an
+   explicit unsupported/configuration/unavailable state.
 
 ## State Management Rules
 
@@ -165,6 +183,10 @@ Visited history flow:
 Implemented now:
 - FreeIPAPI
 - Open-Meteo
+- Spain fuel prices
+- France fuel prices
+- Italy fuel prices
+- Germany Tankerkonig fuel prices with local-only key config
 
 Configured but not yet feature-complete:
 - ReliefWeb app name local config
@@ -188,6 +210,8 @@ Planned:
 - Release credentials only in gitignored local env files
 - Android Maps/Places keys must be restricted to package and signing cert
 - user-supplied provider credentials remain local
+- `NOMAD_TANKERKOENIG_API_KEY` is read from local `Config/AppConfig.env` only;
+  the Android app does not ship a shared Germany fuel key
 
 ## Platform Adaptation Notes
 

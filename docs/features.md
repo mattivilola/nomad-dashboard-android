@@ -70,9 +70,9 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Fuel card shell | Bootstrap | Setting and dashboard text exist |
-| Spain/France/Italy public fuel providers | Planned | Not implemented yet |
-| Germany Tankerkonig support | Planned | User-supplied key policy already modeled |
+| Fuel card | Implemented | Dashboard card now shows ready/configuration/unavailable/no-stations states with the cheapest nearby diesel and gasoline rows |
+| Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
+| Germany Tankerkonig support | Implemented | Requires local `NOMAD_TANKERKOENIG_API_KEY` in gitignored `Config/AppConfig.env` |
 | Emergency care card shell | Bootstrap | Setting and dashboard text exist |
 | Nearby hospitals via Places | Planned | Android replacement for Apple Maps |
 | In-app map preview | Planned | Depends on Maps integration |

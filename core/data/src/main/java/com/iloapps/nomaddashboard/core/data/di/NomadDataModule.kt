@@ -8,19 +8,32 @@ import com.iloapps.nomaddashboard.core.common.IoDispatcher
 import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
+import com.iloapps.nomaddashboard.core.data.fuel.DefaultFuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderLocalConfig
 import com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingTransactionRunner
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingTransactionRunner
 import com.iloapps.nomaddashboard.core.data.visited.DatabaseTransactionRunner
 import com.iloapps.nomaddashboard.core.data.visited.RoomDatabaseTransactionRunner
 import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsSerializer
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
+import com.iloapps.nomaddashboard.core.network.api.FranceFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
+import com.iloapps.nomaddashboard.core.network.api.SpainFuelPriceService
+import com.iloapps.nomaddashboard.core.network.api.TankerkoenigService
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -88,9 +101,62 @@ object NomadInfrastructureModule {
 
     @Provides
     @Singleton
+    fun provideSpainFuelPriceService(
+        client: OkHttpClient,
+        json: Json,
+    ): SpainFuelPriceService =
+        Retrofit.Builder()
+            .baseUrl("https://sedeaplicaciones.minetur.gob.es/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(SpainFuelPriceService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideFranceFuelPriceService(
+        client: OkHttpClient,
+        json: Json,
+    ): FranceFuelPriceService =
+        Retrofit.Builder()
+            .baseUrl("https://data.economie.gouv.fr/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(FranceFuelPriceService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideItalyFuelPriceService(
+        client: OkHttpClient,
+        json: Json,
+    ): ItalyFuelPriceService =
+        Retrofit.Builder()
+            .baseUrl("https://www.mimit.gov.it/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(ItalyFuelPriceService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTankerkoenigService(
+        client: OkHttpClient,
+        json: Json,
+    ): TankerkoenigService =
+        Retrofit.Builder()
+            .baseUrl("https://creativecommons.tankerkoenig.de/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(TankerkoenigService::class.java)
+
+    @Provides
+    @Singleton
     fun provideNomadDatabase(@ApplicationContext context: Context): NomadDatabase =
         Room.databaseBuilder(context, NomadDatabase::class.java, "nomad-dashboard.db")
             .addMigrations(NomadDatabase.MIGRATION_1_2)
+            .addMigrations(NomadDatabase.MIGRATION_2_3)
             .build()
 
     @Provides
@@ -98,6 +164,12 @@ object NomadInfrastructureModule {
 
     @Provides
     fun provideVisitedCountryDayDao(database: NomadDatabase): VisitedCountryDayDao = database.visitedCountryDayDao()
+
+    @Provides
+    fun provideTimeTrackingProjectDao(database: NomadDatabase): TimeTrackingProjectDao = database.timeTrackingProjectDao()
+
+    @Provides
+    fun provideTimeTrackingEntryDao(database: NomadDatabase): TimeTrackingEntryDao = database.timeTrackingEntryDao()
 
     @Provides
     @Singleton
@@ -109,6 +181,13 @@ object NomadInfrastructureModule {
                 serializer = AppSettingsSerializer,
                 produceFile = { context.dataStoreFile("app-settings.pb") },
             ),
+        )
+
+    @Provides
+    @Singleton
+    fun provideFuelProviderLocalConfig(): FuelProviderLocalConfig =
+        FuelProviderLocalConfig(
+            tankerkoenigApiKey = com.iloapps.nomaddashboard.core.data.BuildConfig.TANKERKOENIG_API_KEY,
         )
 
     @Provides
@@ -149,6 +228,24 @@ abstract class NomadRepositoryModule {
     abstract fun bindVisitedLocationProvider(
         impl: AndroidVisitedDeviceLocationProvider,
     ): VisitedDeviceLocationProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindFuelPriceProvider(
+        impl: DefaultFuelPriceProvider,
+    ): FuelPriceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindTimeTrackingRepository(
+        impl: RoomTimeTrackingRepository,
+    ): TimeTrackingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTimeTrackingTransactionRunner(
+        impl: RoomTimeTrackingTransactionRunner,
+    ): TimeTrackingTransactionRunner
 
     @Binds
     @Singleton

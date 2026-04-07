@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+fun env(name: String, default: String = ""): String = System.getenv(name)?.takeIf { it.isNotBlank() } ?: default
+
 android {
     namespace = "com.iloapps.nomaddashboard.core.data"
     compileSdk = 36
@@ -13,6 +15,11 @@ android {
         minSdk = 30
         consumerProguardFiles("consumer-rules.pro")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "TANKERKOENIG_API_KEY", "\"${env("NOMAD_TANKERKOENIG_API_KEY")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {

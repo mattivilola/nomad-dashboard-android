@@ -1,9 +1,12 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
+import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
@@ -11,6 +14,7 @@ import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
+import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
@@ -36,6 +40,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,6 +51,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val telemetryReader: TelemetryReader,
     private val freeIpApiService: FreeIpApiService,
     private val openMeteoService: OpenMeteoService,
+    private val fuelPriceProvider: FuelPriceProvider,
+    private val timeTrackingRepository: TimeTrackingRepository,
     private val visitedHistoryStore: VisitedHistoryStore,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
     @ApplicationScope
@@ -87,6 +95,15 @@ class DefaultNomadDashboardRepository @Inject constructor(
             TravelContextSnapshot()
         }
 
+        val currentDevicePlace = if (
+            currentSettings.fuelPricesEnabled ||
+            (currentSettings.visitedPlacesEnabled && currentSettings.useCurrentLocationForVisitedPlaces)
+        ) {
+            runCatching { visitedDeviceLocationProvider.currentPlace() }.getOrNull()
+        } else {
+            null
+        }
+
         if (currentSettings.visitedPlacesEnabled) {
             val refreshStartedAt = Instant.now()
 
@@ -95,13 +112,9 @@ class DefaultNomadDashboardRepository @Inject constructor(
             }
 
             if (currentSettings.useCurrentLocationForVisitedPlaces) {
-                runCatching {
-                    visitedDeviceLocationProvider.currentPlace()
-                }.getOrNull()?.let { place ->
+                currentDevicePlace?.let { place ->
                     runCatching {
-                        visitedHistoryStore.recordObservation(
-                            place.toObservation(refreshStartedAt),
-                        )
+                        visitedHistoryStore.recordObservation(place.toObservation(refreshStartedAt))
                     }
                 }
             }
@@ -141,6 +154,23 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val visitedPlaces = visitedHistoryStore.visitedPlaces.first()
         val visitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
         val visitedPlaceSummary = visitedPlaces.visitedPlaceSummary()
+        val activeTimeTracking = timeTrackingRepository.currentActiveEntry()
+        val fuelPrices = if (currentSettings.fuelPricesEnabled) {
+            buildFuelSearchRequest(
+                currentDevicePlace = currentDevicePlace,
+                travelContext = travelContext,
+            )?.let { request ->
+                fuelPriceProvider.prices(request)
+            } ?: FuelPriceSnapshot(
+                status = FuelPriceStatus.UNAVAILABLE,
+                sourceName = "Nomad Fuel Prices",
+                countryCode = currentDevicePlace?.countryCode ?: travelContext.countryCode,
+                countryName = currentDevicePlace?.country ?: travelContext.country,
+                detail = "Nearby fuel prices need a resolved current location and country.",
+            )
+        } else {
+            FuelPriceSnapshot(detail = "Enable fuel prices in Settings")
+        }
 
         internalSnapshot.value = DashboardSnapshot(
             lastRefresh = Instant.now(),
@@ -172,13 +202,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             travelContext = travelContext,
             weather = weather,
             travelAlerts = TravelAlertsSnapshot(summary = "Travel alerts contract is ready; Android provider is deferred."),
-            fuelPrices = FuelPriceSnapshot(
-                summary = if (currentSettings.fuelPricesEnabled) {
-                    "Provider scaffolding is ready; regional integrations follow in the next slice."
-                } else {
-                    "Enable fuel prices in Settings"
-                },
-            ),
+            fuelPrices = fuelPrices,
             emergencyCare = EmergencyCareSnapshot(
                 summary = if (currentSettings.emergencyCareEnabled) {
                     "Places/Maps integration is planned next."
@@ -188,11 +212,19 @@ class DefaultNomadDashboardRepository @Inject constructor(
             ),
             timeTracking = TimeTrackingDashboardState(
                 enabled = currentSettings.projectTimeTrackingEnabled,
-                headline = if (currentSettings.projectTimeTrackingEnabled) "Planned" else "Disabled",
-                detail = if (currentSettings.projectTimeTrackingEnabled) {
-                    "Foreground-service tracking scaffold is the next milestone."
-                } else {
-                    "Turn this on to prepare local tracking."
+                headline = when {
+                    currentSettings.projectTimeTrackingEnabled.not() -> "Disabled"
+                    activeTimeTracking != null -> "Tracking"
+                    else -> "Ready"
+                },
+                detail = when {
+                    currentSettings.projectTimeTrackingEnabled.not() -> "Turn this on to prepare local tracking."
+                    activeTimeTracking != null -> {
+                        val localTime = DateTimeFormatter.ofPattern("HH:mm")
+                            .format(activeTimeTracking.entry.startAt.atZone(ZoneId.systemDefault()))
+                        "Active: ${activeTimeTracking.project.name} since $localTime"
+                    }
+                    else -> "Open Tracking to add a project and start local time logging."
                 },
             ),
             visited = VisitedSummary(
@@ -205,7 +237,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     override suspend fun updateSettings(transform: (AppSettings) -> AppSettings) {
-        settingsDataSource.update(transform)
+        val current = settings.first()
+        val updated = transform(current)
+        settingsDataSource.update { updated }
+        if (current.projectTimeTrackingEnabled && updated.projectTimeTrackingEnabled.not()) {
+            timeTrackingRepository.stopTracking()
+        }
     }
 
     private fun weatherSummary(daily: OpenMeteoDaily?): String {
@@ -251,6 +288,39 @@ class DefaultNomadDashboardRepository @Inject constructor(
             "IP".takeIf { settings.publicIpGeolocationEnabled },
             "Device".takeIf { settings.useCurrentLocationForVisitedPlaces },
         ).joinToString(" + ").ifBlank { "None" }
+    }
+
+    private fun buildFuelSearchRequest(
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): FuelSearchRequest? {
+        currentDevicePlace?.let { place ->
+            val latitude = place.latitude
+            val longitude = place.longitude
+            val countryCode = place.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+            if (latitude != null && longitude != null && countryCode != null) {
+                return FuelSearchRequest(
+                    latitude = latitude,
+                    longitude = longitude,
+                    countryCode = countryCode,
+                    countryName = place.country,
+                )
+            }
+        }
+
+        val latitude = travelContext.latitude
+        val longitude = travelContext.longitude
+        val countryCode = travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+        if (latitude != null && longitude != null && countryCode != null) {
+            return FuelSearchRequest(
+                latitude = latitude,
+                longitude = longitude,
+                countryCode = countryCode,
+                countryName = travelContext.country,
+            )
+        }
+
+        return null
     }
 
     private fun OpenMeteoDaily.toForecast(): List<WeatherDayForecast> =

@@ -1,5 +1,11 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
+import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
+import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
+import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
+import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
+import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import androidx.datastore.core.DataStore
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
@@ -13,7 +19,14 @@ import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.datastore.toProto
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
+import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
+import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
+import com.iloapps.nomaddashboard.core.model.FuelStationPrice
+import com.iloapps.nomaddashboard.core.model.FuelType
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
+import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
+import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
+import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
@@ -21,7 +34,9 @@ import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
+import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +52,7 @@ class DefaultNomadDashboardRepositoryTest {
         val visitedStore = FakeVisitedHistoryStore()
         val repository = repository(
             settingsDataSource = settingsDataSource,
+            fuelPriceProvider = FakeFuelPriceProvider(),
             visitedHistoryStore = visitedStore,
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
             applicationScope = backgroundScope,
@@ -67,6 +83,7 @@ class DefaultNomadDashboardRepositoryTest {
         val visitedStore = FakeVisitedHistoryStore()
         val repository = repository(
             settingsDataSource = settingsDataSource,
+            fuelPriceProvider = FakeFuelPriceProvider(),
             visitedHistoryStore = visitedStore,
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
                 ResolvedVisitedPlace(
@@ -102,6 +119,7 @@ class DefaultNomadDashboardRepositoryTest {
         val visitedStore = FakeVisitedHistoryStore()
         val repository = repository(
             settingsDataSource = settingsDataSource,
+            fuelPriceProvider = FakeFuelPriceProvider(),
             visitedHistoryStore = visitedStore,
             visitedDeviceLocationProvider = object : VisitedDeviceLocationProvider {
                 override suspend fun currentPlace(): ResolvedVisitedPlace? = error("should not be called")
@@ -116,17 +134,161 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(repository.snapshot.first { it.lastRefresh != null }.visited.sourceSummary).isEqualTo("Disabled")
     }
 
+    @Test
+    fun `refresh uses device location first for fuel lookup`() = runTest {
+        val settings = AppSettings(
+            fuelPricesEnabled = true,
+            publicIpGeolocationEnabled = true,
+        )
+        val fuelPriceProvider = FakeFuelPriceProvider(
+            snapshot = FuelPriceSnapshot(
+                status = FuelPriceStatus.READY,
+                sourceName = "Spanish Ministry Fuel Prices",
+                countryCode = "ES",
+                countryName = "Spain",
+                diesel = FuelStationPrice(
+                    fuelType = FuelType.DIESEL,
+                    stationName = "Station Diesel",
+                    pricePerLiter = 1.5,
+                    distanceKilometers = 2.0,
+                    latitude = 36.72,
+                    longitude = -4.42,
+                ),
+                detail = "Cheapest prices within 50 km.",
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = fuelPriceProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace(
+                    city = "Malaga",
+                    region = "Andalusia",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.72,
+                    longitude = -4.42,
+                ),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = fuelPriceProvider.requests.single()
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }
+
+        assertThat(request.countryCode).isEqualTo("ES")
+        assertThat(request.latitude).isWithin(0.001).of(36.72)
+        assertThat(snapshot.fuelPrices.status).isEqualTo(FuelPriceStatus.READY)
+        assertThat(snapshot.fuelPrices.sourceName).isEqualTo("Spanish Ministry Fuel Prices")
+    }
+
+    @Test
+    fun `refresh falls back to ip travel context for fuel lookup`() = runTest {
+        val settings = AppSettings(
+            fuelPricesEnabled = true,
+            publicIpGeolocationEnabled = true,
+        )
+        val fuelPriceProvider = FakeFuelPriceProvider(
+            snapshot = FuelPriceSnapshot(
+                status = FuelPriceStatus.READY,
+                sourceName = "Nomad Fuel Prices",
+                countryCode = "FI",
+                countryName = "Finland",
+                detail = "Cheapest prices within 50 km.",
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = fuelPriceProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val request = fuelPriceProvider.requests.single()
+        assertThat(request.countryCode).isEqualTo("FI")
+        assertThat(request.latitude).isWithin(0.001).of(60.1699)
+    }
+
+    @Test
+    fun `refresh marks fuel unavailable when no location context exists`() = runTest {
+        val settings = AppSettings(
+            fuelPricesEnabled = true,
+            publicIpGeolocationEnabled = false,
+        )
+        val fuelPriceProvider = FakeFuelPriceProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = fuelPriceProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        assertThat(fuelPriceProvider.requests).isEmpty()
+        assertThat(repository.snapshot.first { it.lastRefresh != null }.fuelPrices.status)
+            .isEqualTo(FuelPriceStatus.UNAVAILABLE)
+    }
+
+    @Test
+    fun `refresh exposes active time tracking summary`() = runTest {
+        val activeRecord = TimeTrackingRecord(
+            entry = TimeTrackingEntry(
+                id = UUID.fromString("00000000-0000-0000-0000-000000000301"),
+                projectId = UUID.fromString("00000000-0000-0000-0000-000000000302"),
+                startAt = Instant.parse("2026-04-07T09:00:00Z"),
+            ),
+            project = TimeTrackingProject(
+                id = UUID.fromString("00000000-0000-0000-0000-000000000302"),
+                name = "Client Work",
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(
+                FakeAppSettingsDataStore(
+                    AppSettings(projectTimeTrackingEnabled = true).toProto(),
+                ),
+            ),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+            timeTrackingRepository = FakeTimeTrackingRepository(active = activeRecord),
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }
+        assertThat(snapshot.timeTracking.headline).isEqualTo("Tracking")
+        assertThat(snapshot.timeTracking.detail).contains("Client Work")
+    }
+
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
+        fuelPriceProvider: FuelPriceProvider,
         visitedHistoryStore: FakeVisitedHistoryStore,
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
+        timeTrackingRepository: TimeTrackingRepository = FakeTimeTrackingRepository(),
     ): DefaultNomadDashboardRepository =
         DefaultNomadDashboardRepository(
             settingsDataSource = settingsDataSource,
             telemetryReader = FakeTelemetryReader(),
             freeIpApiService = FakeFreeIpApiService(),
             openMeteoService = FakeOpenMeteoService(),
+            fuelPriceProvider = fuelPriceProvider,
+            timeTrackingRepository = timeTrackingRepository,
             visitedHistoryStore = visitedHistoryStore,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
             applicationScope = applicationScope,
@@ -191,6 +353,40 @@ private class FakeVisitedDeviceLocationProvider(
     private val value: ResolvedVisitedPlace?,
 ) : VisitedDeviceLocationProvider {
     override suspend fun currentPlace(): ResolvedVisitedPlace? = value
+}
+
+private class FakeFuelPriceProvider(
+    private val snapshot: FuelPriceSnapshot = FuelPriceSnapshot(
+        status = FuelPriceStatus.NO_STATIONS_FOUND,
+        sourceName = "Nomad Fuel Prices",
+        detail = "No priced stations found within 50 km.",
+    ),
+) : FuelPriceProvider {
+    val requests = mutableListOf<FuelSearchRequest>()
+
+    override suspend fun prices(request: FuelSearchRequest): FuelPriceSnapshot {
+        requests += request
+        return snapshot
+    }
+}
+
+private class FakeTimeTrackingRepository(
+    active: TimeTrackingRecord? = null,
+) : TimeTrackingRepository {
+    override val projects: Flow<List<TimeTrackingProject>> = MutableStateFlow(emptyList())
+    override val recentEntries: Flow<List<TimeTrackingRecord>> = MutableStateFlow(emptyList())
+    override val activeEntry: Flow<TimeTrackingRecord?> = MutableStateFlow(active)
+
+    override suspend fun currentActiveEntry(): TimeTrackingRecord? = activeEntry.first()
+
+    override suspend fun createProject(name: String): CreateProjectResult =
+        CreateProjectResult.Created(
+            TimeTrackingProject(id = UUID.randomUUID(), name = name.trim()),
+        )
+
+    override suspend fun startTracking(projectId: UUID): StartTrackingResult = StartTrackingResult.Started
+
+    override suspend fun stopTracking(): StopTrackingResult = StopTrackingResult.NotTracking
 }
 
 private class FakeVisitedHistoryStore : VisitedHistoryStore {

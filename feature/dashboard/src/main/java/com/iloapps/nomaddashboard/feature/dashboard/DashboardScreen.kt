@@ -28,6 +28,11 @@ import com.iloapps.nomaddashboard.core.designsystem.component.NomadPill
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSummaryTile
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
+import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
+import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
+import com.iloapps.nomaddashboard.core.model.FuelStationPrice
+import com.iloapps.nomaddashboard.core.model.FuelType
+import java.util.Locale
 
 @Composable
 fun DashboardRoute(
@@ -146,8 +151,14 @@ private fun DashboardScreen(
                 )
                 DashboardCardId.FUEL_PRICES -> DashboardSectionCard(
                     title = "Fuel Prices",
-                    subtitle = if (state.settings.fuelPricesEnabled) "Enabled" else "Off",
-                    lines = listOf(state.snapshot.fuelPrices.summary),
+                    subtitle = fuelPricesSubtitle(
+                        enabled = state.settings.fuelPricesEnabled,
+                        snapshot = state.snapshot.fuelPrices,
+                    ),
+                    lines = fuelPriceLines(
+                        enabled = state.settings.fuelPricesEnabled,
+                        snapshot = state.snapshot.fuelPrices,
+                    ),
                 )
                 DashboardCardId.EMERGENCY_CARE -> DashboardSectionCard(
                     title = "Emergency Care",
@@ -176,6 +187,62 @@ private fun DashboardScreen(
             }
         }
     }
+}
+
+private fun fuelPricesSubtitle(
+    enabled: Boolean,
+    snapshot: FuelPriceSnapshot,
+): String {
+    if (enabled.not()) {
+        return "Off"
+    }
+
+    return when (snapshot.status) {
+        FuelPriceStatus.READY,
+        FuelPriceStatus.NO_STATIONS_FOUND,
+        -> snapshot.countryName?.let { "$it · within ${snapshot.searchRadiusKilometers.toInt()} km" }
+            ?: "Within ${snapshot.searchRadiusKilometers.toInt()} km"
+        FuelPriceStatus.CONFIGURATION_REQUIRED,
+        FuelPriceStatus.UNAVAILABLE,
+        FuelPriceStatus.UNSUPPORTED,
+        -> snapshot.sourceName
+    }
+}
+
+private fun fuelPriceLines(
+    enabled: Boolean,
+    snapshot: FuelPriceSnapshot,
+): List<String> {
+    if (enabled.not()) {
+        return listOf("Enable fuel prices in Settings")
+    }
+
+    val rows = when (snapshot.status) {
+        FuelPriceStatus.READY -> listOfNotNull(
+            snapshot.diesel?.toFuelLine(),
+            snapshot.gasoline?.toFuelLine(),
+            snapshot.detail.takeIf(String::isNotBlank),
+            snapshot.note,
+        )
+        FuelPriceStatus.NO_STATIONS_FOUND,
+        FuelPriceStatus.CONFIGURATION_REQUIRED,
+        FuelPriceStatus.UNAVAILABLE,
+        FuelPriceStatus.UNSUPPORTED,
+        -> listOfNotNull(snapshot.detail.takeIf(String::isNotBlank), snapshot.note)
+    }
+
+    return rows.ifEmpty { listOf("Fuel prices unavailable") }
+}
+
+private fun FuelStationPrice.toFuelLine(): String {
+    val label = when (fuelType) {
+        FuelType.DIESEL -> "Diesel"
+        FuelType.GASOLINE -> "Gasoline"
+    }
+    val price = String.format(Locale.US, "%.3f", pricePerLiter)
+    val distance = String.format(Locale.US, "%.1f", distanceKilometers)
+    val localityText = locality?.let { " · $it" }.orEmpty()
+    return "$label: $price $currencyCode/L · $stationName · $distance km$localityText"
 }
 
 @Composable

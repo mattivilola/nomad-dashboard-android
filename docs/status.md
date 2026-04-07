@@ -12,6 +12,7 @@ Current repository state:
 - documentation and wireless helper follow-up committed
 - prior build/test/lint baseline verified locally
 - real-device debug install verified on Android phone via wireless debugging
+- fuel provider implementations and dashboard fuel card wiring implemented
 - visited places persistence and country-day aggregation implemented
 - visited screen history UI implemented
 - visited device-location opt-in and permission CTA implemented
@@ -38,6 +39,11 @@ Current repository state:
 - dashboard route implemented
 - settings route implemented
 - about route implemented
+- dashboard fuel card implemented with device-first / IP-fallback lookup
+- Spain ministry fuel provider implemented
+- France government fuel provider implemented
+- Italy MIMIT fuel provider implemented
+- Germany Tankerkonig fuel provider implemented with local-only config
 - visited route implemented
 - visited places persistence implemented
 - country-day aggregation logic implemented
@@ -49,13 +55,12 @@ Current repository state:
 
 ## In Progress
 
-- verification rerun for build/lint/full emulator-first test flow after the visited slice
+- verification rerun for build/lint/test after the fuel slice
 
 ## Not Started
 
 - visited map rendering
 - time-tracking persistence and foreground-service runtime
-- fuel provider implementations
 - emergency care / Places integration
 - Smartraveller and ReliefWeb Android provider implementation
 - analytics/privacy parity implementation
@@ -65,14 +70,24 @@ Current repository state:
 
 Verified:
 - `make build`
-- `make lint`
 - wireless ADB pairing and reconnect flow
 - debug APK install on physical Android phone
 - app launch on physical Android phone
 - visited model/store/repository unit coverage added and passing via `testDebugUnitTest`
+- targeted compile verification for `:core:data` and `:feature:dashboard`
 
-Not yet fully re-verified after the visited slice in this session:
-- full `make build`
+Blocked in this session:
+- `make lint` on 2026-04-07 still fails outside the fuel slice
+  - `:app:lintDebug` reports existing time-tracking service permission errors in
+    `TimeTrackingForegroundService.kt`
+- `make test` on 2026-04-07 still fails outside the fuel slice
+  - `:core:data:compileDebugUnitTestKotlin` fails on unrelated
+    `RoomTimeTrackingRepositoryTest` errors already present in the worktree
+  - connected tests still hit the earlier
+    `:feature:dashboard:connectedDebugAndroidTest` and
+    `:app:connectedDebugAndroidTest` failures
+
+Not yet fully re-verified after the fuel slice in this session:
 - full `make lint`
 - full `make test` completion with the new default emulator path
 - end-to-end physical-device smoke pass with the explicit `make test-device` path
@@ -82,8 +97,8 @@ Not yet fully re-verified after the visited slice in this session:
 ## Immediate Next Steps
 
 1. Implement local time-tracking runtime and storage.
-2. Capture first Android screenshots from the running app for parity review.
-3. Add provider-complete fuel and emergency-care slices.
+2. Add emergency care / Places provider completion.
+3. Capture first Android screenshots from the running app for parity review.
 4. Add visited map rendering on top of the persisted history slice.
 
 ## Parallel-Safe Workstreams
