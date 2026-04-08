@@ -2,9 +2,15 @@ package com.iloapps.nomaddashboard.core.data.timetracking
 
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
 import com.iloapps.nomaddashboard.core.database.entity.toEntity
+import com.iloapps.nomaddashboard.core.model.TimeTrackingDayReport
+import com.iloapps.nomaddashboard.core.model.TimeTrackingFocusLossPerInterruption
+import com.iloapps.nomaddashboard.core.model.TimeTrackingInterruption
+import com.iloapps.nomaddashboard.core.model.TimeTrackingProjectReport
+import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingBucket
@@ -15,7 +21,9 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
 import com.iloapps.nomaddashboard.core.model.isUnallocated
+import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.util.UUID
@@ -35,6 +43,7 @@ import kotlinx.coroutines.launch
 class RoomTimeTrackingRepository @Inject constructor(
     private val projectDao: TimeTrackingProjectDao,
     private val entryDao: TimeTrackingEntryDao,
+    private val interruptionDao: TimeTrackingInterruptionDao,
     private val transactionRunner: TimeTrackingTransactionRunner,
     private val settingsDataSource: NomadSettingsDataSource,
     @ApplicationScope
@@ -65,6 +74,13 @@ class RoomTimeTrackingRepository @Inject constructor(
     ) { entity, items ->
         entity?.toRecord(items)?.takeIf { it.entry.isUnallocated() }
     }.stateIn(applicationScope, SharingStarted.Eagerly, null)
+
+    override val report: Flow<TimeTrackingReportSnapshot> = combine(
+        entryDao.observeAll(),
+        interruptionDao.observeAll(),
+        projects,
+        ::buildReportSnapshot,
+    ).stateIn(applicationScope, SharingStarted.Eagerly, TimeTrackingReportSnapshot())
 
     init {
         applicationScope.launch {
@@ -142,6 +158,28 @@ class RoomTimeTrackingRepository @Inject constructor(
             val active = entryDao.getActive()?.toModel() ?: return@run StopTrackingResult.NotTracking
             entryDao.upsert(active.copy(endAt = now).toEntity())
             StopTrackingResult.Stopped
+        }
+
+    override suspend fun reportInterruption(now: Instant): ReportInterruptionResult =
+        transactionRunner.run {
+            ensureBuiltInProjects()
+            syncTrackingLocked(now)
+            if (settingsState.value.projectTimeTrackingEnabled.not()) {
+                return@run ReportInterruptionResult.TrackingDisabled
+            }
+
+            val currentEntryId = entryDao.getActive()?.id
+                ?: entryDao.getAll()
+                    .firstOrNull { entity -> entity.endAtEpochMillis != null && entity.toModel().isUnallocated() }
+                    ?.id
+
+            interruptionDao.upsert(
+                TimeTrackingInterruption(
+                    entryId = currentEntryId?.let(UUID::fromString),
+                    occurredAt = now,
+                ).toEntity(),
+            )
+            ReportInterruptionResult.Recorded
         }
 
     override suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult =
@@ -278,6 +316,90 @@ class RoomTimeTrackingRepository @Inject constructor(
         return TimeTrackingRecord(entry = entry, project = project)
     }
 
+    private fun buildReportSnapshot(
+        entries: List<TimeTrackingEntryEntity>,
+        interruptions: List<com.iloapps.nomaddashboard.core.database.entity.TimeTrackingInterruptionEntity>,
+        projects: List<TimeTrackingProject>,
+    ): TimeTrackingReportSnapshot {
+        val zone = ZoneId.systemDefault()
+        val entryById = entries.associate { entity -> entity.id to entity.toModel() }
+        val projectById = projects.associateBy { it.id }
+        val allocatedRecords = entries
+            .mapNotNull { entity -> entity.toRecord(projects) }
+            .filter { record -> record.entry.endAt != null && record.entry.isUnallocated().not() }
+        val dayAccumulator = linkedMapOf<LocalDate, MutableDayReport>()
+
+        allocatedRecords.forEach { record ->
+            splitEntryAcrossDays(record.entry, zone).forEach { segment ->
+                val day = dayAccumulator.getOrPut(segment.date) { MutableDayReport(segment.date) }
+                day.allocatedDuration += segment.duration
+                val projectReport = day.projectReports.getOrPut(record.project.id) {
+                    MutableProjectReport(project = record.project)
+                }
+                projectReport.reportedDuration += segment.duration
+            }
+        }
+
+        interruptions
+            .map { it.toModel() }
+            .forEach { interruption ->
+                val date = interruption.occurredAt.atZone(zone).toLocalDate()
+                val day = dayAccumulator.getOrPut(date) { MutableDayReport(date) }
+                day.interruptionCount += 1
+
+                val entry = interruption.entryId?.let { entryId -> entryById[entryId.toString()] }
+                if (entry?.isUnallocated() == false) {
+                    val project = projectById[entry.projectId]
+                    if (project != null) {
+                        val projectReport = day.projectReports.getOrPut(project.id) {
+                            MutableProjectReport(project = project)
+                        }
+                        projectReport.interruptionCount += 1
+                    }
+                }
+            }
+
+        val dayReports = dayAccumulator.values
+            .map { it.toModel() }
+            .sortedByDescending { it.date }
+        val today = LocalDate.now(zone)
+        val todayReport = dayReports.firstOrNull { it.date == today }
+        val lastInterruptionAt = interruptions.maxOfOrNull { it.occurredAtEpochMillis }
+            ?.let(Instant::ofEpochMilli)
+
+        return TimeTrackingReportSnapshot(
+            interruptionsToday = todayReport?.interruptionCount ?: 0,
+            lastInterruptionAt = lastInterruptionAt,
+            todaysEstimatedFocusLoss = todayReport?.estimatedFocusLoss ?: Duration.ZERO,
+            todaysAllocatedDuration = todayReport?.allocatedDuration ?: Duration.ZERO,
+            todaysEstimatedFocusTime = todayReport?.estimatedFocusTime ?: Duration.ZERO,
+            dayReports = dayReports,
+        )
+    }
+
+    private fun splitEntryAcrossDays(
+        entry: TimeTrackingEntry,
+        zone: ZoneId,
+    ): List<DayDurationSegment> {
+        val endAt = entry.endAt ?: return emptyList()
+        if (endAt.isAfter(entry.startAt).not()) {
+            return emptyList()
+        }
+        val segments = mutableListOf<DayDurationSegment>()
+        var cursor = entry.startAt
+        while (cursor.isBefore(endAt)) {
+            val currentDate = cursor.atZone(zone).toLocalDate()
+            val nextBoundary = currentDate.plusDays(1).atStartOfDay(zone).toInstant()
+            val segmentEnd = if (endAt.isBefore(nextBoundary)) endAt else nextBoundary
+            segments += DayDurationSegment(
+                date = currentDate,
+                duration = Duration.between(cursor, segmentEnd),
+            )
+            cursor = segmentEnd
+        }
+        return segments
+    }
+
     private fun newUnallocatedEntry(
         bucket: TimeTrackingBucket,
         startAt: Instant,
@@ -324,3 +446,48 @@ class RoomTimeTrackingRepository @Inject constructor(
     private fun List<TimeTrackingProject>.sortedProjects(): List<TimeTrackingProject> =
         sortedWith(compareBy<TimeTrackingProject>({ it.id == TimeTrackingOtherProjectId }, { it.name.lowercase() }))
 }
+
+private data class DayDurationSegment(
+    val date: LocalDate,
+    val duration: Duration,
+)
+
+private data class MutableProjectReport(
+    val project: TimeTrackingProject,
+    var reportedDuration: Duration = Duration.ZERO,
+    var interruptionCount: Int = 0,
+) {
+    fun toModel(): TimeTrackingProjectReport {
+        val estimatedFocusLoss = TimeTrackingFocusLossPerInterruption.multipliedBy(interruptionCount.toLong())
+        return TimeTrackingProjectReport(
+            project = project,
+            reportedDuration = reportedDuration,
+            interruptionCount = interruptionCount,
+            estimatedFocusLoss = estimatedFocusLoss,
+            estimatedFocusTime = (reportedDuration - estimatedFocusLoss).coerceAtLeastZero(),
+        )
+    }
+}
+
+private data class MutableDayReport(
+    val date: LocalDate,
+    var interruptionCount: Int = 0,
+    var allocatedDuration: Duration = Duration.ZERO,
+    val projectReports: LinkedHashMap<UUID, MutableProjectReport> = linkedMapOf(),
+) {
+    fun toModel(): TimeTrackingDayReport {
+        val estimatedFocusLoss = TimeTrackingFocusLossPerInterruption.multipliedBy(interruptionCount.toLong())
+        return TimeTrackingDayReport(
+            date = date,
+            interruptionCount = interruptionCount,
+            estimatedFocusLoss = estimatedFocusLoss,
+            allocatedDuration = allocatedDuration,
+            estimatedFocusTime = (allocatedDuration - estimatedFocusLoss).coerceAtLeastZero(),
+            projectReports = projectReports.values
+                .map { it.toModel() }
+                .sortedWith(compareByDescending<TimeTrackingProjectReport> { it.reportedDuration }.thenBy { it.project.name.lowercase() }),
+        )
+    }
+}
+
+private fun Duration.coerceAtLeastZero(): Duration = if (isNegative) Duration.ZERO else this

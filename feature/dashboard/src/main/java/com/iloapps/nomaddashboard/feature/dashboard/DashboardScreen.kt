@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Thunderstorm
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -58,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +77,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -146,6 +151,7 @@ fun DashboardRoute(
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasLocationPermission by remember { mutableStateOf(context.hasDashboardLocationPermission()) }
     var hasNotificationPermission by remember { mutableStateOf(context.hasDashboardNotificationPermission()) }
+    var interruptionPulseKey by remember { mutableStateOf(0) }
     val currentRefresh by rememberUpdatedState(viewModel::refresh)
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -182,6 +188,7 @@ fun DashboardRoute(
             when (effect) {
                 DashboardEffect.StartTrackingService -> onStartForegroundTracking()
                 DashboardEffect.StopTrackingService -> onStopForegroundTracking()
+                DashboardEffect.InterruptionReported -> interruptionPulseKey += 1
             }
         }
     }
@@ -191,6 +198,7 @@ fun DashboardRoute(
         onRefresh = viewModel::refresh,
         hasLocationPermission = hasLocationPermission,
         hasNotificationPermission = hasNotificationPermission,
+        interruptionPulseKey = interruptionPulseKey,
         onRequestLocationPermission = {
             permissionLauncher.launch(
                 arrayOf(
@@ -207,6 +215,7 @@ fun DashboardRoute(
             }
         },
         onStopTracking = viewModel::stopTracking,
+        onReportInterruption = viewModel::reportInterruption,
         onAllocateTrackedTime = viewModel::allocateTrackedTime,
         onOpenSettings = onOpenSettings,
     )
@@ -219,9 +228,11 @@ fun DashboardScreen(
     onRefresh: () -> Unit,
     hasLocationPermission: Boolean = false,
     hasNotificationPermission: Boolean = false,
+    interruptionPulseKey: Int = 0,
     onRequestLocationPermission: () -> Unit = {},
     onStartTracking: () -> Unit = {},
     onStopTracking: () -> Unit = {},
+    onReportInterruption: () -> Unit = {},
     onAllocateTrackedTime: (java.util.UUID) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -346,8 +357,10 @@ fun DashboardScreen(
                     detail = state.snapshot.timeTracking.detail,
                     hasNotificationPermission = hasNotificationPermission,
                     autoWindowLabel = "${state.settings.projectTimeTrackingAutoStartMinutes.formatClockMinutes()}-${state.settings.projectTimeTrackingAutoStopMinutes.formatClockMinutes()}",
+                    interruptionPulseKey = interruptionPulseKey,
                     onStartTracking = onStartTracking,
                     onStopTracking = onStopTracking,
+                    onReportInterruption = onReportInterruption,
                     onAllocateTrackedTime = onAllocateTrackedTime,
                 )
 
@@ -1617,11 +1630,13 @@ private fun TimeTrackingSectionCard(
     detail: String,
     hasNotificationPermission: Boolean,
     autoWindowLabel: String,
+    interruptionPulseKey: Int,
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    onReportInterruption: () -> Unit,
     onAllocateTrackedTime: (java.util.UUID) -> Unit,
 ) {
-    val now = rememberDashboardTickerInstant(enabled = trackingState.activeEntry != null)
+    val now = rememberDashboardTickerInstant(enabled = true)
     val bufferedDuration = dashboardBufferedDuration(trackingState, now)
     val isRunning = trackingState.activeEntry != null
 
@@ -1661,18 +1676,39 @@ private fun TimeTrackingSectionCard(
                 )
             }
         }
-        Button(
-            onClick = if (isRunning) onStopTracking else onStartTracking,
+        Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(
-                if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = null,
+            Button(
+                onClick = if (isRunning) onStopTracking else onStartTracking,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                )
+                Text(
+                    if (isRunning) "Pause capture" else "Resume capture",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            DashboardInterruptionButton(
+                trackingState = trackingState,
+                now = now,
+                pulseKey = interruptionPulseKey,
+                onClick = onReportInterruption,
             )
-            Text(
-                if (isRunning) "Pause capture" else "Resume capture",
-                modifier = Modifier.padding(start = 8.dp),
-            )
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            maxItemsInEachRow = 2,
+        ) {
+            NomadMetricBlock("Interruptions", trackingState.report.interruptionsToday.toString(), "today")
+            NomadMetricBlock("Focus Loss", formatDurationCompact(trackingState.report.todaysEstimatedFocusLoss), "23m each")
+            NomadMetricBlock("Focused", formatDurationCompact(trackingState.report.todaysEstimatedFocusTime), "today estimate")
+            NomadMetricBlock("Allocated", formatDurationCompact(trackingState.report.todaysAllocatedDuration), "today logged")
         }
         if (hasNotificationPermission.not()) {
             Text(
@@ -1707,6 +1743,68 @@ private fun TimeTrackingSectionCard(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardInterruptionButton(
+    trackingState: DashboardTimeTrackingUiState,
+    now: Instant,
+    pulseKey: Int,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(22.dp)
+    val containerColor by animateColorAsState(
+        targetValue = dashboardInterruptionButtonColor(
+            lastInterruptionAt = trackingState.report.lastInterruptionAt,
+            now = now,
+            defaultColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.92f),
+        ),
+        label = "dashboardInterruptionColor",
+    )
+    val contentColor = if (containerColor.luminance() > 0.45f) Color(0xFF1F2A37) else Color.White
+    var flashAlpha by remember { mutableStateOf(0f) }
+
+    LaunchedEffect(pulseKey) {
+        if (pulseKey == 0) return@LaunchedEffect
+        flashAlpha = 0.9f
+        delay(120)
+        flashAlpha = 0.34f
+        delay(260)
+        flashAlpha = 0f
+    }
+
+    Box(modifier = Modifier.height(52.dp)) {
+        Button(
+            onClick = onClick,
+            modifier = Modifier.height(52.dp),
+            shape = shape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = containerColor,
+                contentColor = contentColor,
+            ),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.PriorityHigh, contentDescription = null, modifier = Modifier.size(20.dp))
+                Text(
+                    text = trackingState.report.interruptionsToday.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
+        if (flashAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(Color(0xFFFF4336).copy(alpha = flashAlpha)),
             )
         }
     }
@@ -1757,12 +1855,35 @@ private fun formatElapsedDuration(duration: Duration): String {
     return "%02d:%02d:%02d".format(hours, minutes, seconds)
 }
 
+private fun formatDurationCompact(duration: Duration): String {
+    val totalMinutes = duration.toMinutes().coerceAtLeast(0)
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0 && minutes > 0 -> "${hours}h ${minutes}m"
+        hours > 0 -> "${hours}h"
+        else -> "${minutes}m"
+    }
+}
+
 private fun compactDashboardProjectLabel(name: String): String =
     if (name.length <= 8) name else "${name.take(8)}..."
 
 private fun Int.pluralSuffix(): String = if (this == 1) "" else "s"
 
 private fun Int.formatClockMinutes(): String = "%02d:%02d".format(this / 60, this % 60)
+
+private fun dashboardInterruptionButtonColor(
+    lastInterruptionAt: Instant?,
+    now: Instant,
+    defaultColor: Color,
+): Color {
+    val last = lastInterruptionAt ?: return defaultColor
+    val elapsedMillis = Duration.between(last, now).toMillis().coerceAtLeast(0)
+    val cooldownMillis = Duration.ofMinutes(23).toMillis().toFloat()
+    val progress = (elapsedMillis / cooldownMillis).coerceIn(0f, 1f)
+    return lerp(Color(0xFFC92A2A), defaultColor, progress)
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

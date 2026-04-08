@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
+import com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
+import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +32,7 @@ data class TimeTrackingUiState(
     val pendingEntries: List<TimeTrackingRecord> = emptyList(),
     val recentEntries: List<TimeTrackingRecord> = emptyList(),
     val activeEntry: TimeTrackingRecord? = null,
+    val report: TimeTrackingReportSnapshot = TimeTrackingReportSnapshot(),
     val draftProjectName: String = "",
     val message: String? = null,
 )
@@ -38,6 +41,8 @@ sealed interface TimeTrackingEffect {
     data object StartService : TimeTrackingEffect
 
     data object StopService : TimeTrackingEffect
+
+    data object InterruptionReported : TimeTrackingEffect
 }
 
 private data class TrackingInputs(
@@ -51,6 +56,7 @@ private data class TrackingSnapshot(
     val pendingEntries: List<TimeTrackingRecord>,
     val recentEntries: List<TimeTrackingRecord>,
     val activeEntry: TimeTrackingRecord?,
+    val report: TimeTrackingReportSnapshot,
 )
 
 @HiltViewModel
@@ -76,13 +82,15 @@ class TimeTrackingViewModel @Inject constructor(
         timeTrackingRepository.pendingEntries,
         timeTrackingRepository.recentEntries,
         timeTrackingRepository.activeEntry,
-    ) { settings, projects, pendingEntries, recentEntries, activeEntry ->
+        timeTrackingRepository.report,
+    ) { settings, projects, pendingEntries, recentEntries, activeEntry, report ->
         TrackingSnapshot(
             settings = settings,
             projects = projects,
             pendingEntries = pendingEntries,
             recentEntries = recentEntries,
             activeEntry = activeEntry,
+            report = report,
         )
     }
 
@@ -96,6 +104,7 @@ class TimeTrackingViewModel @Inject constructor(
             pendingEntries = snapshot.pendingEntries,
             recentEntries = snapshot.recentEntries,
             activeEntry = snapshot.activeEntry,
+            report = snapshot.report,
             draftProjectName = inputs.draftProjectName,
             message = inputs.message,
         )
@@ -188,6 +197,22 @@ class TimeTrackingViewModel @Inject constructor(
 
                 AllocateTrackedTimeResult.MissingProject -> {
                     message.value = "That project is no longer available."
+                }
+            }
+            dashboardRepository.refresh()
+        }
+    }
+
+    fun reportInterruption() {
+        viewModelScope.launch {
+            when (timeTrackingRepository.reportInterruption()) {
+                ReportInterruptionResult.Recorded -> {
+                    message.value = "Interruption reported."
+                    _effects.emit(TimeTrackingEffect.InterruptionReported)
+                }
+
+                ReportInterruptionResult.TrackingDisabled -> {
+                    message.value = "Turn on time tracking before reporting interruptions."
                 }
             }
             dashboardRepository.refresh()

@@ -4,12 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
+import com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
+import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +30,7 @@ data class DashboardTimeTrackingUiState(
     val projects: List<TimeTrackingProject> = emptyList(),
     val pendingEntries: List<TimeTrackingRecord> = emptyList(),
     val activeEntry: TimeTrackingRecord? = null,
+    val report: TimeTrackingReportSnapshot = TimeTrackingReportSnapshot(),
     val message: String? = null,
 )
 
@@ -41,6 +44,8 @@ sealed interface DashboardEffect {
     data object StartTrackingService : DashboardEffect
 
     data object StopTrackingService : DashboardEffect
+
+    data object InterruptionReported : DashboardEffect
 }
 
 @HiltViewModel
@@ -59,7 +64,8 @@ class DashboardViewModel @Inject constructor(
         timeTrackingRepository.projects,
         timeTrackingRepository.pendingEntries,
         timeTrackingRepository.activeEntry,
-    ) { snapshot, settings, projects, pendingEntries, activeEntry ->
+        timeTrackingRepository.report,
+    ) { snapshot, settings, projects, pendingEntries, activeEntry, report ->
         DashboardUiState(
             snapshot = snapshot,
             settings = settings,
@@ -67,6 +73,7 @@ class DashboardViewModel @Inject constructor(
                 projects = projects,
                 pendingEntries = pendingEntries,
                 activeEntry = activeEntry,
+                report = report,
             ),
         )
     }.combine(timeTrackingMessage) { state, message ->
@@ -143,6 +150,22 @@ class DashboardViewModel @Inject constructor(
 
                 AllocateTrackedTimeResult.MissingProject -> {
                     timeTrackingMessage.value = "That project is no longer available."
+                }
+            }
+            repository.refresh()
+        }
+    }
+
+    fun reportInterruption() {
+        viewModelScope.launch {
+            when (timeTrackingRepository.reportInterruption()) {
+                ReportInterruptionResult.Recorded -> {
+                    timeTrackingMessage.value = "Interruption reported."
+                    _effects.emit(DashboardEffect.InterruptionReported)
+                }
+
+                ReportInterruptionResult.TrackingDisabled -> {
+                    timeTrackingMessage.value = "Turn on time tracking before reporting interruptions."
                 }
             }
             repository.refresh()

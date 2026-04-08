@@ -3,13 +3,16 @@ package com.iloapps.nomaddashboard.core.data.timetracking
 import androidx.datastore.core.DataStore
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
+import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingInterruptionEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.model.TimeTrackingBucket
 import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
+import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -125,14 +128,40 @@ class RoomTimeTrackingRepositoryTest {
         assertThat(repository.currentActiveEntry()?.project?.name).isEqualTo("Other")
     }
 
+    @Test
+    fun `report interruption increments today counter and estimated focus loss`() = runTest {
+        val repository = repository(
+            applicationScope = backgroundScope,
+            settingsDataSource = NomadSettingsDataSource(
+                FakeAppSettingsDataStore(
+                    AppSettingsProto.getDefaultInstance()
+                        .toBuilder()
+                        .setProjectTimeTrackingEnabled(true)
+                        .build(),
+                ),
+            ),
+        )
+        repository.startTracking()
+
+        val result = repository.reportInterruption(Instant.parse("2026-04-08T09:00:00Z"))
+        advanceUntilIdle()
+
+        assertThat(result).isEqualTo(ReportInterruptionResult.Recorded)
+        val report = repository.report.first()
+        assertThat(report.interruptionsToday).isEqualTo(1)
+        assertThat(report.todaysEstimatedFocusLoss).isEqualTo(Duration.ofMinutes(23))
+    }
+
     private fun repository(
         applicationScope: CoroutineScope,
         projectDao: FakeTimeTrackingProjectDao = FakeTimeTrackingProjectDao(),
         entryDao: FakeTimeTrackingEntryDao = FakeTimeTrackingEntryDao(),
+        interruptionDao: FakeTimeTrackingInterruptionDao = FakeTimeTrackingInterruptionDao(),
         settingsDataSource: NomadSettingsDataSource = fakeSettingsDataSource(),
     ): RoomTimeTrackingRepository = RoomTimeTrackingRepository(
         projectDao = projectDao,
         entryDao = entryDao,
+        interruptionDao = interruptionDao,
         transactionRunner = ImmediateTimeTrackingTransactionRunner,
         settingsDataSource = settingsDataSource,
         applicationScope = applicationScope,
@@ -198,6 +227,25 @@ private class FakeTimeTrackingEntryDao : TimeTrackingEntryDao {
 
     override suspend fun upsertAll(entries: List<TimeTrackingEntryEntity>) {
         entries.forEach { upsert(it) }
+    }
+}
+
+private class FakeTimeTrackingInterruptionDao : TimeTrackingInterruptionDao {
+    private val state = MutableStateFlow<List<TimeTrackingInterruptionEntity>>(emptyList())
+
+    override fun observeAll(): Flow<List<TimeTrackingInterruptionEntity>> = state
+
+    override suspend fun getAll(): List<TimeTrackingInterruptionEntity> = state.value
+
+    override suspend fun upsert(interruption: TimeTrackingInterruptionEntity) {
+        val next = state.value.toMutableList()
+        val index = next.indexOfFirst { it.id == interruption.id }
+        if (index >= 0) {
+            next[index] = interruption
+        } else {
+            next += interruption
+        }
+        state.value = next.sortedByDescending { it.occurredAtEpochMillis }
     }
 }
 

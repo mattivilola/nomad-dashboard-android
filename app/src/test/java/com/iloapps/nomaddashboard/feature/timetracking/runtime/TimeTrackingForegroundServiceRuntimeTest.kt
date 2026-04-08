@@ -71,6 +71,7 @@ private class FakeTimeTrackingRepository : TimeTrackingRepository {
     override val recentEntries: Flow<List<TimeTrackingRecord>> = emptyFlow()
     override val pendingEntries: Flow<List<TimeTrackingRecord>> = emptyFlow()
     override val activeEntry: Flow<TimeTrackingRecord?> = emptyFlow()
+    override val report = kotlinx.coroutines.flow.flowOf(com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot())
 
     override suspend fun currentActiveEntry(): TimeTrackingRecord? = null
 
@@ -84,6 +85,9 @@ private class FakeTimeTrackingRepository : TimeTrackingRepository {
         stopCalls += 1
         return StopTrackingResult.Stopped
     }
+
+    override suspend fun reportInterruption(now: Instant): com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResult =
+        com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResult.Recorded
 
     override suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult =
         AllocateTrackedTimeResult.NothingToAllocate

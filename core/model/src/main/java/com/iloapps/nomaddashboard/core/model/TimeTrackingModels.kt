@@ -1,10 +1,13 @@
 package com.iloapps.nomaddashboard.core.model
 
 import java.time.Instant
+import java.time.Duration
+import java.time.LocalDate
 import java.util.UUID
 
 val TimeTrackingOtherProjectId: UUID = UUID.fromString("00000000-0000-0000-0000-000000000002")
 const val TimeTrackingOtherProjectName = "Other"
+val TimeTrackingFocusLossPerInterruption: Duration = Duration.ofMinutes(23)
 
 data class TimeTrackingProject(
     val id: UUID = UUID.randomUUID(),
@@ -30,6 +33,38 @@ data class TimeTrackingEntry(
 data class TimeTrackingRecord(
     val entry: TimeTrackingEntry,
     val project: TimeTrackingProject,
+)
+
+data class TimeTrackingInterruption(
+    val id: UUID = UUID.randomUUID(),
+    val entryId: UUID? = null,
+    val occurredAt: Instant,
+)
+
+data class TimeTrackingProjectReport(
+    val project: TimeTrackingProject,
+    val reportedDuration: Duration = Duration.ZERO,
+    val interruptionCount: Int = 0,
+    val estimatedFocusLoss: Duration = Duration.ZERO,
+    val estimatedFocusTime: Duration = Duration.ZERO,
+)
+
+data class TimeTrackingDayReport(
+    val date: LocalDate,
+    val interruptionCount: Int = 0,
+    val estimatedFocusLoss: Duration = Duration.ZERO,
+    val allocatedDuration: Duration = Duration.ZERO,
+    val estimatedFocusTime: Duration = Duration.ZERO,
+    val projectReports: List<TimeTrackingProjectReport> = emptyList(),
+)
+
+data class TimeTrackingReportSnapshot(
+    val interruptionsToday: Int = 0,
+    val lastInterruptionAt: Instant? = null,
+    val todaysEstimatedFocusLoss: Duration = Duration.ZERO,
+    val todaysAllocatedDuration: Duration = Duration.ZERO,
+    val todaysEstimatedFocusTime: Duration = Duration.ZERO,
+    val dayReports: List<TimeTrackingDayReport> = emptyList(),
 )
 
 fun TimeTrackingEntry.isUnallocated(): Boolean =

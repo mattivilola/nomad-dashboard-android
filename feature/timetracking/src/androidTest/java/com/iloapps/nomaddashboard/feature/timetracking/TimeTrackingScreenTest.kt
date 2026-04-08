@@ -47,9 +47,11 @@ class TimeTrackingScreenTest {
                         activeEntry = activeEntry,
                     ),
                     hasNotificationPermission = true,
+                    interruptionPulseKey = 0,
                     onProjectNameChanged = {},
                     onCreateProject = {},
                     onAllocateTrackedTime = {},
+                    onReportInterruption = {},
                     onStartTracking = {},
                     onStopTracking = {},
                 )
@@ -57,6 +59,7 @@ class TimeTrackingScreenTest {
         }
 
         composeRule.onNodeWithTag("timetracking_capture_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("timetracking_interruption_card").assertIsDisplayed()
         composeRule.onNodeWithText("Capture Running").assertIsDisplayed()
         composeRule.onNodeWithText("Quick Allocate").assertIsDisplayed()
     }

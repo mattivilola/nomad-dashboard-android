@@ -11,6 +11,7 @@ import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
 import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
+import com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.UpdateTimeTrackingEntryResult
 import com.google.common.truth.Truth.assertThat
@@ -53,6 +54,7 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
+import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
@@ -933,8 +935,8 @@ class DefaultNomadDashboardRepositoryTest {
         advanceUntilIdle()
 
         val snapshot = repository.snapshot.first { it.lastRefresh != null }
-        assertThat(snapshot.timeTracking.headline).isEqualTo("Tracking")
-        assertThat(snapshot.timeTracking.detail).contains("Client Work")
+        assertThat(snapshot.timeTracking.headline).isEqualTo("Running")
+        assertThat(snapshot.timeTracking.detail).contains("capture since")
     }
 
     @Test
@@ -1565,6 +1567,7 @@ private class FakeTimeTrackingRepository(
     override val recentEntries: Flow<List<TimeTrackingRecord>> = MutableStateFlow(emptyList())
     override val pendingEntries: Flow<List<TimeTrackingRecord>> = MutableStateFlow(emptyList())
     override val activeEntry: Flow<TimeTrackingRecord?> = MutableStateFlow(active)
+    override val report: Flow<TimeTrackingReportSnapshot> = MutableStateFlow(TimeTrackingReportSnapshot())
 
     override suspend fun currentActiveEntry(): TimeTrackingRecord? = activeEntry.first()
 
@@ -1578,6 +1581,9 @@ private class FakeTimeTrackingRepository(
     override suspend fun startTracking(): StartTrackingResult = StartTrackingResult.Started
 
     override suspend fun stopTracking(): StopTrackingResult = StopTrackingResult.NotTracking
+
+    override suspend fun reportInterruption(now: Instant): ReportInterruptionResult =
+        ReportInterruptionResult.Recorded
 
     override suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult =
         AllocateTrackedTimeResult.NothingToAllocate

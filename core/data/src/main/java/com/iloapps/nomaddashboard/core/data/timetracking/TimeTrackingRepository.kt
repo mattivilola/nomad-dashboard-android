@@ -1,6 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.timetracking
 
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
+import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Instant
 import java.util.UUID
@@ -11,12 +12,14 @@ interface TimeTrackingRepository {
     val recentEntries: Flow<List<TimeTrackingRecord>>
     val pendingEntries: Flow<List<TimeTrackingRecord>>
     val activeEntry: Flow<TimeTrackingRecord?>
+    val report: Flow<TimeTrackingReportSnapshot>
 
     suspend fun currentActiveEntry(): TimeTrackingRecord?
     suspend fun syncTracking(now: Instant = Instant.now())
     suspend fun createProject(name: String): CreateProjectResult
     suspend fun startTracking(): StartTrackingResult
     suspend fun stopTracking(): StopTrackingResult
+    suspend fun reportInterruption(now: Instant = Instant.now()): ReportInterruptionResult
     suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult
     suspend fun updateEntry(
         entryId: UUID,
@@ -43,6 +46,12 @@ sealed interface StopTrackingResult {
     data object Stopped : StopTrackingResult
 
     data object NotTracking : StopTrackingResult
+}
+
+sealed interface ReportInterruptionResult {
+    data object Recorded : ReportInterruptionResult
+
+    data object TrackingDisabled : ReportInterruptionResult
 }
 
 sealed interface AllocateTrackedTimeResult {

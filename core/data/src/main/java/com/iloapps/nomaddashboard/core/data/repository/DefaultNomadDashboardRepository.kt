@@ -270,6 +270,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val visitedPlaceSummary = visitedPlaces.visitedPlaceSummary()
         val activeTimeTracking = timeTrackingRepository.currentActiveEntry()
         val pendingTimeTracking = timeTrackingRepository.pendingEntries.first()
+        val timeTrackingReport = timeTrackingRepository.report.first()
         val fuelPrices = if (currentSettings.fuelPricesEnabled) {
             buildFuelSearchRequest(
                 currentDevicePlace = currentDevicePlace,
@@ -342,12 +343,15 @@ class DefaultNomadDashboardRepository @Inject constructor(
                         val localTime = DateTimeFormatter.ofPattern("HH:mm")
                             .format(activeTimeTracking.entry.startAt.atZone(ZoneId.systemDefault()))
                         val mode = if (activeTimeTracking.entry.isAutomaticallyTracked()) "Auto" else "Manual"
-                        "$mode capture since $localTime"
+                        "$mode capture since $localTime · ${timeTrackingReport.interruptionsToday} interruption(s) today"
                     }
                     pendingTimeTracking.isNotEmpty() ->
-                        "${pendingTimeTracking.size} buffered segment(s) waiting for allocation."
+                        "${pendingTimeTracking.size} buffered segment(s) waiting for allocation · ${timeTrackingReport.interruptionsToday} interruption(s) today."
                     else -> "Dashboard quick-allocation is ready once your projects are set up."
                 },
+                interruptionsToday = timeTrackingReport.interruptionsToday,
+                estimatedFocusLoss = timeTrackingReport.todaysEstimatedFocusLoss,
+                estimatedFocusTime = timeTrackingReport.todaysEstimatedFocusTime,
             ),
             visited = VisitedSummary(
                 citiesVisited = visitedPlaceSummary.citiesVisited,

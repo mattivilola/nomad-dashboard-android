@@ -8,12 +8,14 @@ import androidx.room.migration.Migration
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.database.entity.LocalPriceCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
+import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingInterruptionEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedCountryDayEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
@@ -26,8 +28,9 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
         VisitedCountryDayEntity::class,
         TimeTrackingProjectEntity::class,
         TimeTrackingEntryEntity::class,
+        TimeTrackingInterruptionEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 @TypeConverters(NomadDatabaseConverters::class)
@@ -38,6 +41,7 @@ abstract class NomadDatabase : RoomDatabase() {
     abstract fun visitedCountryDayDao(): VisitedCountryDayDao
     abstract fun timeTrackingProjectDao(): TimeTrackingProjectDao
     abstract fun timeTrackingEntryDao(): TimeTrackingEntryDao
+    abstract fun timeTrackingInterruptionDao(): TimeTrackingInterruptionDao
 
     companion object {
         private const val LEGACY_TIME_TRACKING_PROJECT_ID = "00000000-0000-0000-0000-000000000001"
@@ -174,6 +178,20 @@ abstract class NomadDatabase : RoomDatabase() {
                         fetchedAtEpochMillis INTEGER,
                         detail TEXT,
                         note TEXT
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS time_tracking_interruptions (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        entryId TEXT,
+                        occurredAtEpochMillis INTEGER NOT NULL
                     )
                     """.trimIndent(),
                 )

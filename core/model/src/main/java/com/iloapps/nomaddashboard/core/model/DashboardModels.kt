@@ -1,6 +1,7 @@
 package com.iloapps.nomaddashboard.core.model
 
 import java.time.Instant
+import java.time.Duration
 import java.time.LocalDate
 
 enum class SignalLevel {
@@ -171,6 +172,9 @@ data class TimeTrackingDashboardState(
     val enabled: Boolean = false,
     val headline: String = "Disabled",
     val detail: String = "Time tracking arrives in the next slice.",
+    val interruptionsToday: Int = 0,
+    val estimatedFocusLoss: Duration = Duration.ZERO,
+    val estimatedFocusTime: Duration = Duration.ZERO,
 )
 
 data class VisitedSummary(

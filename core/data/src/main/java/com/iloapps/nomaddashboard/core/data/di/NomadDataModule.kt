@@ -34,6 +34,7 @@ import com.iloapps.nomaddashboard.core.database.NomadDatabase
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
+import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
@@ -284,6 +285,7 @@ object NomadInfrastructureModule {
             .addMigrations(NomadDatabase.MIGRATION_1_2)
             .addMigrations(NomadDatabase.MIGRATION_2_3)
             .addMigrations(NomadDatabase.MIGRATION_3_4)
+            .addMigrations(NomadDatabase.MIGRATION_4_5)
             .build()
 
     @Provides
@@ -303,6 +305,10 @@ object NomadInfrastructureModule {
 
     @Provides
     fun provideTimeTrackingEntryDao(database: NomadDatabase): TimeTrackingEntryDao = database.timeTrackingEntryDao()
+
+    @Provides
+    fun provideTimeTrackingInterruptionDao(database: NomadDatabase): TimeTrackingInterruptionDao =
+        database.timeTrackingInterruptionDao()
 
     @Provides
     @Singleton
