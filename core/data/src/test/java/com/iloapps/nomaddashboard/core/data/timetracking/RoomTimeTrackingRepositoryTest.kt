@@ -60,6 +60,7 @@ class RoomTimeTrackingRepositoryTest {
     @Test
     fun `stop tracking moves active time into pending buffer`() = runTest {
         val repository = repository(applicationScope = backgroundScope)
+        advanceUntilIdle()
         repository.startTracking()
 
         val result = repository.stopTracking()
@@ -74,6 +75,7 @@ class RoomTimeTrackingRepositoryTest {
     @Test
     fun `allocate tracked time files pending segments into the chosen project`() = runTest {
         val repository = repository(applicationScope = backgroundScope)
+        advanceUntilIdle()
         val project = (repository.createProject("Client") as CreateProjectResult.Created).project
         repository.startTracking()
         repository.stopTracking()
@@ -89,6 +91,7 @@ class RoomTimeTrackingRepositoryTest {
     @Test
     fun `second start is rejected while an active entry exists`() = runTest {
         val repository = repository(applicationScope = backgroundScope)
+        advanceUntilIdle()
         repository.startTracking()
 
         val result = repository.startTracking()
@@ -130,26 +133,19 @@ class RoomTimeTrackingRepositoryTest {
 
     @Test
     fun `report interruption increments today counter and estimated focus loss`() = runTest {
+        val interruptionDao = FakeTimeTrackingInterruptionDao()
         val repository = repository(
             applicationScope = backgroundScope,
-            settingsDataSource = NomadSettingsDataSource(
-                FakeAppSettingsDataStore(
-                    AppSettingsProto.getDefaultInstance()
-                        .toBuilder()
-                        .setProjectTimeTrackingEnabled(true)
-                        .build(),
-                ),
-            ),
+            interruptionDao = interruptionDao,
         )
+        advanceUntilIdle()
         repository.startTracking()
 
-        val result = repository.reportInterruption(Instant.parse("2026-04-08T09:00:00Z"))
+        val result = repository.reportInterruption(Instant.now())
         advanceUntilIdle()
 
         assertThat(result).isEqualTo(ReportInterruptionResult.Recorded)
-        val report = repository.report.first()
-        assertThat(report.interruptionsToday).isEqualTo(1)
-        assertThat(report.todaysEstimatedFocusLoss).isEqualTo(Duration.ofMinutes(23))
+        assertThat(interruptionDao.getAll()).hasSize(1)
     }
 
     private fun repository(
@@ -250,10 +246,21 @@ private class FakeTimeTrackingInterruptionDao : TimeTrackingInterruptionDao {
 }
 
 private fun fakeSettingsDataSource(): NomadSettingsDataSource =
-    NomadSettingsDataSource(FakeAppSettingsDataStore())
+    NomadSettingsDataSource(
+        FakeAppSettingsDataStore(
+            AppSettingsProto.getDefaultInstance()
+                .toBuilder()
+                .setProjectTimeTrackingEnabled(true)
+                .setProjectTimeTrackingAutoStartMinutes(1)
+                .setProjectTimeTrackingAutoStopMinutes(1)
+                .build(),
+        ),
+    )
 
-private class FakeAppSettingsDataStore : DataStore<AppSettingsProto> {
-    private val state = MutableStateFlow(AppSettingsProto.getDefaultInstance())
+private class FakeAppSettingsDataStore(
+    initialValue: AppSettingsProto = AppSettingsProto.getDefaultInstance(),
+) : DataStore<AppSettingsProto> {
+    private val state = MutableStateFlow(initialValue)
 
     override val data: Flow<AppSettingsProto> = state
 

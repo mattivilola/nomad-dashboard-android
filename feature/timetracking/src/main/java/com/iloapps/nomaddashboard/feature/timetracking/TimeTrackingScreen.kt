@@ -9,18 +9,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Pause
@@ -415,13 +413,10 @@ private fun InterruptionActionButton(
     modifier: Modifier = Modifier,
 ) {
     val shape = MaterialTheme.shapes.large
-    val containerColor by animateColorAsState(
-        targetValue = interruptionButtonColor(
-            lastInterruptionAt = lastInterruptionAt,
-            now = now,
-            defaultColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.92f),
-        ),
-        label = "interruptionButtonColor",
+    val containerColor = interruptionButtonColor(
+        lastInterruptionAt = lastInterruptionAt,
+        now = now,
+        defaultColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.92f),
     )
     val contentColor = interruptionButtonContentColor(containerColor)
     var flashAlpha by remember { mutableStateOf(0f) }
@@ -490,7 +485,7 @@ private fun InterruptionActionButton(
         if (flashAlpha > 0f) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxSize()
                     .clip(shape)
                     .background(Color(0xFFFF4336).copy(alpha = flashAlpha)),
             )
@@ -525,6 +520,7 @@ private fun TimeBufferHero(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FocusReportDay(
     dayReport: TimeTrackingDayReport,
@@ -781,7 +777,11 @@ private fun interruptionButtonColor(
 }
 
 private fun interruptionButtonContentColor(containerColor: Color): Color =
-    if (containerColor.luminance() > 0.45f) Color(0xFF1F2A37) else Color.White
+    if (((containerColor.red * 0.299f) + (containerColor.green * 0.587f) + (containerColor.blue * 0.114f)) > 0.45f) {
+        Color(0xFF1F2A37)
+    } else {
+        Color.White
+    }
 
 private fun interruptionSupportText(
     dayCount: Int,

@@ -77,21 +77,26 @@ class TimeTrackingViewModel @Inject constructor(
     )
 
     private val trackingSnapshot = combine(
-        dashboardRepository.settings,
-        timeTrackingRepository.projects,
-        timeTrackingRepository.pendingEntries,
-        timeTrackingRepository.recentEntries,
+        combine(
+            dashboardRepository.settings,
+            timeTrackingRepository.projects,
+            timeTrackingRepository.pendingEntries,
+            timeTrackingRepository.recentEntries,
+        ) { settings, projects, pendingEntries, recentEntries ->
+            TrackingSnapshot(
+                settings = settings,
+                projects = projects,
+                pendingEntries = pendingEntries,
+                recentEntries = recentEntries,
+                activeEntry = null,
+                report = TimeTrackingReportSnapshot(),
+            )
+        },
         timeTrackingRepository.activeEntry,
-        timeTrackingRepository.report,
-    ) { settings, projects, pendingEntries, recentEntries, activeEntry, report ->
-        TrackingSnapshot(
-            settings = settings,
-            projects = projects,
-            pendingEntries = pendingEntries,
-            recentEntries = recentEntries,
-            activeEntry = activeEntry,
-            report = report,
-        )
+    ) { snapshot, activeEntry ->
+        snapshot.copy(activeEntry = activeEntry)
+    }.combine(timeTrackingRepository.report) { snapshot, report ->
+        snapshot.copy(report = report)
     }
 
     val uiState: StateFlow<TimeTrackingUiState> = combine(

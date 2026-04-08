@@ -20,10 +20,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -61,7 +61,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.animateColorAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1756,15 +1755,16 @@ private fun DashboardInterruptionButton(
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(22.dp)
-    val containerColor by animateColorAsState(
-        targetValue = dashboardInterruptionButtonColor(
-            lastInterruptionAt = trackingState.report.lastInterruptionAt,
-            now = now,
-            defaultColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.92f),
-        ),
-        label = "dashboardInterruptionColor",
+    val containerColor = dashboardInterruptionButtonColor(
+        lastInterruptionAt = trackingState.report.lastInterruptionAt,
+        now = now,
+        defaultColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.92f),
     )
-    val contentColor = if (containerColor.luminance() > 0.45f) Color(0xFF1F2A37) else Color.White
+    val contentColor = if (((containerColor.red * 0.299f) + (containerColor.green * 0.587f) + (containerColor.blue * 0.114f)) > 0.45f) {
+        Color(0xFF1F2A37)
+    } else {
+        Color.White
+    }
     var flashAlpha by remember { mutableStateOf(0f) }
 
     LaunchedEffect(pulseKey) {
@@ -1802,7 +1802,7 @@ private fun DashboardInterruptionButton(
         if (flashAlpha > 0f) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxSize()
                     .clip(shape)
                     .background(Color(0xFFFF4336).copy(alpha = flashAlpha)),
             )

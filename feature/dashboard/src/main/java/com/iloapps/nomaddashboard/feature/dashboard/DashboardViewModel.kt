@@ -59,22 +59,30 @@ class DashboardViewModel @Inject constructor(
     val effects = _effects.asSharedFlow()
 
     val uiState: StateFlow<DashboardUiState> = combine(
-        repository.snapshot,
-        repository.settings,
-        timeTrackingRepository.projects,
-        timeTrackingRepository.pendingEntries,
+        combine(
+            repository.snapshot,
+            repository.settings,
+            timeTrackingRepository.projects,
+            timeTrackingRepository.pendingEntries,
+        ) { snapshot, settings, projects, pendingEntries ->
+            DashboardUiState(
+                snapshot = snapshot,
+                settings = settings,
+                timeTracking = DashboardTimeTrackingUiState(
+                    projects = projects,
+                    pendingEntries = pendingEntries,
+                    activeEntry = null,
+                ),
+            )
+        },
         timeTrackingRepository.activeEntry,
-        timeTrackingRepository.report,
-    ) { snapshot, settings, projects, pendingEntries, activeEntry, report ->
-        DashboardUiState(
-            snapshot = snapshot,
-            settings = settings,
-            timeTracking = DashboardTimeTrackingUiState(
-                projects = projects,
-                pendingEntries = pendingEntries,
-                activeEntry = activeEntry,
-                report = report,
-            ),
+    ) { state, activeEntry ->
+        state.copy(
+            timeTracking = state.timeTracking.copy(activeEntry = activeEntry),
+        )
+    }.combine(timeTrackingRepository.report) { state, report ->
+        state.copy(
+            timeTracking = state.timeTracking.copy(report = report),
         )
     }.combine(timeTrackingMessage) { state, message ->
         state.copy(

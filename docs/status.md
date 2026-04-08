@@ -75,6 +75,10 @@ Current repository state:
   unallocated buffer first, shows the live counter on both dashboard and
   tracking screens, exposes quick-allocation project chips plus a built-in
   `Other` lane, and adds a configurable same-day auto-capture window
+- interruption tracking landed inside time tracking: the dashboard and
+  tracking screens now expose a dedicated interruption action with daily count,
+  red-flash feedback, and a `23 minute` cooldown fade, while local reports now
+  estimate focus loss per day and per allocated project
 - about-screen refinement landed: the screen now acts as a clearer trust
   surface with direct website and GitHub actions, live version metadata, and a
   proper maintainer/distributor footer instead of generic filler copy
@@ -149,6 +153,8 @@ Current repository state:
   dashboard quick allocation, and configurable daily auto-run hours
 - time-tracking Room persistence implemented for projects and entries
 - time-tracking foreground service and persistent notification implemented
+- time-tracking interruption persistence, reporting, and focus-loss metrics
+  implemented
 - time-tracking repository/storage/runtime tests implemented
 - Compose UI smoke tests added for app launch, top-level navigation, dashboard shell render, and one settings persistence flow
 - emulator boot and emulator-targeted test helper scripts added
@@ -183,7 +189,7 @@ Current repository state:
 
 ## Not Started
 
-- time-tracking reporting/export parity
+- time-tracking export parity
 - analytics/privacy parity implementation
 
 ## Verification Status
@@ -241,6 +247,14 @@ Verified:
   dashboard UX refinement slice
 - `make build` passed on 2026-04-08 after the weather hourly + surf parity
   slice
+- `source scripts/android-env.sh && run_gradle :feature:timetracking:compileDebugKotlin :feature:dashboard:compileDebugKotlin :app:compileDebugKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after adding interruption reporting, cooldown visuals,
+  and the new dashboard plus tracking-screen report UI
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingRepositoryTest' :app:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.feature.timetracking.runtime.TimeTrackingForegroundServiceRuntimeTest' :feature:timetracking:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after adding the interruption Room table, repository
+  aggregation, and updated time-tracking UI contract
+- `make build` passed on 2026-04-08 after the interruption tracking and focus
+  reporting slice
 - `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after adding the new time-tracking auto-window settings
   fields and model mapping
@@ -305,8 +319,8 @@ Not yet fully re-verified after the whole-app UX parity slice in this session:
    tighten any sections that still look form-heavy or generic.
 4. Screenshot-review the new power card and tune its chart density, copy, and
    metric order from rendered device output.
-5. Extend time tracking with reporting/export only after the current UX layer
-   settles.
+5. Extend time tracking export parity after the new interruption-reporting UI
+   and metrics settle.
 
 ## Parallel-Safe Workstreams
 

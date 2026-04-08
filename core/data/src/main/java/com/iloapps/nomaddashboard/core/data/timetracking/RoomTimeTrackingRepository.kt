@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -49,9 +50,6 @@ class RoomTimeTrackingRepository @Inject constructor(
     @ApplicationScope
     private val applicationScope: CoroutineScope,
 ) : TimeTrackingRepository {
-    private val settingsState = settingsDataSource.settings
-        .stateIn(applicationScope, SharingStarted.Eagerly, AppSettings())
-
     override val projects: Flow<List<TimeTrackingProject>> = projectDao.observeAll()
         .map { entities -> entities.map { it.toModel() }.sortedProjects() }
         .stateIn(applicationScope, SharingStarted.Eagerly, emptyList())
@@ -88,7 +86,7 @@ class RoomTimeTrackingRepository @Inject constructor(
             syncTracking()
         }
         applicationScope.launch {
-            settingsState.collect {
+            settingsDataSource.settings.collect {
                 syncTracking()
             }
         }
@@ -109,8 +107,9 @@ class RoomTimeTrackingRepository @Inject constructor(
 
     override suspend fun syncTracking(now: Instant) {
         ensureBuiltInProjects()
+        val settings = currentSettings()
         transactionRunner.run {
-            syncTrackingLocked(now)
+            syncTrackingLocked(now, settings)
         }
     }
 
@@ -141,7 +140,8 @@ class RoomTimeTrackingRepository @Inject constructor(
         transactionRunner.run {
             ensureBuiltInProjects()
             val now = Instant.now()
-            syncTrackingLocked(now)
+            val settings = currentSettings()
+            syncTrackingLocked(now, settings)
             if (entryDao.getActive() != null) {
                 return@run StartTrackingResult.AlreadyTracking
             }
@@ -154,7 +154,8 @@ class RoomTimeTrackingRepository @Inject constructor(
         transactionRunner.run {
             ensureBuiltInProjects()
             val now = Instant.now()
-            syncTrackingLocked(now)
+            val settings = currentSettings()
+            syncTrackingLocked(now, settings)
             val active = entryDao.getActive()?.toModel() ?: return@run StopTrackingResult.NotTracking
             entryDao.upsert(active.copy(endAt = now).toEntity())
             StopTrackingResult.Stopped
@@ -163,8 +164,9 @@ class RoomTimeTrackingRepository @Inject constructor(
     override suspend fun reportInterruption(now: Instant): ReportInterruptionResult =
         transactionRunner.run {
             ensureBuiltInProjects()
-            syncTrackingLocked(now)
-            if (settingsState.value.projectTimeTrackingEnabled.not()) {
+            val settings = currentSettings()
+            syncTrackingLocked(now, settings)
+            if (settings.projectTimeTrackingEnabled.not()) {
                 return@run ReportInterruptionResult.TrackingDisabled
             }
 
@@ -186,12 +188,12 @@ class RoomTimeTrackingRepository @Inject constructor(
         transactionRunner.run {
             ensureBuiltInProjects()
             val now = Instant.now()
-            syncTrackingLocked(now)
+            val settings = currentSettings()
+            syncTrackingLocked(now, settings)
             val project = projectDao.getById(projectId.toString())?.toModel()
                 ?.takeIf { it.isArchived.not() }
                 ?: return@run AllocateTrackedTimeResult.MissingProject
 
-            val settings = settingsState.value
             val activeBeforeAllocation = entryDao.getActive()?.toModel()
             val pending = entryDao.getAll()
                 .map { it.toModel() }
@@ -248,8 +250,10 @@ class RoomTimeTrackingRepository @Inject constructor(
             UpdateTimeTrackingEntryResult.Updated
         }
 
-    private suspend fun syncTrackingLocked(now: Instant) {
-        val settings = settingsState.value
+    private suspend fun syncTrackingLocked(
+        now: Instant,
+        settings: AppSettings,
+    ) {
         val active = entryDao.getActive()?.toModel()
 
         if (settings.projectTimeTrackingEnabled.not()) {
@@ -445,6 +449,8 @@ class RoomTimeTrackingRepository @Inject constructor(
 
     private fun List<TimeTrackingProject>.sortedProjects(): List<TimeTrackingProject> =
         sortedWith(compareBy<TimeTrackingProject>({ it.id == TimeTrackingOtherProjectId }, { it.name.lowercase() }))
+
+    private suspend fun currentSettings(): AppSettings = settingsDataSource.settings.first()
 }
 
 private data class DayDurationSegment(
