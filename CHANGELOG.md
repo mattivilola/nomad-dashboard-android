@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-04-08
+
+### Added
+- Added local price level indicators for Europe and the United States.
+
+### Improved
+- Enhanced Smartraveller advisory fetch with multiple fallbacks.
+- Refined travel alert message for caution severity.
+- Refined dashboard surf metric text sizes.
+
+### Build & Release
+- Enabled configurable Play Store release status and native crash symbolication.
+
 ## [0.3.0] - 2026-04-08
 
 ### Added
