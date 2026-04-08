@@ -33,6 +33,9 @@ Current repository state:
 - emergency-care provider integration implemented with Google Places Nearby
   Search (New), device-location-first and public-IP fallback lookup, dashboard
   card state wiring, and open-in-maps handoff for resolved hospitals
+- local price level dashboard feature implemented with Eurostat Europe
+  fallback rows, HUD USER plus US Census US rent benchmark, Room-backed
+  caching, encrypted HUD token storage, settings wiring, and dashboard card UI
 - Android-versus-macOS screenshot review completed; the highest-value next
   parity work is dashboard and visited UX refinement rather than new visual
   theming alone
@@ -129,6 +132,7 @@ Current repository state:
 - dashboard fuel card implemented with device-first / IP-fallback lookup
 - dashboard emergency-care card implemented with loading, ready,
   permission-required, configuration-required, unavailable, and error states
+- local price level card implemented with official-source Europe and US v1 support
 - Spain ministry fuel provider implemented
 - France government fuel provider implemented
 - Italy MIMIT fuel provider implemented
@@ -246,6 +250,15 @@ Verified:
   slice
 - `run_gradle :feature:about:compileDebugKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the about-screen trust-surface redesign
+- `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:database:compileDebugKotlin :core:network:compileDebugKotlin :core:data:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:dashboard:compileDebugKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the Local Price Level feature slice
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.localprice.DefaultLocalPriceLevelProviderTest' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh resolves local price level from ip country context in europe' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price configuration required in us without token' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh returns us local price row when token and current location exist' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price location required with no country context' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price unsupported for unsupported country' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.update provider credentials clears us local price cache when hud token changes' -Pksp.incremental=false`
+  passed on 2026-04-08 after the Local Price Level provider and repository coverage landed
+- `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after adding the Local Price Level dashboard Android tests
+- `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after wiring the Local Price Level settings navigation
+  path and updating the debug screenshot fixtures
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 during
   the `make test` lane after the dashboard header and compact overview polish
 - `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
@@ -271,6 +284,9 @@ Not yet fully re-verified after the whole-app UX parity slice in this session:
   with a missing `app/build/tmp/kotlin-classes/debug/com` output path
 - `make screenshots` still cannot complete reliably when the local
   `Pixel_5_API_31` emulator exits before `adb` exposes a serial
+- Local Price Level verification did not include a connected Android test run
+  because `adb devices` reported no attached emulator or physical device during
+  the narrowed dashboard-card pass
 - fresh light-and-dark screenshot exports for the redesigned dashboard,
   settings, visited, time-tracking, and about screens
 - end-to-end physical-device smoke pass with the explicit `make test-device`

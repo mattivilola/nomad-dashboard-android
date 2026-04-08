@@ -230,6 +230,9 @@ Latest verification attempt:
   passed after adding Local Price Level dashboard card Android tests; the
   connected test itself was not run because `adb devices` reported no attached
   emulator or physical device
+- on 2026-04-08, `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed after wiring the dashboard-to-settings navigation path and updating
+  the debug screenshot fixtures for Local Price Level
 - on 2026-04-08, `make build` and a targeted
   `run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:data:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:compileDebugKotlin -Pksp.incremental=false`
   both stopped early in the existing unrelated

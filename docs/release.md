@@ -1,6 +1,6 @@
 # Release Workflow
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 ## Release Strategy
 
@@ -34,6 +34,13 @@ From `Config/Signing.env`:
 - `NOMAD_KEY_PASSWORD`
 - `NOMAD_PLAY_SERVICE_ACCOUNT_JSON`
 - `NOMAD_PLAY_TRACK`
+
+Optional Play publishing override:
+- `NOMAD_PLAY_RELEASE_STATUS`
+  - defaults to `draft` so the first internal-track upload works while the Play
+    app is still in draft state
+  - set to `completed` after the app is no longer draft and you want uploads to
+    auto-complete the internal release
 
 From `Config/AppConfig.env` as needed:
 - no provider credentials; keep this file for non-secret helper config only
@@ -126,6 +133,13 @@ Current behavior:
   `app/src/main/play/release-notes/en-US/default.txt`
 - creates a local `Release vX.Y.Z` commit and a local `vX.Y.Z` tag
 - does not push; push the release commit and tag manually when ready
+- release builds now request native symbol-table extraction for bundled `.so`
+  libraries via AGP so Play Console native crash symbolication is enabled where
+  dependency-provided native debug metadata is available, without changing
+  runtime behavior
+- Play publishing defaults the release status to `draft` for first-time
+  internal testing on a draft Play app; override with
+  `NOMAD_PLAY_RELEASE_STATUS=completed` after the app leaves draft state
 
 If `v0.1.0` or another historic release was already shipped outside this repo,
 backfill the corresponding git tag before relying on future changelog diffs.
@@ -140,6 +154,12 @@ Implemented:
 - publish helper wiring
 - local-first changelog and Play release-notes generation during version bumps
 - shipped app provider credentials removed from build-time env injection
+- release build configured to request native symbol-table extraction for Play
+  Console crash reporting where dependency-provided native debug metadata is
+  available
+- Play publishing now defaults to `draft` release status so first internal
+  uploads can succeed on a draft Play app, with an env override for later
+  `completed` uploads
 
 Not yet verified with real credentials:
 - signed release artifact generation

@@ -33,6 +33,16 @@ fun configValue(vararg names: String): String {
     return ""
 }
 
+fun playReleaseStatus(): ReleaseStatus = when (env("NOMAD_PLAY_RELEASE_STATUS", "draft").trim().uppercase()) {
+    "COMPLETED" -> ReleaseStatus.COMPLETED
+    "DRAFT" -> ReleaseStatus.DRAFT
+    "HALTED" -> ReleaseStatus.HALTED
+    "IN_PROGRESS" -> ReleaseStatus.IN_PROGRESS
+    else -> error(
+        "Unsupported NOMAD_PLAY_RELEASE_STATUS. Use one of: draft, completed, halted, in_progress.",
+    )
+}
+
 android {
     namespace = "com.iloapps.nomaddashboard"
     compileSdk = 36
@@ -59,6 +69,9 @@ android {
         testInstrumentationRunner = "com.iloapps.nomaddashboard.NomadDashboardTestRunner"
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders["googleMapsApiKey"] = ""
+        ndk {
+            debugSymbolLevel = "SYMBOL_TABLE"
+        }
     }
 
     signingConfigs {
@@ -118,7 +131,7 @@ android {
 play {
     serviceAccountCredentials.set(file(env("NOMAD_PLAY_SERVICE_ACCOUNT_JSON", "Config/nonexistent-play-service-account.json")))
     track.set(env("NOMAD_PLAY_TRACK", "internal"))
-    releaseStatus.set(ReleaseStatus.COMPLETED)
+    releaseStatus.set(playReleaseStatus())
     defaultToAppBundles.set(true)
 }
 
