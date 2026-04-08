@@ -113,7 +113,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
             connectivity = connectivity,
             recordedAtMillis = currentTraffic.capturedAtMillis,
         )
-        val power = telemetryReader.power()
+        val power = enrichPowerWithHistory(
+            power = telemetryReader.power(),
+            recordedAtMillis = currentTraffic.capturedAtMillis,
+        )
 
         val travelContext = if (currentSettings.publicIpGeolocationEnabled) {
             runCatching {
@@ -277,10 +280,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
             ),
             powerSummary = SummaryTile(
                 title = "Power",
-                headline = power.batteryHealthSummary,
-                detail = power.batteryPercent?.let { "$it% battery" } ?: "Collecting power status",
+                headline = power.statusLabel,
+                detail = powerSummaryDetail(power),
                 level = when {
                     power.charging -> SignalLevel.GOOD
+                    power.batteryHealthLevel == SignalLevel.BAD -> SignalLevel.BAD
+                    power.batteryHealthLevel == SignalLevel.WARNING -> SignalLevel.WARNING
                     (power.batteryPercent ?: 0) > 35 -> SignalLevel.NEUTRAL
                     else -> SignalLevel.WARNING
                 },
@@ -361,10 +366,32 @@ class DefaultNomadDashboardRepository @Inject constructor(
         )
     }
 
+    private suspend fun enrichPowerWithHistory(
+        power: com.iloapps.nomaddashboard.core.model.PowerSnapshot,
+        recordedAtMillis: Long,
+    ): com.iloapps.nomaddashboard.core.model.PowerSnapshot {
+        power.batteryPercent?.let { batteryPercent ->
+            recordMetric(
+                kind = PowerBatteryPercentMetricKind,
+                recordedAtMillis = recordedAtMillis,
+                value = batteryPercent.toDouble(),
+                keepCount = PowerHistoryRetentionCount,
+            )
+        }
+
+        return power.copy(
+            batteryPercentHistory = recentMetricHistory(
+                kind = PowerBatteryPercentMetricKind,
+                limit = PowerHistoryRetentionCount,
+            ),
+        )
+    }
+
     private suspend fun recordMetric(
         kind: String,
         recordedAtMillis: Long,
         value: Double,
+        keepCount: Int = ConnectivityHistoryRetentionCount,
     ) {
         metricPointDao.insert(
             MetricPointEntity(
@@ -373,11 +400,14 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 value = value,
             ),
         )
-        metricPointDao.trimToLatest(kind = kind, keepCount = ConnectivityHistoryRetentionCount)
+        metricPointDao.trimToLatest(kind = kind, keepCount = keepCount)
     }
 
-    private suspend fun recentMetricHistory(kind: String): List<MetricHistoryPoint> =
-        metricPointDao.recentByKind(kind = kind, limit = ConnectivityHistoryRetentionCount)
+    private suspend fun recentMetricHistory(
+        kind: String,
+        limit: Int = ConnectivityHistoryRetentionCount,
+    ): List<MetricHistoryPoint> =
+        metricPointDao.recentByKind(kind = kind, limit = limit)
             .asReversed()
             .map { point ->
                 MetricHistoryPoint(
@@ -773,9 +803,20 @@ class DefaultNomadDashboardRepository @Inject constructor(
         95, 96, 99 -> "Storms"
         else -> "Mixed"
     }
+
+    private fun powerSummaryDetail(power: com.iloapps.nomaddashboard.core.model.PowerSnapshot): String =
+        power.batteryPercent?.let { batteryPercent ->
+            listOfNotNull(
+                "$batteryPercent% battery",
+                power.batteryHealthSummary.takeUnless { it.equals("Estimating", ignoreCase = true) },
+                power.powerSourceLabel?.takeUnless { it.equals("Battery", ignoreCase = true) }?.let { "$it power" },
+            ).joinToString(" · ")
+        } ?: "Collecting power status"
 }
 
 private const val ConnectivityHistoryRetentionCount = 24
+private const val PowerHistoryRetentionCount = 48
 private const val ConnectivityDownloadMetricKind = "connectivity_download_mbps"
 private const val ConnectivityUploadMetricKind = "connectivity_upload_mbps"
 private const val ConnectivityLatencyMetricKind = "connectivity_latency_ms"
+private const val PowerBatteryPercentMetricKind = "power_battery_percent"

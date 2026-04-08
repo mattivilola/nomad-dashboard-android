@@ -181,6 +181,12 @@ Current verified result:
 - `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after adding retained connectivity history and the
   new dashboard mini-chart UI
+- `make build` passed on 2026-04-08 after the dashboard header and compact
+  overview polish pass
+- `make lint` passed on 2026-04-08 after the dashboard header and compact
+  overview polish pass
+- `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 inside
+  the `make test` lane after the dashboard header and compact overview polish
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
@@ -208,6 +214,12 @@ Latest verification attempt:
   emergency-care coverage and the new
   `:feature:dashboard:connectedDebugAndroidTest` emergency-care card test, then
   failed in existing `app:connectedDebugAndroidTest` settings smoke tests:
+  `expand_weather_forecast_toggle_persists_across_recreate_and_is_restored`,
+  `reliefweb_app_name_persists_across_recreate_and_can_be_cleared`, and
+  `tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared`
+- on 2026-04-08, `make test` again passed the dashboard feature connected tests
+  after the header/overview polish, then failed in the same existing
+  `app:connectedDebugAndroidTest` settings smoke tests:
   `expand_weather_forecast_toggle_persists_across_recreate_and_is_restored`,
   `reliefweb_app_name_persists_across_recreate_and_can_be_cleared`, and
   `tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared`

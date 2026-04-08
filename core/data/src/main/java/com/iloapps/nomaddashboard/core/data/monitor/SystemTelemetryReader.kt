@@ -14,6 +14,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
+import com.iloapps.nomaddashboard.core.model.SignalLevel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -98,25 +99,68 @@ class SystemTelemetryReader @Inject constructor(
         }
         val status = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        val plugged = batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        val health = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN)
+            ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
+        val temperatureTenthsCelsius = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
+        val currentAverageMicroAmps = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE) ?: 0
         val currentNowMicroAmps = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0
+        val currentEstimateMicroAmps = currentAverageMicroAmps.takeIf { it != 0 } ?: currentNowMicroAmps
         val voltageMillivolts = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-        val dischargeWatts = if (currentNowMicroAmps != 0 && voltageMillivolts != 0) {
-            kotlin.math.abs(currentNowMicroAmps / 1_000_000.0 * voltageMillivolts / 1000.0)
+        val dischargeWatts = if (currentEstimateMicroAmps != 0 && voltageMillivolts != 0) {
+            kotlin.math.abs(currentEstimateMicroAmps / 1_000_000.0 * voltageMillivolts / 1000.0)
         } else {
             null
+        }
+        val temperatureCelsius = if (temperatureTenthsCelsius > 0) {
+            temperatureTenthsCelsius / 10.0
+        } else {
+            null
+        }
+        val voltageVolts = if (voltageMillivolts > 0) {
+            voltageMillivolts / 1000.0
+        } else {
+            null
+        }
+        val (batteryHealthSummary, batteryHealthLevel) = when (health) {
+            BatteryManager.BATTERY_HEALTH_GOOD -> "Good" to SignalLevel.GOOD
+            BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheating" to SignalLevel.WARNING
+            BatteryManager.BATTERY_HEALTH_COLD -> "Cold" to SignalLevel.WARNING
+            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "Over-voltage" to SignalLevel.WARNING
+            BatteryManager.BATTERY_HEALTH_DEAD -> "Needs service" to SignalLevel.BAD
+            BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "Failure" to SignalLevel.BAD
+            else -> when {
+                batteryPct == null -> "Estimating" to SignalLevel.NEUTRAL
+                batteryPct > 70 -> "Healthy" to SignalLevel.GOOD
+                batteryPct > 35 -> "Steady" to SignalLevel.NEUTRAL
+                else -> "Low" to SignalLevel.WARNING
+            }
+        }
+        val statusLabel = when (status) {
+            BatteryManager.BATTERY_STATUS_FULL -> "Full"
+            BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
+            BatteryManager.BATTERY_STATUS_DISCHARGING -> "On Battery"
+            BatteryManager.BATTERY_STATUS_NOT_CHARGING -> if (plugged != 0) "Plugged In" else "Idle"
+            else -> "Checking"
+        }
+        val powerSourceLabel = when (plugged) {
+            BatteryManager.BATTERY_PLUGGED_AC -> "AC"
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless"
+            BatteryManager.BATTERY_PLUGGED_DOCK -> "Dock"
+            else -> "Battery"
         }
 
         PowerSnapshot(
             batteryPercent = batteryPct,
             charging = charging,
-            batteryHealthSummary = when {
-                batteryPct == null -> "Estimating"
-                charging -> "Charging"
-                batteryPct > 70 -> "Healthy"
-                batteryPct > 35 -> "Steady"
-                else -> "Low"
-            },
+            statusLabel = statusLabel,
+            batteryHealthSummary = batteryHealthSummary,
+            batteryHealthLevel = batteryHealthLevel,
             dischargeWatts = dischargeWatts,
+            powerSourceLabel = powerSourceLabel,
+            temperatureCelsius = temperatureCelsius,
+            voltageVolts = voltageVolts,
         )
     }
 

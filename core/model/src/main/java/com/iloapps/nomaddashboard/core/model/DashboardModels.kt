@@ -41,8 +41,14 @@ data class MetricHistoryPoint(
 data class PowerSnapshot(
     val batteryPercent: Int? = null,
     val charging: Boolean = false,
+    val statusLabel: String = "Checking",
     val batteryHealthSummary: String = "Estimating",
+    val batteryHealthLevel: SignalLevel = SignalLevel.NEUTRAL,
     val dischargeWatts: Double? = null,
+    val powerSourceLabel: String? = null,
+    val temperatureCelsius: Double? = null,
+    val voltageVolts: Double? = null,
+    val batteryPercentHistory: List<MetricHistoryPoint> = emptyList(),
 )
 
 data class TravelContextSnapshot(

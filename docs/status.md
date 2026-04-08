@@ -39,6 +39,10 @@ Current repository state:
 - dashboard UX parity pass started: compact quick actions, denser top-level
   summary strip, weather-first default ordering, and metric-led detail cards
   are now implemented in the dashboard UI layer
+- dashboard header polish landed: duplicate top navigation and settings access
+  are removed from the phone dashboard, the header now uses concrete location
+  and freshness language, refresh shows visible progress, and the overview
+  strip now leads with weather instead of a vague overall-status tile
 - connectivity dashboard refinement landed: the card header now carries the
   live status chip, duplicate online copy is removed, empty throughput values
   render as `0 Mbps`, and retained Room-backed throughput/latency samples now
@@ -161,6 +165,12 @@ Verified:
   passed on 2026-04-07 after adding the new dashboard, visited, and time-tracking UI checks
 - `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the connectivity history and mini-chart slice
+- `make build` passed on 2026-04-08 after the dashboard header and compact
+  overview polish pass
+- `make lint` passed on 2026-04-08 after the dashboard header and compact
+  overview polish pass
+- `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 during
+  the `make test` lane after the dashboard header and compact overview polish
 - `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
   repo-level Gradle properties
 - `make lint` passed on 2026-04-07 after setting `ksp.incremental=false` in

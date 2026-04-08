@@ -16,14 +16,14 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now has an action-first header, a denser summary strip, and metric-led detail cards |
+| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header, visible refresh progress, a weather-first three-up overview strip, and metric-led detail cards without duplicate top navigation |
 | Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
 | About screen | Implemented | About now explains product purpose, local-first data handling, and current parity direction instead of bootstrap filler |
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Implemented | Route now shares the same product language as the rest of the app, with clearer overview, active-state, and recent-session sections |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
-| Compact dashboard UX parity pass | Implemented | Default dashboard order now starts with weather and travel alerts; quick actions replace the old non-interactive route pills |
+| Compact dashboard UX parity pass | Implemented | Default dashboard order now starts with weather and travel alerts; the phone dashboard removes duplicate top navigation, replaces the vague overall tile with weather-led overview tiles, and shows active refresh feedback |
 | Shared product UI foundation | Implemented | Design system now includes stronger status badges, metric blocks, chart shells, and product top-bar/header patterns reused across screens |
 
 ## Connectivity And Travel Context
