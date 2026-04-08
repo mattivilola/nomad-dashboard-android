@@ -43,17 +43,46 @@ Current repository state:
   are removed from the phone dashboard, the header now uses concrete location
   and freshness language, refresh shows visible progress, and the overview
   strip now leads with weather instead of a vague overall-status tile
+- dashboard brand polish landed: the Nomad symbol mark now sits inline with
+  the dashboard title so the screen opens with clearer product identity without
+  consuming the right-side action area
 - connectivity dashboard refinement landed: the card header now carries the
   live status chip, duplicate online copy is removed, empty throughput values
   render as `0 Mbps`, and retained Room-backed throughput/latency samples now
   drive real mini-charts
+- dashboard travel-context redesign landed: public IP parsing now tolerates the
+  provider's current timezone schema, the card compares device and public-IP
+  location side by side, richer Wi-Fi telemetry is visible, and map actions
+  now use Android-native intents instead of the previous dead URI path
+- travel alerts reliability and UX pass landed: Smartraveller advisory now
+  parses the live destinations page, coverage remains `current country +
+  bordering countries` for cases like France plus 8 neighbors, and the card
+  now keeps its overall status chip in the top row with denser per-signal
+  panels
 - whole-app UX parity pass expanded across settings, about, and time tracking;
   shared badges, metric blocks, chart shells, and stronger section headers now
   give the app a more coherent product language
+- about-screen refinement landed: the screen now acts as a clearer trust
+  surface with direct website and GitHub actions, live version metadata, and a
+  proper maintainer/distributor footer instead of generic filler copy
+- power dashboard refinement landed: the card header now carries its live
+  status chip inline, device-backed health/source/thermal diagnostics now
+  replace the vague state copy, and retained Room-backed battery percentage
+  samples now drive a real local history chart
 - weather refresh now honors the existing device-location weather setting and
   falls back to IP geolocation when device coordinates are unavailable
+- weather and surf refinement landed: the dashboard now uses real Open-Meteo
+  hourly checkpoints, icon-led forecast rows with rain and wind detail, and a
+  live marine surf subsection for the saved surf spot instead of placeholder
+  copy
+- surf-spot setup is now practical on Android: Settings expose manual surf
+  spot name plus coordinate fields and a current-location autofill action
 - visited UX parity pass started: the screen now opens with an operational
   overview card and keeps capture guidance behind the map/history content
+- visited map framing and hierarchy refinement landed: the world footprint now
+  opens around the latest relevant region, keeps the selected-year footprint in
+  frame, uses stronger visited-country contrast, and presents country/saved-stop
+  summaries in a denser travel-dashboard layout
 - screenshot review workflow now captures both light and dark theme exports for
   each review screen
 
@@ -77,6 +106,11 @@ Current repository state:
 - dashboard route implemented
 - weather location sourcing now respects the weather settings toggle and no
   longer depends only on IP geolocation
+- weather card now renders real `+3h`, `+6h`, and `+12h` checkpoints from
+  Open-Meteo hourly data plus icon-led forecast rows with rain and wind
+- Open-Meteo marine surf support implemented for the saved surf spot with
+  wave, swell, wind, sea temperature, and near-term checkpoints
+- Settings now support manual surf-spot editing and current-location autofill
 - settings route implemented
 - about route implemented
 - dashboard fuel card implemented with device-first / IP-fallback lookup
@@ -107,14 +141,20 @@ Current repository state:
 - README and docs set added
 - connectivity throughput/latency history retention and dashboard mini-charts
   implemented
+- retained battery percentage history and the redesigned power dashboard card
+  implemented
+- travel-context comparison UI implemented for public-IP plus device location,
+  copyable public IP, richer Wi-Fi detail, and Android-native map launches
 
 ## In Progress
 
 - dashboard UX parity pass is underway; the first implementation landed for the
   compact phone dashboard, but screenshot verification is still pending
+- travel-context physical-device smoke verification is pending for public-IP
+  refresh, copy-IP, location permission CTA, and map handoff behavior
 - visited UX parity pass is underway; the first implementation landed for a
-  map-first screen structure, but screenshot verification and deeper polish are
-  still pending
+  map-first screen structure, and the map framing/highlight pass is now in, but
+  screenshot verification and final polish are still pending
 - settings/about/time-tracking UX parity pass is underway; the new productized
   layouts compile and test-compile, but still need screenshot review
 - physical-device notification smoke verification for the new time-tracking runtime
@@ -123,7 +163,6 @@ Current repository state:
 
 ## Not Started
 
-- power history visuals and retained battery charts
 - time-tracking reporting/export parity
 - analytics/privacy parity implementation
 
@@ -159,16 +198,32 @@ Verified:
   passed on 2026-04-07 after the first dashboard UX parity refactor
 - `run_gradle :feature:visited:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
   passed on 2026-04-07 after the first visited UX parity refactor
+- `run_gradle :feature:visited:testDebugUnitTest :feature:visited:compileDebugKotlin :feature:visited:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the visited map framing and UI refinement slice
 - `run_gradle :core:designsystem:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:about:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
   passed on 2026-04-07 after the shared UX foundation and whole-app screen redesign pass
 - `run_gradle :app:assembleDebug :app:compileDebugAndroidTestKotlin :feature:dashboard:compileDebugAndroidTestKotlin :feature:visited:compileDebugAndroidTestKotlin :feature:timetracking:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-07 after adding the new dashboard, visited, and time-tracking UI checks
 - `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the connectivity history and mini-chart slice
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the travel-context comparison redesign, IP model
+  hardening, and Android-native map handoff fix
+- `run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest --tests com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh\ resolves\ travel\ alerts\ and\ prefers\ device\ country\ coverage :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the Smartraveller live-page parsing fix and the
+  Travel Alerts dashboard card refinement
 - `make build` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
+- `make build` passed on 2026-04-08 after the power telemetry/history and
+  dashboard UX refinement slice
+- `make build` passed on 2026-04-08 after the weather hourly + surf parity
+  slice
 - `make lint` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
+- `make lint` passed on 2026-04-08 after the weather hourly + surf parity
+  slice
+- `run_gradle :feature:about:compileDebugKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the about-screen trust-surface redesign
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 during
   the `make test` lane after the dashboard header and compact overview polish
 - `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
@@ -180,6 +235,14 @@ Verified:
   scenarios
 
 Not yet fully re-verified after the whole-app UX parity slice in this session:
+- `./scripts/test.sh` reran on 2026-04-08; the new
+  `:core:data:testDebugUnitTest` power-history coverage passed, but the broad
+  emulator lane still failed in existing connected Android tests under
+  `:feature:timetracking:connectedDebugAndroidTest`
+- `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  reran on 2026-04-08 for the travel-alert polish slice; dashboard compile
+  succeeded, but the full repository unit-test task still failed in existing
+  weather-location tests that are outside the travel-alert scope
 - `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
   now gets through the updated repository test and dashboard compile path, but
   still fails later in existing app assembly work under `:app:compileDebugKotlin`
@@ -197,13 +260,13 @@ Not yet fully re-verified after the whole-app UX parity slice in this session:
 
 1. Resolve the current intermittent emulator launch crash, then rerun the full
    light-and-dark `make screenshots` parity pass.
-2. Review the new dashboard and visited screenshots against the macOS
+2. Review the new dashboard weather/surf and visited screenshots against the macOS
    reference set and tune spacing, card density, and vertical order from the
    rendered output.
 3. Review the redesigned settings/about/time-tracking screens the same way and
    tighten any sections that still look form-heavy or generic.
-4. Add retained-history-backed power visuals next so the remaining chart shell
-   becomes a real telemetry module too.
+4. Screenshot-review the new power card and tune its chart density, copy, and
+   metric order from rendered device output.
 5. Extend time tracking with reporting/export only after the current UX layer
    settles.
 

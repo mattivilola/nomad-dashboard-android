@@ -5,24 +5,34 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalSnapshot
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 @Singleton
 class SmartravellerAdvisoryProvider @Inject constructor(
     private val service: SmartravellerService,
     private val countryNameResolver: CountryNameResolver,
+    private val json: Json,
 ) {
     suspend fun advisory(
         countryCodes: List<String>,
         primaryCountryCode: String,
     ): TravelAlertSignalSnapshot {
         val normalizedCountryCodes = countryCodes.map { it.uppercase() }.uniqued()
-        val destinations = parseDestinations(service.destinations())
+        val destinations = service.destinations().use { responseBody ->
+            parseDestinations(responseBody.string())
+        }
         val matches = normalizedCountryCodes.mapNotNull { countryCode ->
             val destination = bestDestinationMatch(countryCode, destinations) ?: return@mapNotNull null
             AdvisoryMatch(
@@ -41,9 +51,12 @@ class SmartravellerAdvisoryProvider @Inject constructor(
         )
 
         val summary = when {
-            worst.severity == TravelAlertSeverity.CLEAR -> "No elevated travel advisories across your nearby countries."
-            worst.countryCode.equals(primaryCountryCode, ignoreCase = true) -> "${worst.countryName} is at ${worst.destination.levelLabel}."
-            else -> "${worst.countryName} is at ${worst.destination.levelLabel} nearby."
+            worst.severity == TravelAlertSeverity.CLEAR ->
+                "No elevated travel advisories across ${matches.size} monitored countries."
+            worst.countryCode.equals(primaryCountryCode, ignoreCase = true) ->
+                "${worst.countryName}: ${worst.destination.adviceLabel}."
+            else ->
+                "${worst.countryName} nearby: ${worst.destination.adviceLabel}."
         }
 
         return TravelAlertSignalSnapshot(
@@ -55,6 +68,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             sourceUrl = worst.destination.url ?: SOURCE_URL,
             updatedAt = worst.destination.updatedAt ?: Instant.now(),
             affectedCountryCodes = matches.filter { it.severity.rank > TravelAlertSeverity.CLEAR.rank }.map { it.countryCode }.uniqued(),
+            itemCount = matches.size,
         )
     }
 
@@ -78,7 +92,23 @@ class SmartravellerAdvisoryProvider @Inject constructor(
         }
     }
 
-    internal fun parseDestinations(root: JsonElement): List<SmartravellerDestination> {
+    internal fun parseDestinations(rawBody: String): List<SmartravellerDestination> {
+        val trimmedBody = rawBody.trim()
+        if (trimmedBody.isBlank()) {
+            throw TravelAlertSourceException(
+                diagnosticSummary = "Smartraveller returned an empty destination list.",
+                message = "Smartraveller returned an empty response body.",
+            )
+        }
+
+        return if (trimmedBody.startsWith("{") || trimmedBody.startsWith("[")) {
+            parseDestinationsJson(json.parseToJsonElement(trimmedBody))
+        } else {
+            parseDestinationsHtml(trimmedBody)
+        }
+    }
+
+    private fun parseDestinationsJson(root: JsonElement): List<SmartravellerDestination> {
         val items = when (root) {
             is JsonArray -> root
             is JsonObject -> root["data"] as? JsonArray ?: root["destinations"] as? JsonArray ?: JsonArray(emptyList())
@@ -110,6 +140,58 @@ class SmartravellerAdvisoryProvider @Inject constructor(
         return destinations
     }
 
+    private fun parseDestinationsHtml(rawBody: String): List<SmartravellerDestination> {
+        val document = Jsoup.parse(rawBody, SOURCE_URL)
+        val destinations = document.select("tr").mapNotNull(::parseDestinationRow)
+        if (destinations.isEmpty()) {
+            throw TravelAlertSourceException(
+                diagnosticSummary = "Smartraveller response format changed.",
+                message = "Smartraveller destinations page contained no parseable advisory rows.",
+            )
+        }
+        return destinations
+    }
+
+    private fun parseDestinationRow(row: Element): SmartravellerDestination? {
+        val cells = row.children()
+            .filter { child -> child.tagName() == "th" || child.tagName() == "td" }
+        if (cells.size < 4) {
+            return null
+        }
+
+        val name = cells[0].text().trim()
+        if (name.isBlank() || name.equals("Destination", ignoreCase = true)) {
+            return null
+        }
+
+        val level = levelFromAdviceText(cells[2].text()) ?: return null
+        return SmartravellerDestination(
+            name = name,
+            level = level,
+            url = cells[0].selectFirst("a[href]")?.absUrl("href")?.takeIf(String::isNotBlank),
+            updatedAt = parseDestinationDate(cells[3].text()),
+        )
+    }
+
+    private fun levelFromAdviceText(value: String): Int? {
+        val normalized = value.trim().lowercase(Locale.US)
+        return when {
+            normalized.contains("do not travel") -> 4
+            normalized.contains("reconsider your need to travel") -> 3
+            normalized.contains("exercise a high degree of caution") -> 2
+            normalized.contains("exercise normal safety precautions") -> 1
+            else -> null
+        }
+    }
+
+    private fun parseDestinationDate(value: String): Instant? =
+        runCatching {
+            LocalDate.parse(
+                value.trim(),
+                DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH),
+            ).atStartOfDay().toInstant(ZoneOffset.UTC)
+        }.getOrNull()
+
     private companion object {
         const val SOURCE_NAME = "Smartraveller"
         const val SOURCE_URL = "https://www.smartraveller.gov.au"
@@ -131,8 +213,14 @@ internal data class SmartravellerDestination(
             else -> TravelAlertSeverity.INFO
         }
 
-    val levelLabel: String
-        get() = "Level $level"
+    val adviceLabel: String
+        get() = when (level) {
+            1 -> "exercise normal safety precautions"
+            2 -> "exercise a high degree of caution"
+            3 -> "reconsider your need to travel"
+            4 -> "do not travel"
+            else -> "review local travel advice"
+        }
 }
 
 internal data class AdvisoryMatch(

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -42,6 +43,8 @@ import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.DashboardCardWidthMode
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
+import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
+import java.util.Locale
 
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
@@ -50,6 +53,7 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         uiState = uiState,
         onUpdate = viewModel::update,
         onUpdateProviderCredentials = viewModel::updateProviderCredentials,
+        onFillSurfSpotFromCurrentLocation = viewModel::fillSurfSpotFromCurrentLocation,
     )
 }
 
@@ -58,6 +62,7 @@ fun SettingsScreen(
     uiState: SettingsUiState,
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
     onUpdateProviderCredentials: ((ProviderCredentialSettings) -> ProviderCredentialSettings) -> Unit,
+    onFillSurfSpotFromCurrentLocation: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings = uiState.settings
@@ -161,6 +166,19 @@ fun SettingsScreen(
         }
 
         item {
+            SurfSpotSettingsCard(
+                surfSpot = settings.surfSpot,
+                isResolvingCurrentLocation = uiState.isResolvingSurfSpotLocation,
+                locationStatus = uiState.surfSpotLocationStatus,
+                locationStatusIsError = uiState.surfSpotLocationStatusIsError,
+                onSave = { surfSpot ->
+                    onUpdate { current -> current.copy(surfSpot = surfSpot) }
+                },
+                onFillFromCurrentLocation = onFillSurfSpotFromCurrentLocation,
+            )
+        }
+
+        item {
             ProviderCredentialCard(
                 providerCredentials = uiState.providerCredentials,
                 onSaveTankerkoenigApiKey = { apiKey ->
@@ -220,6 +238,136 @@ private fun SettingsGroupCard(
     NomadCard {
         NomadSectionClusterHeader(title = title, subtitle = subtitle)
         Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+    }
+}
+
+@Composable
+private fun SurfSpotSettingsCard(
+    surfSpot: SurfSpotConfiguration,
+    isResolvingCurrentLocation: Boolean,
+    locationStatus: String?,
+    locationStatusIsError: Boolean,
+    onSave: (SurfSpotConfiguration) -> Unit,
+    onFillFromCurrentLocation: () -> Unit,
+) {
+    var surfSpotName by rememberSaveable(surfSpot.name) {
+        mutableStateOf(surfSpot.name)
+    }
+    var surfSpotLatitude by rememberSaveable(surfSpot.latitude) {
+        mutableStateOf(surfSpot.latitude?.let { formatCoordinate(it) }.orEmpty())
+    }
+    var surfSpotLongitude by rememberSaveable(surfSpot.longitude) {
+        mutableStateOf(surfSpot.longitude?.let { formatCoordinate(it) }.orEmpty())
+    }
+
+    val parsedLatitude = surfSpotLatitude.trim().takeIf(String::isNotBlank)?.toDoubleOrNull()
+    val parsedLongitude = surfSpotLongitude.trim().takeIf(String::isNotBlank)?.toDoubleOrNull()
+    val latitudeInvalid = surfSpotLatitude.isNotBlank() && parsedLatitude == null
+    val longitudeInvalid = surfSpotLongitude.isNotBlank() && parsedLongitude == null
+    val coordinatesOutOfRange = listOfNotNull(
+        parsedLatitude?.takeUnless { it in -90.0..90.0 },
+        parsedLongitude?.takeUnless { it in -180.0..180.0 },
+    ).isNotEmpty()
+    val draftSurfSpot = SurfSpotConfiguration(
+        name = surfSpotName.trim(),
+        latitude = parsedLatitude,
+        longitude = parsedLongitude,
+    )
+    val isDirty = draftSurfSpot != surfSpot
+
+    NomadCard {
+        NomadSectionClusterHeader(
+            title = "Surf Spot",
+            subtitle = "Save one coastal break for marine wave, swell, and wind conditions on the dashboard.",
+            badges = listOf(
+                if (surfSpot.latitude != null && surfSpot.longitude != null) {
+                    "Configured" to NomadBadgeTone.Good
+                } else {
+                    "Not set" to NomadBadgeTone.Info
+                },
+            ),
+        )
+        OutlinedTextField(
+            value = surfSpotName,
+            onValueChange = { surfSpotName = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Spot name") },
+            supportingText = {
+                Text("Use a practical label like Tarifa, El Saler, or Ericeira.")
+            },
+            singleLine = true,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = surfSpotLatitude,
+                onValueChange = { surfSpotLatitude = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Latitude") },
+                supportingText = {
+                    Text(if (latitudeInvalid) "Enter a decimal latitude." else "Decimal coordinates.")
+                },
+                isError = latitudeInvalid || coordinatesOutOfRange && parsedLatitude != null && parsedLatitude !in -90.0..90.0,
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = surfSpotLongitude,
+                onValueChange = { surfSpotLongitude = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Longitude") },
+                supportingText = {
+                    Text(if (longitudeInvalid) "Enter a decimal longitude." else "Decimal coordinates.")
+                },
+                isError = longitudeInvalid || coordinatesOutOfRange && parsedLongitude != null && parsedLongitude !in -180.0..180.0,
+                singleLine = true,
+            )
+        }
+        Text(
+            text = when {
+                latitudeInvalid || longitudeInvalid ->
+                    "Save uses decimal coordinates only."
+                coordinatesOutOfRange ->
+                    "Latitude must be between -90 and 90, longitude between -180 and 180."
+                else ->
+                    "Use current location to autofill the spot from Android location services, or enter coordinates manually."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        )
+        locationStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (locationStatusIsError) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            Button(
+                enabled = isResolvingCurrentLocation.not(),
+                onClick = onFillFromCurrentLocation,
+            ) {
+                Icon(Icons.Rounded.MyLocation, contentDescription = null)
+                Text(
+                    text = if (isResolvingCurrentLocation) "Matching..." else "Use current location",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            Button(
+                enabled = isDirty && latitudeInvalid.not() && longitudeInvalid.not() && coordinatesOutOfRange.not(),
+                onClick = { onSave(draftSurfSpot) },
+            ) {
+                Text("Save surf spot")
+            }
+        }
     }
 }
 
@@ -407,6 +555,8 @@ private fun AppSettings.moveCard(card: DashboardCardId, delta: Int): AppSettings
     list.add(target, card)
     return copy(dashboardCardOrder = list)
 }
+
+private fun formatCoordinate(value: Double): String = String.format(Locale.US, "%.5f", value)
 
 private const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
 private const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"

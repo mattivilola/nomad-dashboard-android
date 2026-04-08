@@ -11,6 +11,8 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
+import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
@@ -31,6 +33,7 @@ import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
+import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardUiState
 import com.iloapps.nomaddashboard.feature.settings.SettingsUiState
@@ -82,9 +85,9 @@ object ScreenshotReviewFixtures {
                 ),
                 powerSummary = SummaryTile(
                     title = "Power",
-                    headline = "78%",
-                    detail = "Healthy battery with 11.8W discharge",
-                    level = SignalLevel.GOOD,
+                    headline = "On Battery",
+                    detail = "78% battery · Good health",
+                    level = SignalLevel.NEUTRAL,
                 ),
                 connectivity = ConnectivitySnapshot(
                     internetState = "Online",
@@ -113,14 +116,27 @@ object ScreenshotReviewFixtures {
                     },
                     wifiName = "Nomad Cabin",
                     wifiSignalDbm = -56,
+                    wifiLinkSpeedMbps = 866,
+                    wifiFrequencyMhz = 5180,
                     vpnActive = false,
                     timeZoneId = "Europe/Madrid",
                 ),
                 power = PowerSnapshot(
                     batteryPercent = 78,
                     charging = false,
-                    batteryHealthSummary = "Battery health normal",
+                    statusLabel = "On Battery",
+                    batteryHealthSummary = "Good",
+                    batteryHealthLevel = SignalLevel.GOOD,
                     dischargeWatts = 11.8,
+                    powerSourceLabel = "Battery",
+                    temperatureCelsius = 31.4,
+                    voltageVolts = 4.11,
+                    batteryPercentHistory = listOf(72.0, 73.0, 74.0, 76.0, 77.0, 78.0).mapIndexed { index, value ->
+                        MetricHistoryPoint(
+                            recordedAt = fixtureNow.minusSeconds(((5 - index) * 60).toLong()),
+                            value = value,
+                        )
+                    },
                 ),
                 travelContext = TravelContextSnapshot(
                     publicIp = "203.0.113.27",
@@ -131,6 +147,12 @@ object ScreenshotReviewFixtures {
                     latitude = 36.0132,
                     longitude = -5.6069,
                     timeZoneId = "Europe/Madrid",
+                    deviceCity = "Tarifa",
+                    deviceRegion = "Andalusia",
+                    deviceCountry = "Spain",
+                    deviceCountryCode = "ES",
+                    deviceLatitude = 36.0135,
+                    deviceLongitude = -5.6072,
                 ),
                 weather = WeatherSnapshot(
                     currentTemperatureCelsius = 18.4,
@@ -138,12 +160,62 @@ object ScreenshotReviewFixtures {
                     windSpeedKph = 24.0,
                     windDirectionDegrees = 248.0,
                     rainChancePercent = 10,
-                    summary = "Sunny with strong Levante wind",
-                    dailyForecast = listOf(
-                        WeatherDayForecast(LocalDate.of(2026, 4, 7), "Sunny", 14.0, 19.0, 5),
-                        WeatherDayForecast(LocalDate.of(2026, 4, 8), "Partly cloudy", 13.0, 18.0, 15),
-                        WeatherDayForecast(LocalDate.of(2026, 4, 9), "Light rain", 12.0, 17.0, 45),
+                    summary = "Today tops out at 19°C",
+                    conditionDescription = "Sunny with strong Levante wind",
+                    weatherCode = 0,
+                    hourlyForecast = listOf(
+                        WeatherHourlyForecastSlot(
+                            at = fixtureNow.plusSeconds(3 * 3_600),
+                            summary = "Sunny",
+                            temperatureCelsius = 19.0,
+                            rainChancePercent = 5,
+                            windSpeedKph = 18.0,
+                            windDirectionDegrees = 250.0,
+                            weatherCode = 0,
+                        ),
+                        WeatherHourlyForecastSlot(
+                            at = fixtureNow.plusSeconds(6 * 3_600),
+                            summary = "Partly cloudy",
+                            temperatureCelsius = 18.0,
+                            rainChancePercent = 10,
+                            windSpeedKph = 20.0,
+                            windDirectionDegrees = 255.0,
+                            weatherCode = 2,
+                        ),
+                        WeatherHourlyForecastSlot(
+                            at = fixtureNow.plusSeconds(12 * 3_600),
+                            summary = "Light rain",
+                            temperatureCelsius = 16.0,
+                            rainChancePercent = 35,
+                            windSpeedKph = 22.0,
+                            windDirectionDegrees = 245.0,
+                            weatherCode = 61,
+                        ),
                     ),
+                    dailyForecast = listOf(
+                        WeatherDayForecast(LocalDate.of(2026, 4, 7), "Sunny", 14.0, 19.0, 5, weatherCode = 0, windSpeedKph = 18.0, windDirectionDegrees = 250.0),
+                        WeatherDayForecast(LocalDate.of(2026, 4, 8), "Partly cloudy", 13.0, 18.0, 15, weatherCode = 2, windSpeedKph = 16.0, windDirectionDegrees = 240.0),
+                        WeatherDayForecast(LocalDate.of(2026, 4, 9), "Light rain", 12.0, 17.0, 45, weatherCode = 61, windSpeedKph = 20.0, windDirectionDegrees = 235.0),
+                    ),
+                    fetchedAt = fixtureNow,
+                ),
+                marine = MarineSnapshot(
+                    spotName = "Tarifa, Spain",
+                    waveHeightMeters = 1.7,
+                    wavePeriodSeconds = 14.0,
+                    swellHeightMeters = 1.6,
+                    swellPeriodSeconds = 13.0,
+                    swellDirectionDegrees = 270.0,
+                    windSpeedKph = 6.0,
+                    windGustKph = 11.0,
+                    windDirectionDegrees = 270.0,
+                    seaSurfaceTemperatureCelsius = 16.2,
+                    forecastSlots = listOf(
+                        MarineForecastSlot(fixtureNow.plusSeconds(3 * 3_600), 1.9, 1.7, 10.0, 225.0),
+                        MarineForecastSlot(fixtureNow.plusSeconds(6 * 3_600), 2.0, 1.8, 10.0, 225.0),
+                        MarineForecastSlot(fixtureNow.plusSeconds(12 * 3_600), 2.1, 1.9, 3.0, 225.0),
+                    ),
+                    fetchedAt = fixtureNow,
                 ),
                 travelAlerts = TravelAlertsSnapshot(
                     primaryCountryCode = "ES",

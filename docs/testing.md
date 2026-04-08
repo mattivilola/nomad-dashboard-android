@@ -168,6 +168,9 @@ Current verified result:
   emergency-care provider and repository coverage landed
 - `:core:data:testDebugUnitTest` targeted weather repository coverage passed on
   2026-04-07 after wiring device-location weather lookup with IP fallback
+- `run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest --tests com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh\ resolves\ travel\ alerts\ and\ prefers\ device\ country\ coverage :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after switching Smartraveller advisory parsing to the
+  live destinations page and tightening the Travel Alerts card UI
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-07 for the
   travel-alert card after switching the test to an activity-backed Compose rule
 - `:feature:dashboard:connectedDebugAndroidTest` passed again on 2026-04-07
@@ -178,24 +181,50 @@ Current verified result:
   passed on 2026-04-07 after the shared UX foundation and whole-app screen redesign pass
 - `run_gradle :app:assembleDebug :app:compileDebugAndroidTestKotlin :feature:dashboard:compileDebugAndroidTestKotlin :feature:visited:compileDebugAndroidTestKotlin :feature:timetracking:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-07 after the screenshot contract and UI test updates
+- `run_gradle :feature:visited:testDebugUnitTest :feature:visited:compileDebugKotlin :feature:visited:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the visited map framing and UI refinement slice
 - `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after adding retained connectivity history and the
   new dashboard mini-chart UI
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the travel-context comparison redesign, IP model
+  hardening, and Android-native map handoff fix
 - `make build` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
+- `make build` passed on 2026-04-08 after the power telemetry/history and
+  dashboard power-card refinement slice
+- `make build` passed on 2026-04-08 after the weather hourly + surf parity
+  slice
 - `make lint` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
+- `make lint` passed on 2026-04-08 after the weather hourly + surf parity
+  slice
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 inside
   the `make test` lane after the dashboard header and compact overview polish
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
+- on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed after the Travel Context device-vs-IP redesign and map-intent fix
+- on 2026-04-08, `make build` passed after the weather hourly + surf parity
+  slice, including the new Open-Meteo hourly checkpoint and marine surf code paths
+- on 2026-04-08, `make lint` passed after the weather hourly + surf parity
+  slice
+- on 2026-04-08, `./scripts/test.sh` reran the emulator lane; the new
+  `:core:data:testDebugUnitTest` power-history coverage passed, but the suite
+  still failed in existing connected Android tests under
+  `:feature:timetracking:connectedDebugAndroidTest` with an ambiguous
+  `Client Work` text assertion
 - on 2026-04-08, `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
   got through the updated repository unit tests and dashboard Kotlin plus
   Android-test compilation, then failed in existing app assembly work under
   `:app:compileDebugKotlin` with `Cannot access output property
   'destinationDirectory'` and a missing
   `app/build/tmp/kotlin-classes/debug/com` path
+- on 2026-04-08, `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  reran for the travel-alert polish slice and still hit existing weather
+  repository test failures outside the travel-alert scope; the targeted
+  travel-alert tests and dashboard Android-test compilation passed separately
 - on 2026-04-07, `make build` still failed in generated KSP output, now as
   `FileAlreadyExistsException` under `feature:visited:kspDebugKotlin`,
   `feature:dashboard:kspDebugKotlin`, and the app module; the emergency-care

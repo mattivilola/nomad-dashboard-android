@@ -82,6 +82,8 @@ class SystemTelemetryReader @Inject constructor(
             uploadMbps = uploadMbps,
             wifiName = wifiInfo?.ssid?.takeUnless { it == WifiManager.UNKNOWN_SSID }?.trim('"'),
             wifiSignalDbm = wifiInfo?.rssi,
+            wifiLinkSpeedMbps = wifiInfo?.linkSpeed?.takeIf { it > 0 },
+            wifiFrequencyMhz = wifiInfo?.frequency?.takeIf { it > 0 },
             vpnActive = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true,
             timeZoneId = ZoneId.systemDefault().id,
         ) to currentTraffic

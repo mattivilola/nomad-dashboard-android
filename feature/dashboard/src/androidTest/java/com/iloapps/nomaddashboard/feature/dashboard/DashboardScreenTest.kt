@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
+import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
@@ -33,6 +34,13 @@ class DashboardScreenTest {
                             travelContext = TravelContextSnapshot(
                                 city = "Tarifa",
                                 country = "Spain",
+                            ),
+                            power = PowerSnapshot(
+                                batteryPercent = 78,
+                                statusLabel = "On Battery",
+                                batteryHealthSummary = "Good",
+                                powerSourceLabel = "Battery",
+                                temperatureCelsius = 31.2,
                             ),
                             weather = WeatherSnapshot(
                                 currentTemperatureCelsius = 18.0,

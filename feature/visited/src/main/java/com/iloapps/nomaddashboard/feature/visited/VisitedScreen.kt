@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,9 +67,12 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadActionChip
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadBadgeTone
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadPill
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionHeader
+import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDayMonthSummary
@@ -141,6 +146,9 @@ fun VisitedScreen(
     onRequestLocationPermission: () -> Unit,
 ) {
     val placeSummary = state.places.visitedPlaceSummary()
+    val latestPlace = remember(state.places) {
+        state.places.maxByOrNull(VisitedPlace::lastVisitedAt)
+    }
     val availableYears = state.countryDays.availableYears()
     val currentYear = LocalDate.now().year
     var selectedYear by rememberSaveable { mutableIntStateOf(currentYear) }
@@ -182,6 +190,7 @@ fun VisitedScreen(
             VisitedOverviewCard(
                 settings = state.settings,
                 placeSummary = placeSummary,
+                latestPlace = latestPlace,
                 countryDays = state.countryDays,
                 hasLocationPermission = hasLocationPermission,
                 onRefresh = onRefresh,
@@ -261,9 +270,10 @@ fun VisitedScreen(
 
             item {
                 NomadCard {
-                    NomadSectionHeader(
+                    NomadSectionClusterHeader(
                         title = "Saved Places",
                         subtitle = "${state.places.size} saved entries ordered by most recent visit.",
+                        badges = listOf("${state.places.size} stops" to NomadBadgeTone.Info),
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         state.places.forEach { place ->
@@ -285,44 +295,80 @@ fun VisitedScreen(
 private fun VisitedOverviewCard(
     settings: AppSettings,
     placeSummary: com.iloapps.nomaddashboard.core.model.VisitedPlaceSummary,
+    latestPlace: VisitedPlace?,
     countryDays: List<VisitedCountryDay>,
     hasLocationPermission: Boolean,
     onRefresh: () -> Unit,
     onRequestLocationPermission: () -> Unit,
 ) {
+    val overviewBadges = buildList {
+        add(
+            if (settings.visitedPlacesEnabled) {
+                "Saved locally only" to NomadBadgeTone.Info
+            } else {
+                "Capture off" to NomadBadgeTone.Warning
+            },
+        )
+        trackingModeLabel(settings)
+            .takeIf { it != "No capture source enabled" }
+            ?.let { add(it to NomadBadgeTone.Accent) }
+        if (settings.useCurrentLocationForVisitedPlaces) {
+            add(
+                if (hasLocationPermission) {
+                    "Device ready" to NomadBadgeTone.Good
+                } else {
+                    "Permission needed" to NomadBadgeTone.Warning
+                },
+            )
+        }
+    }
+
     NomadCard(modifier = Modifier.testTag("visited_overview_card")) {
-        NomadSectionHeader(
+        NomadSectionClusterHeader(
             title = "Visited Places",
             subtitle = headerSubtitle(settings, placeSummary, countryDays),
+            badges = overviewBadges,
         )
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            maxItemsInEachRow = 3,
-        ) {
-            VisitedOverviewMetric(label = "Cities", value = placeSummary.citiesVisited.toString())
-            VisitedOverviewMetric(label = "Countries", value = placeSummary.countriesVisited.toString())
-            VisitedOverviewMetric(label = "Tracked Days", value = countryDays.size.toString())
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                VisitedOverviewMetric(
+                    label = "Cities",
+                    value = placeSummary.citiesVisited.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                VisitedOverviewMetric(
+                    label = "Countries",
+                    value = placeSummary.countriesVisited.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                VisitedOverviewMetric(
+                    label = "Tracked Days",
+                    value = countryDays.size.toString(),
+                    modifier = Modifier.weight(1f),
+                )
+                VisitedOverviewMetric(
+                    label = "Latest Stop",
+                    value = latestPlace?.city?.takeIf(String::isNotBlank) ?: latestPlace?.country ?: "Waiting",
+                    supportingText = latestPlace?.lastVisitedAt?.formatDateLabel() ?: "No saved stop yet",
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            NomadPill(text = trackingModeLabel(settings))
-            NomadPill(text = if (settings.visitedPlacesEnabled) "Saved locally only" else "Capture off")
-            if (settings.publicIpGeolocationEnabled) {
-                NomadPill(text = "IP enabled")
-            }
-            if (settings.useCurrentLocationForVisitedPlaces) {
-                NomadPill(text = if (hasLocationPermission) "Device ready" else "Device permission needed")
-            }
-        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
 
         Text(
             text = captureSubtitle(settings, hasLocationPermission),
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
         )
 
@@ -338,10 +384,11 @@ private fun VisitedOverviewCard(
                 Text("Capture now", modifier = Modifier.padding(start = 8.dp))
             }
             if (settings.visitedPlacesEnabled && settings.useCurrentLocationForVisitedPlaces && hasLocationPermission.not()) {
-                Button(onClick = onRequestLocationPermission) {
-                    Icon(Icons.Rounded.MyLocation, contentDescription = null)
-                    Text("Allow location", modifier = Modifier.padding(start = 8.dp))
-                }
+                NomadActionChip(
+                    label = "Allow location",
+                    icon = Icons.Rounded.MyLocation,
+                    onClick = onRequestLocationPermission,
+                )
             }
         }
     }
@@ -351,31 +398,28 @@ private fun VisitedOverviewCard(
 private fun VisitedOverviewMetric(
     label: String,
     value: String,
+    supportingText: String? = null,
+    modifier: Modifier = Modifier,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-    }
+    NomadMetricBlock(
+        label = label,
+        value = value,
+        supportingText = supportingText,
+        modifier = modifier,
+    )
 }
 
 @Composable
 private fun HowCaptureWorksCard() {
     NomadCard {
-        NomadSectionHeader(
-            title = "How Capture Works",
+        NomadSectionClusterHeader(
+            title = "Capture Logic",
             subtitle = "Saved locally on this device only.",
+            badges = listOf("No cloud sync" to NomadBadgeTone.Info),
         )
         Text(
-            text = "The app records travel history during refresh. Device location replaces same-day IP captures, the first resolved country wins for a day, and missing in-between days are inferred by splitting gaps between the surrounding countries.",
-            style = MaterialTheme.typography.bodyLarge,
+            text = "Refresh records travel history. Same-day device readings replace IP captures, the first resolved country wins for a day, and longer gaps are inferred from the surrounding countries so the footprint stays readable.",
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }
@@ -391,29 +435,36 @@ private fun WorldFootprintCard(
 ) {
     val highlightedStyle = rememberHighlightedCountryStyle()
     val unvisitedStyle = rememberUnvisitedCountryStyle()
+    val footprintBadges = remember(
+        hasMapsApiKey,
+        selectedYear,
+        countryShapes,
+        mapPresentation.highlightedCountryCodes,
+        mapPresentation.focusLabel,
+    ) {
+        buildList {
+            add("Pins: all-time" to NomadBadgeTone.Info)
+            add("Shading: $selectedYear" to NomadBadgeTone.Accent)
+            mapPresentation.focusLabel?.let { add("Focus: $it" to NomadBadgeTone.Good) }
+            add(
+                when {
+                    hasMapsApiKey.not() -> "Map key needed" to NomadBadgeTone.Warning
+                    countryShapes == null -> "Boundaries loading" to NomadBadgeTone.Neutral
+                    mapPresentation.highlightedCountryCodes.isEmpty() -> "No $selectedYear highlights" to NomadBadgeTone.Info
+                    else -> "${mapPresentation.highlightedCountryCodes.size} countries highlighted" to NomadBadgeTone.Good
+                },
+            )
+        }
+    }
 
     NomadCard(
         modifier = modifier.testTag("visited_world_footprint"),
     ) {
-        NomadSectionHeader(
+        NomadSectionClusterHeader(
             title = "World Footprint",
-            subtitle = "Pins show all saved places across all time. Country shading follows the selected $selectedYear country-day view.",
+            subtitle = "Opens around your most relevant region first, while keeping the selected-year footprint visible.",
+            badges = footprintBadges,
         )
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            NomadPill(text = "Pins: all-time")
-            NomadPill(text = "Shading: $selectedYear")
-            NomadPill(
-                text = when {
-                    hasMapsApiKey.not() -> "Map key needed"
-                    countryShapes == null -> "Boundaries loading"
-                    else -> "${mapPresentation.highlightedCountryCodes.size} countries highlighted"
-                },
-            )
-        }
 
         if (hasMapsApiKey.not()) {
             InlineStatusContent(
@@ -442,11 +493,12 @@ private fun CountryDaysCard(
     selectedYearSummary: com.iloapps.nomaddashboard.core.model.VisitedCountryDayYearSummary?,
 ) {
     NomadCard(modifier = modifier) {
-        NomadSectionHeader(
+        NomadSectionClusterHeader(
             title = "Country Days",
             subtitle = selectedYearSummary?.let {
                 "In $selectedYear you tracked ${it.totalTrackedDays} day${if (it.totalTrackedDays == 1) "" else "s"}."
             } ?: "Yearly country totals will appear here as daily travel history is captured.",
+            badges = listOf(selectedYear.toString() to NomadBadgeTone.Accent),
         )
 
         if (availableYears.isNotEmpty()) {
@@ -466,12 +518,14 @@ private fun CountryDaysCard(
             }
         }
 
-        selectedYearSummary?.items?.forEach { item ->
-            Text(
-                text = "${item.country}: ${item.dayCount} day${if (item.dayCount == 1) "" else "s"} · ${item.percentage.asPercent()}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            selectedYearSummary?.items?.forEach { item ->
+                CountryDaySummaryRow(
+                    country = item.country,
+                    detail = "${item.dayCount} day${if (item.dayCount == 1) "" else "s"} tracked",
+                    percentage = item.percentage.asPercent(),
+                )
+            }
         }
     }
 }
@@ -483,8 +537,11 @@ private fun VisitedWorldMap(
     highlightedStyle: VisitedMapCountryStyle,
     unvisitedStyle: VisitedMapCountryStyle,
 ) {
+    val initialCameraPosition = remember(mapPresentation.viewport) {
+        mapPresentation.viewport.bounds.toInitialCameraPosition()
+    }
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(18.0, 0.0), 1.2f)
+        position = initialCameraPosition
     }
     var mapLoaded by remember { mutableStateOf(false) }
     var appliedViewportKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -493,7 +550,12 @@ private fun VisitedWorldMap(
     }
 
     LaunchedEffect(mapLoaded, viewportKey) {
-        if (mapLoaded.not() || appliedViewportKey == viewportKey) {
+        if (mapLoaded.not()) {
+            cameraPositionState.position = initialCameraPosition
+            return@LaunchedEffect
+        }
+
+        if (appliedViewportKey == viewportKey) {
             return@LaunchedEffect
         }
 
@@ -568,22 +630,30 @@ private fun VisitedWorldMap(
 @Composable
 private fun rememberHighlightedCountryStyle(): VisitedMapCountryStyle =
     VisitedMapCountryStyle(
-        fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-        strokeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.68f),
-        strokeWidth = 1.4f,
+        fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f),
+        strokeColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.92f),
+        strokeWidth = 2.2f,
     )
 
 @Composable
 private fun rememberUnvisitedCountryStyle(): VisitedMapCountryStyle =
     VisitedMapCountryStyle(
-        fillColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
-        strokeColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
-        strokeWidth = 0.7f,
+        fillColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+        strokeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
+        strokeWidth = 0.9f,
     )
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun SavedPlaceRow(place: VisitedPlace) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = place.displayName,
             style = MaterialTheme.typography.titleMedium,
@@ -591,13 +661,31 @@ private fun SavedPlaceRow(place: VisitedPlace) {
         )
         Text(
             text = buildString {
-                append(place.region?.takeIf(String::isNotBlank) ?: place.country)
-                append(" · Sources: ")
-                append(place.sources.joinToString(" + ") { it.label() })
+                val regionLabel = place.region?.takeIf(String::isNotBlank)
+                append(regionLabel ?: place.country)
+                if (regionLabel != null) {
+                    append(", ")
+                    append(place.country)
+                }
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f),
         )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            place.sources.forEach { source ->
+                NomadPill(
+                    text = source.label(),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                )
+            }
+            NomadPill(
+                text = "Last ${place.lastVisitedAt.formatDateLabel()}",
+                tint = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+            )
+        }
         Text(
             text = "First: ${place.firstVisitedAt.formatTimestamp()} · Last: ${place.lastVisitedAt.formatTimestamp()}",
             style = MaterialTheme.typography.bodyMedium,
@@ -609,19 +697,22 @@ private fun SavedPlaceRow(place: VisitedPlace) {
 @Composable
 private fun MonthSummaryCard(summary: VisitedCountryDayMonthSummary) {
     NomadCard {
-        NomadSectionHeader(
+        NomadSectionClusterHeader(
             title = monthLabel(summary.month),
             subtitle = "${summary.totalTrackedDays} tracked day${if (summary.totalTrackedDays == 1) "" else "s"}",
+            badges = listOf(summary.totalTrackedDays.toString() to NomadBadgeTone.Info),
         )
-        summary.items.forEach { item ->
-            Text(
-                text = "${item.country}: ${item.dayCount} day${if (item.dayCount == 1) "" else "s"} · ${item.percentage.asPercent()}",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            summary.items.forEach { item ->
+                CountryDaySummaryRow(
+                    country = item.country,
+                    detail = "${item.dayCount} day${if (item.dayCount == 1) "" else "s"} tracked",
+                    percentage = item.percentage.asPercent(),
+                )
+            }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
         Column(
-            modifier = Modifier.padding(top = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             summary.days.forEach { day ->
@@ -632,6 +723,43 @@ private fun MonthSummaryCard(summary: VisitedCountryDayMonthSummary) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CountryDaySummaryRow(
+    country: String,
+    detail: String,
+    percentage: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = country,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+        NomadPill(
+            text = percentage,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        )
     }
 }
 
@@ -716,6 +844,11 @@ private fun java.time.Instant.formatTimestamp(): String =
         .withZone(java.time.ZoneId.systemDefault())
         .format(this)
 
+private fun java.time.Instant.formatDateLabel(): String =
+    DateTimeFormatter.ofPattern("MMM d, yyyy")
+        .withZone(java.time.ZoneId.systemDefault())
+        .format(this)
+
 private fun monthLabel(month: Int): String =
     java.time.Month.of(month).name.lowercase().replaceFirstChar(Char::titlecase)
 
@@ -740,6 +873,18 @@ private fun VisitedMapBounds.toLatLngBounds(): LatLngBounds =
     )
 
 private fun VisitedMapCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
+
+private fun VisitedMapBounds.toInitialCameraPosition(): CameraPosition {
+    val zoom = when {
+        latitudeSpan <= 4.0 && longitudeSpan <= 6.0 -> 6.5f
+        latitudeSpan <= 8.0 && longitudeSpan <= 12.0 -> 5.4f
+        latitudeSpan <= 14.0 && longitudeSpan <= 20.0 -> 4.5f
+        latitudeSpan <= 24.0 && longitudeSpan <= 34.0 -> 3.7f
+        latitudeSpan <= 40.0 && longitudeSpan <= 60.0 -> 2.9f
+        else -> 1.2f
+    }
+    return CameraPosition.fromLatLngZoom(center.toLatLng(), zoom)
+}
 
 private fun VisitedMapBounds.viewportKey(source: VisitedMapViewportSource): String =
     listOf(

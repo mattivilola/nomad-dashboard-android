@@ -12,6 +12,18 @@ internal data class VisitedMapBounds(
     val southWest: VisitedMapCoordinate,
     val northEast: VisitedMapCoordinate,
 ) {
+    val latitudeSpan: Double
+        get() = northEast.latitude - southWest.latitude
+
+    val longitudeSpan: Double
+        get() = northEast.longitude - southWest.longitude
+
+    val center: VisitedMapCoordinate
+        get() = VisitedMapCoordinate(
+            latitude = (southWest.latitude + northEast.latitude) / 2.0,
+            longitude = (southWest.longitude + northEast.longitude) / 2.0,
+        )
+
     fun union(other: VisitedMapBounds): VisitedMapBounds =
         VisitedMapBounds(
             southWest = VisitedMapCoordinate(
@@ -23,6 +35,20 @@ internal data class VisitedMapBounds(
                 longitude = maxOf(northEast.longitude, other.northEast.longitude),
             ),
         )
+
+    fun expanded(
+        minLatitudeSpan: Double,
+        minLongitudeSpan: Double,
+        paddingFraction: Double,
+    ): VisitedMapBounds {
+        val expandedLatitudeSpan = maxOf(latitudeSpan, minLatitudeSpan) * (1.0 + paddingFraction)
+        val expandedLongitudeSpan = maxOf(longitudeSpan, minLongitudeSpan) * (1.0 + paddingFraction)
+        return around(
+            coordinate = center,
+            latitudeSpan = expandedLatitudeSpan,
+            longitudeSpan = expandedLongitudeSpan,
+        )
+    }
 
     companion object {
         val World = VisitedMapBounds(
@@ -45,6 +71,25 @@ internal data class VisitedMapBounds(
                 northEast = VisitedMapCoordinate(
                     latitude = latitudes.max(),
                     longitude = longitudes.max(),
+                ),
+            )
+        }
+
+        fun around(
+            coordinate: VisitedMapCoordinate,
+            latitudeSpan: Double,
+            longitudeSpan: Double,
+        ): VisitedMapBounds {
+            val boundedLatitudeSpan = latitudeSpan.coerceIn(2.0, 140.0)
+            val boundedLongitudeSpan = longitudeSpan.coerceIn(2.0, 340.0)
+            return VisitedMapBounds(
+                southWest = VisitedMapCoordinate(
+                    latitude = (coordinate.latitude - boundedLatitudeSpan / 2.0).coerceIn(-85.0, 85.0),
+                    longitude = (coordinate.longitude - boundedLongitudeSpan / 2.0).coerceIn(-180.0, 180.0),
+                ),
+                northEast = VisitedMapCoordinate(
+                    latitude = (coordinate.latitude + boundedLatitudeSpan / 2.0).coerceIn(-85.0, 85.0),
+                    longitude = (coordinate.longitude + boundedLongitudeSpan / 2.0).coerceIn(-180.0, 180.0),
                 ),
             )
         }
@@ -72,6 +117,7 @@ internal data class VisitedMapViewport(
 internal data class VisitedMapPresentation(
     val highlightedCountryCodes: Set<String>,
     val markers: List<VisitedMapMarker>,
+    val focusLabel: String?,
     val viewport: VisitedMapViewport,
 )
 
@@ -88,16 +134,39 @@ internal fun buildVisitedMapPresentation(
 
     val markers = places.mapNotNull(::toVisitedMapMarker)
     val highlightedBounds = highlightedCountryCodes.mapNotNull(countryBoundsByCode::get)
+    val focusMarker = resolveFocusMarker(
+        places = places,
+        highlightedCountryCodes = highlightedCountryCodes,
+    )
 
     val viewport = when {
         highlightedBounds.isNotEmpty() -> VisitedMapViewport(
-            bounds = highlightedBounds.reduce(VisitedMapBounds::union),
+            bounds = highlightedBounds
+                .reduce(VisitedMapBounds::union)
+                .let { bounds ->
+                    focusMarker?.let { marker ->
+                        bounds.union(
+                            VisitedMapBounds.around(
+                                coordinate = marker.coordinate,
+                                latitudeSpan = 8.0,
+                                longitudeSpan = 10.0,
+                            ),
+                        )
+                    } ?: bounds
+                }
+                .expanded(
+                    minLatitudeSpan = 10.0,
+                    minLongitudeSpan = 14.0,
+                    paddingFraction = 0.18,
+                ),
             source = VisitedMapViewportSource.HIGHLIGHTED_COUNTRIES,
         )
 
         markers.isNotEmpty() -> VisitedMapViewport(
-            bounds = VisitedMapBounds.fromCoordinates(markers.map(VisitedMapMarker::coordinate))
-                ?: VisitedMapBounds.World,
+            bounds = markersViewportBounds(
+                markers = markers,
+                focusMarker = focusMarker ?: markers.first(),
+            ),
             source = VisitedMapViewportSource.MARKERS,
         )
 
@@ -110,7 +179,32 @@ internal fun buildVisitedMapPresentation(
     return VisitedMapPresentation(
         highlightedCountryCodes = highlightedCountryCodes,
         markers = markers,
+        focusLabel = focusMarker?.title,
         viewport = viewport,
+    )
+}
+
+private fun markersViewportBounds(
+    markers: List<VisitedMapMarker>,
+    focusMarker: VisitedMapMarker,
+): VisitedMapBounds {
+    val allMarkerBounds = VisitedMapBounds.fromCoordinates(markers.map(VisitedMapMarker::coordinate))
+    val focusBounds = VisitedMapBounds.around(
+        coordinate = focusMarker.coordinate,
+        latitudeSpan = 10.0,
+        longitudeSpan = 14.0,
+    )
+    val combinedBounds = when {
+        allMarkerBounds == null -> focusBounds
+        allMarkerBounds.latitudeSpan <= 12.0 && allMarkerBounds.longitudeSpan <= 18.0 ->
+            allMarkerBounds.union(focusBounds)
+
+        else -> focusBounds
+    }
+    return combinedBounds.expanded(
+        minLatitudeSpan = 10.0,
+        minLongitudeSpan = 14.0,
+        paddingFraction = 0.12,
     )
 }
 
@@ -135,3 +229,27 @@ private fun toVisitedMapMarker(place: VisitedPlace): VisitedMapMarker? {
 
 private fun normalizeCountryCode(countryCode: String?): String? =
     countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+
+private data class FocusMarkerCandidate(
+    val marker: VisitedMapMarker,
+    val countryCode: String?,
+)
+
+private fun resolveFocusMarker(
+    places: List<VisitedPlace>,
+    highlightedCountryCodes: Set<String>,
+): VisitedMapMarker? {
+    val candidates = places.sortedByDescending(VisitedPlace::lastVisitedAt)
+        .mapNotNull { place ->
+            toVisitedMapMarker(place)?.let { marker ->
+                FocusMarkerCandidate(
+                    marker = marker,
+                    countryCode = normalizeCountryCode(place.countryCode),
+                )
+            }
+        }
+
+    return candidates.firstOrNull { candidate ->
+        candidate.countryCode != null && highlightedCountryCodes.contains(candidate.countryCode)
+    }?.marker ?: candidates.firstOrNull()?.marker
+}

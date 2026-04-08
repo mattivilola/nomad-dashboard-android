@@ -32,28 +32,36 @@ class TravelAlertProvidersTest {
     fun `smartraveller provider parses tolerant payload shapes and picks highest nearby severity`() = runTest {
         val provider = SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations() = json.parseToJsonElement(
+                override suspend fun destinations() =
                     """
-                    {
-                      "data": [
-                        {
-                          "title": "Spain",
-                          "advice_level": 1,
-                          "canonical_url": "https://example.com/spain",
-                          "updated_at": "2026-04-07T10:00:00Z"
-                        },
-                        {
-                          "name": "France",
-                          "adviceLevel": "3",
-                          "link": "https://example.com/france",
-                          "updatedAt": "2026-04-07T11:00:00Z"
-                        }
-                      ]
-                    }
-                    """.trimIndent(),
-                )
+                    <html>
+                      <body>
+                        <table>
+                          <tr>
+                            <th>Destination</th>
+                            <th>Region</th>
+                            <th>Overall Advice Level</th>
+                            <th>Updated</th>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/spain">Spain</a></td>
+                            <td>Europe</td>
+                            <td>Exercise normal safety precautions</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/france">France</a></td>
+                            <td>Europe</td>
+                            <td>Reconsider your need to travel</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                        </table>
+                      </body>
+                    </html>
+                    """.trimIndent().toResponseBody(HtmlMediaType)
             },
             countryNameResolver = CountryNameResolver(),
+            json = json,
         )
 
         val signal = provider.advisory(
@@ -62,8 +70,8 @@ class TravelAlertProvidersTest {
         )
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.WARNING)
-        assertThat(signal.summary).isEqualTo("France is at Level 3 nearby.")
-        assertThat(signal.sourceUrl).isEqualTo("https://example.com/france")
+        assertThat(signal.summary).isEqualTo("France nearby: reconsider your need to travel.")
+        assertThat(signal.sourceUrl).isEqualTo("https://www.smartraveller.gov.au/destinations/france")
         assertThat(signal.affectedCountryCodes).containsExactly("FR")
     }
 
@@ -71,7 +79,7 @@ class TravelAlertProvidersTest {
     fun `smartraveller provider resolves alias country names`() = runTest {
         val provider = SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations() = json.parseToJsonElement(
+                override suspend fun destinations() =
                     """
                     [
                       {
@@ -81,10 +89,10 @@ class TravelAlertProvidersTest {
                         "last_updated": "2026-04-07T09:00:00Z"
                       }
                     ]
-                    """.trimIndent(),
-                )
+                    """.trimIndent().toResponseBody(JsonMediaType)
             },
             countryNameResolver = CountryNameResolver(),
+            json = json,
         )
 
         val signal = provider.advisory(
@@ -93,7 +101,18 @@ class TravelAlertProvidersTest {
         )
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)
-        assertThat(signal.summary).contains("Level 2.")
+        assertThat(signal.summary).contains("exercise a high degree of caution")
+    }
+
+    @Test
+    fun `bundled neighbor country resolver includes France plus 8 bordering countries`() {
+        val resolver = BundledNeighborCountryResolver.fromRecords(
+            mapOf("FR" to listOf("AD", "BE", "CH", "DE", "ES", "IT", "LU", "MC")),
+        )
+
+        assertThat(resolver.neighboringCountryCodes("fr"))
+            .containsExactly("AD", "BE", "CH", "DE", "ES", "IT", "LU", "MC")
+            .inOrder()
     }
 
     @Test
@@ -199,5 +218,6 @@ class TravelAlertProvidersTest {
 
     private companion object {
         val JsonMediaType = "application/json".toMediaType()
+        val HtmlMediaType = "text/html".toMediaType()
     }
 }

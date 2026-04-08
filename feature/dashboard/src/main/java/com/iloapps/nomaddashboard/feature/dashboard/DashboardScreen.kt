@@ -1,6 +1,15 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
@@ -21,35 +30,59 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AcUnit
+import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Thunderstorm
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.iloapps.nomaddashboard.core.designsystem.R
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadActionChip
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadBadgeTone
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadCard
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadChartShell
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadStatusBadge
@@ -62,6 +95,8 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
+import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
@@ -72,6 +107,7 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
+import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
 import java.time.Instant
 import java.time.ZoneId
@@ -84,9 +120,43 @@ fun DashboardRoute(
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasLocationPermission by remember { mutableStateOf(context.hasDashboardLocationPermission()) }
+    val currentRefresh by rememberUpdatedState(viewModel::refresh)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        hasLocationPermission = context.hasDashboardLocationPermission()
+        if (hasLocationPermission) {
+            currentRefresh()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasLocationPermission = context.hasDashboardLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     DashboardScreen(
         state = uiState,
         onRefresh = viewModel::refresh,
+        hasLocationPermission = hasLocationPermission,
+        onRequestLocationPermission = {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                ),
+            )
+        },
     )
 }
 
@@ -95,9 +165,12 @@ fun DashboardRoute(
 fun DashboardScreen(
     state: DashboardUiState,
     onRefresh: () -> Unit,
+    hasLocationPermission: Boolean = false,
+    onRequestLocationPermission: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
@@ -112,6 +185,13 @@ fun DashboardScreen(
                     title = "Nomad Dashboard",
                     subtitle = dashboardLocationLabel(state),
                     supportingText = dashboardSupportLine(state),
+                    titleLeading = {
+                        Image(
+                            painter = painterResource(id = R.drawable.nomad_symbol_mark),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    },
                     trailing = {
                         IconButton(
                             onClick = {
@@ -146,6 +226,7 @@ fun DashboardScreen(
                 DashboardCardId.WEATHER -> WeatherSectionCard(
                     snapshot = state.snapshot.weather,
                     surfSpot = state.settings.surfSpot,
+                    marine = state.snapshot.marine,
                     forecastExpanded = state.settings.weatherForecastExpanded,
                     modifier = Modifier.testTag("dashboard_weather_card"),
                 )
@@ -160,11 +241,20 @@ fun DashboardScreen(
 
                 DashboardCardId.TRAVEL_CONTEXT -> TravelContextSectionCard(
                     state = state,
+                    hasLocationPermission = hasLocationPermission,
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    onCopyPublicIp = {
+                        state.snapshot.travelContext.publicIp?.let { publicIp ->
+                            clipboardManager.setText(AnnotatedString(publicIp))
+                        }
+                    },
                     onOpenMap = {
-                        state.snapshot.travelContext.latitude?.let { latitude ->
-                            state.snapshot.travelContext.longitude?.let { longitude ->
-                                uriHandler.openUri(mapSearchUrl(latitude, longitude))
-                            }
+                        travelContextMapTarget(state.snapshot)?.let { target ->
+                            context.openMapLocation(
+                                latitude = target.latitude,
+                                longitude = target.longitude,
+                                label = target.label,
+                            )
                         }
                     },
                 )
@@ -173,7 +263,11 @@ fun DashboardScreen(
                     enabled = state.settings.fuelPricesEnabled,
                     snapshot = state.snapshot.fuelPrices,
                     onOpenMap = { station ->
-                        uriHandler.openUri(mapSearchUrl(station.latitude, station.longitude))
+                        context.openMapLocation(
+                            latitude = station.latitude,
+                            longitude = station.longitude,
+                            label = station.stationName,
+                        )
                     },
                 )
 
@@ -191,7 +285,11 @@ fun DashboardScreen(
                     snapshot = state.snapshot.emergencyCare,
                     onOpenMap = {
                         state.snapshot.emergencyCare.facility?.let { facility ->
-                            uriHandler.openUri(mapSearchUrl(facility.latitude, facility.longitude))
+                            context.openMapLocation(
+                                latitude = facility.latitude,
+                                longitude = facility.longitude,
+                                label = facility.name,
+                            )
                         }
                     },
                 )
@@ -281,44 +379,111 @@ private fun CompactSummaryTile(
 private fun WeatherSectionCard(
     snapshot: WeatherSnapshot,
     surfSpot: SurfSpotConfiguration,
+    marine: MarineSnapshot?,
     forecastExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
     NomadCard(modifier = modifier) {
-        NomadSectionClusterHeader(
-            title = "Weather",
-            subtitle = snapshot.summary,
-            badges = listOf(
-                statusBadgeForWeather(snapshot),
-                snapshot.sourceName to NomadBadgeTone.Info,
-            ),
-        )
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            maxItemsInEachRow = 2,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
         ) {
-            NomadMetricBlock("Current", snapshot.currentTemperatureCelsius.formatDegrees())
-            NomadMetricBlock("Feels Like", snapshot.apparentTemperatureCelsius.formatDegrees())
-            NomadMetricBlock("Rain Chance", snapshot.rainChancePercent?.let { "$it%" } ?: "n/a")
-            NomadMetricBlock("Wind", snapshot.windSpeedKph?.let { "%.0f km/h".format(it) } ?: "Unavailable")
+            Text(
+                text = "Weather",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            NomadStatusBadge(
+                text = statusBadgeForWeather(snapshot).first,
+                tone = statusBadgeForWeather(snapshot).second,
+            )
         }
 
-        Text(
-            text = "Next checkpoints",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            snapshot.dailyForecast.take(3).forEachIndexed { index, day ->
-                ForecastCheckpoint(
-                    day = day,
-                    label = "+${(index + 1) * 24}h",
-                )
+            Text(
+                text = snapshot.summary,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
+            )
+            Text(
+                text = snapshot.sourceName,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = weatherIconFor(snapshot.weatherCode),
+                contentDescription = snapshot.conditionDescription,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = snapshot.conditionDescription,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            WeatherMetricTile(
+                label = "Current",
+                value = snapshot.currentTemperatureCelsius.formatDegrees(),
+                modifier = Modifier.weight(1f),
+            )
+            WeatherMetricTile(
+                label = "Feels Like",
+                value = snapshot.apparentTemperatureCelsius.formatDegrees(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            WeatherMetricTile(
+                label = "Rain Chance",
+                value = snapshot.rainChancePercent?.let { "$it%" } ?: "n/a",
+                modifier = Modifier.weight(1f),
+            )
+            WeatherMetricTile(
+                label = "Wind",
+                value = snapshot.windSpeedKph.formatWindSpeed(),
+                supportingText = windDirectionLabel(snapshot.windDirectionDegrees),
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        if (snapshot.hourlyForecast.isNotEmpty()) {
+            Text(
+                text = "Next checkpoints",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                snapshot.hourlyForecast.take(3).forEach { slot ->
+                    ForecastCheckpoint(
+                        slot = slot,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
@@ -328,53 +493,207 @@ private fun WeatherSectionCard(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
             )
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 snapshot.dailyForecast.take(5).forEach { day ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = day.date.dayOfWeek.name.lowercase().replaceFirstChar(Char::titlecase),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = day.summary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                            )
-                        }
-                        Text(
-                            text = "${day.minCelsius?.toInt() ?: 0}° / ${day.maxCelsius?.toInt() ?: 0}°",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
+                    DailyForecastRow(day = day)
                 }
             }
         }
 
-        NomadCard {
-            NomadSectionClusterHeader(
-                title = "Surf Spot",
-                subtitle = surfSpot.name.ifBlank { "Configured surf spot" },
-                badges = listOf("Android marine parity pending" to NomadBadgeTone.Warning),
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                maxItemsInEachRow = 2,
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.36f))
+
+        SurfSpotBand(
+            surfSpot = surfSpot,
+            marine = marine,
+        )
+    }
+}
+
+@Composable
+private fun WeatherMetricTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    supportingText: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        NomadMetricBlock(
+            label = label,
+            value = value,
+            supportingText = supportingText,
+        )
+    }
+}
+
+@Composable
+private fun DailyForecastRow(
+    day: WeatherDayForecast,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Icon(
+            imageVector = weatherIconFor(day.weatherCode),
+            contentDescription = day.summary,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(top = 2.dp)
+                .size(20.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                NomadMetricBlock("Wind", snapshot.windSpeedKph?.let { "%.0f km/h".format(it) } ?: "Unavailable")
-                NomadMetricBlock("Direction", windDirectionLabel(snapshot.windDirectionDegrees))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = day.date.dayOfWeek.name.lowercase().replaceFirstChar(Char::titlecase),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = day.summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                Text(
+                    text = "${day.minCelsius?.toInt() ?: 0}° / ${day.maxCelsius?.toInt() ?: 0}°",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
             Text(
-                text = "The Android weather card now reserves a dedicated surf section so marine data can land without another layout rewrite.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
+                text = listOfNotNull(
+                    day.rainChancePercent?.let { "Rain $it%" },
+                    day.windSpeedKph?.let { "${it.roundToInt()} km/h ${windDirectionLabel(day.windDirectionDegrees)}" },
+                ).joinToString(" · ").ifBlank { "Daily outlook loading" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
             )
+        }
+    }
+}
+
+@Composable
+private fun SurfSpotBand(
+    surfSpot: SurfSpotConfiguration,
+    marine: MarineSnapshot?,
+) {
+    val isConfigured = surfSpot.latitude != null && surfSpot.longitude != null
+    val hasValidCoordinates = surfSpot.latitude?.let { it in -90.0..90.0 } == true &&
+        surfSpot.longitude?.let { it in -180.0..180.0 } == true
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f))
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "Surf Spot",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = surfSpot.name.ifBlank {
+                            if (isConfigured) "Configured surf spot" else "Add one break in Settings"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+                NomadStatusBadge(
+                    text = when {
+                        marine != null -> "${marine.sourceName} · ${marine.fetchedAt?.formatDashboardTimestamp().orEmpty()}".trimEnd()
+                        isConfigured.not() -> "Not set"
+                        hasValidCoordinates.not() -> "Fix spot"
+                        else -> "Unavailable"
+                    },
+                    tone = when {
+                        marine != null -> NomadBadgeTone.Good
+                        isConfigured.not() -> NomadBadgeTone.Info
+                        hasValidCoordinates.not() -> NomadBadgeTone.Warning
+                        else -> NomadBadgeTone.Warning
+                    },
+                )
+            }
+
+            if (marine != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    WeatherMetricTile(
+                        label = "Wave",
+                        value = marine.waveSummary(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    WeatherMetricTile(
+                        label = "Swell",
+                        value = marine.swellSummary(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    WeatherMetricTile(
+                        label = "Wind",
+                        value = marine.windSummary(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (marine.forecastSlots.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        marine.forecastSlots.take(3).forEach { slot ->
+                            SurfForecastCheckpoint(
+                                slot = slot,
+                                referenceTime = marine.fetchedAt ?: Instant.now(),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+                marine.seaSurfaceTemperatureCelsius?.let { seaTemp ->
+                    Text(
+                        text = "Sea ${formatCompactTemperature(seaTemp)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+            } else {
+                Text(
+                    text = when {
+                        isConfigured.not() -> "Add a surf spot in Settings to bring marine wave, swell, and coastal wind into this card."
+                        hasValidCoordinates.not() -> "Surf spot coordinates are out of range. Fix the saved latitude and longitude in Settings."
+                        else -> "Marine conditions are unavailable right now for the configured spot."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                )
+            }
         }
     }
 }
@@ -652,34 +971,304 @@ private fun ConnectivityMiniChart(
 @Composable
 private fun TravelContextSectionCard(
     state: DashboardUiState,
+    hasLocationPermission: Boolean,
+    onRequestLocationPermission: () -> Unit,
+    onCopyPublicIp: () -> Unit,
     onOpenMap: () -> Unit,
 ) {
+    val travelContext = state.snapshot.travelContext
+    val locationAlignment = travelLocationAlignment(travelContext)
+    val headerBadges = buildList {
+        add(
+            if (state.snapshot.connectivity.vpnActive) {
+                "VPN On" to NomadBadgeTone.Warning
+            } else {
+                "VPN Off" to NomadBadgeTone.Info
+            },
+        )
+        locationAlignment?.let { add(it.label to it.tone) }
+    }
+
     NomadCard {
         NomadSectionClusterHeader(
             title = "Travel Context",
-            subtitle = dashboardLocationLabel(state),
-            badges = listOf(
-                (state.snapshot.travelContext.publicIp ?: "No public IP") to NomadBadgeTone.Info,
-            ),
+            subtitle = travelContextSubtitle(state, hasLocationPermission),
+            badges = headerBadges,
             actions = {
-                val hasCoordinates = state.snapshot.travelContext.latitude != null && state.snapshot.travelContext.longitude != null
                 NomadActionChip(
                     label = "Map",
                     icon = Icons.Rounded.Map,
                     onClick = onOpenMap,
-                    enabled = hasCoordinates,
+                    enabled = travelContextMapTarget(state.snapshot) != null,
                 )
             },
         )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            maxItemsInEachRow = 2,
+
+        TravelLocationPanels(
+            travelContext = travelContext,
+            publicIpEnabled = state.settings.publicIpGeolocationEnabled,
+            hasLocationPermission = hasLocationPermission,
+            onRequestLocationPermission = onRequestLocationPermission,
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TravelDetailRow(
+                label = "Public IP",
+                value = when {
+                    state.settings.publicIpGeolocationEnabled.not() -> "Off in Settings"
+                    travelContext.publicIp != null -> travelContext.publicIp ?: "Unavailable"
+                    else -> "Unavailable"
+                },
+                supporting = when {
+                    travelContext.publicIp != null -> travelContext.cityCountryOrRegion()
+                    state.settings.publicIpGeolocationEnabled.not() -> "Turn on external IP location to compare network identity."
+                    else -> "No public IP resolved on the last refresh."
+                },
+                actionIcon = Icons.Rounded.ContentCopy,
+                actionDescription = "Copy public IP",
+                onAction = travelContext.publicIp?.let { { onCopyPublicIp() } },
+            )
+            TravelDetailRow(
+                label = "Wi-Fi",
+                value = travelWifiLabel(state.snapshot.connectivity),
+                supporting = travelWifiSupportingText(state.snapshot.connectivity),
+            )
+            TravelDetailRow(
+                label = "Signal",
+                value = travelWifiSignalSummary(state.snapshot.connectivity),
+                supporting = "Android exposes RSSI, band, and link speed when available.",
+            )
+            TravelDetailRow(
+                label = "Time Zone",
+                value = travelTimeZoneSummary(state.snapshot),
+                supporting = "Device timezone is shown first; IP timezone appears when it differs.",
+            )
+            TravelDetailRow(
+                label = "VPN",
+                value = if (state.snapshot.connectivity.vpnActive) "Active" else "Inactive",
+                supporting = if (state.snapshot.connectivity.vpnActive) {
+                    "Public IP location may differ from your physical device location."
+                } else {
+                    "Network identity currently matches the device's direct connection."
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TravelLocationPanels(
+    travelContext: com.iloapps.nomaddashboard.core.model.TravelContextSnapshot,
+    publicIpEnabled: Boolean,
+    hasLocationPermission: Boolean,
+    onRequestLocationPermission: () -> Unit,
+) {
+    BoxWithConstraints {
+        val useTwoColumns = maxWidth >= 360.dp
+        if (useTwoColumns) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    TravelLocationPanel(
+                        source = "Device",
+                        headline = travelContext.deviceLocationLabel(),
+                        status = when {
+                            travelContext.hasDeviceLocation() -> "Ready"
+                            hasLocationPermission.not() -> "Permission"
+                            else -> "Waiting"
+                        },
+                        tone = when {
+                            travelContext.hasDeviceLocation() -> NomadBadgeTone.Accent
+                            hasLocationPermission.not() -> NomadBadgeTone.Warning
+                            else -> NomadBadgeTone.Info
+                        },
+                        supporting = when {
+                            travelContext.hasDeviceLocation() -> travelContext.deviceRegionCountryLine()
+                            hasLocationPermission.not() -> "Allow location to compare the device's physical position."
+                            else -> "Location permission is granted, but Android has not resolved a place yet."
+                        },
+                        actionLabel = if (hasLocationPermission.not()) "Allow" else null,
+                        actionIcon = if (hasLocationPermission.not()) Icons.Rounded.MyLocation else null,
+                        onAction = if (hasLocationPermission.not()) onRequestLocationPermission else null,
+                    )
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    TravelLocationPanel(
+                        source = "Public IP",
+                        headline = when {
+                            publicIpEnabled.not() -> "Off in Settings"
+                            travelContext.hasIpLocation() -> travelContext.ipLocationLabel()
+                            else -> "Unavailable"
+                        },
+                        status = when {
+                            publicIpEnabled.not() -> "Off"
+                            travelContext.hasIpLocation() -> "Live"
+                            else -> "Unavailable"
+                        },
+                        tone = when {
+                            publicIpEnabled.not() -> NomadBadgeTone.Info
+                            travelContext.hasIpLocation() -> NomadBadgeTone.Good
+                            else -> NomadBadgeTone.Warning
+                        },
+                        supporting = when {
+                            publicIpEnabled.not() -> "Enable external IP location to compare network identity."
+                            travelContext.publicIp != null -> travelContext.publicIp ?: "Unavailable"
+                            else -> "No IP-based location was resolved on the last refresh."
+                        },
+                    )
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TravelLocationPanel(
+                    source = "Device",
+                    headline = travelContext.deviceLocationLabel(),
+                    status = when {
+                        travelContext.hasDeviceLocation() -> "Ready"
+                        hasLocationPermission.not() -> "Permission"
+                        else -> "Waiting"
+                    },
+                    tone = when {
+                        travelContext.hasDeviceLocation() -> NomadBadgeTone.Accent
+                        hasLocationPermission.not() -> NomadBadgeTone.Warning
+                        else -> NomadBadgeTone.Info
+                    },
+                    supporting = when {
+                        travelContext.hasDeviceLocation() -> travelContext.deviceRegionCountryLine()
+                        hasLocationPermission.not() -> "Allow location to compare the device's physical position."
+                        else -> "Location permission is granted, but Android has not resolved a place yet."
+                    },
+                    actionLabel = if (hasLocationPermission.not()) "Allow location" else null,
+                    actionIcon = if (hasLocationPermission.not()) Icons.Rounded.MyLocation else null,
+                    onAction = if (hasLocationPermission.not()) onRequestLocationPermission else null,
+                )
+                TravelLocationPanel(
+                    source = "Public IP",
+                    headline = when {
+                        publicIpEnabled.not() -> "Off in Settings"
+                        travelContext.hasIpLocation() -> travelContext.ipLocationLabel()
+                        else -> "Unavailable"
+                    },
+                    status = when {
+                        publicIpEnabled.not() -> "Off"
+                        travelContext.hasIpLocation() -> "Live"
+                        else -> "Unavailable"
+                    },
+                    tone = when {
+                        publicIpEnabled.not() -> NomadBadgeTone.Info
+                        travelContext.hasIpLocation() -> NomadBadgeTone.Good
+                        else -> NomadBadgeTone.Warning
+                    },
+                    supporting = when {
+                        publicIpEnabled.not() -> "Enable external IP location to compare network identity."
+                        travelContext.publicIp != null -> travelContext.publicIp ?: "Unavailable"
+                        else -> "No IP-based location was resolved on the last refresh."
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TravelLocationPanel(
+    source: String,
+    headline: String,
+    status: String,
+    tone: NomadBadgeTone,
+    supporting: String,
+    actionLabel: String? = null,
+    actionIcon: ImageVector? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            .padding(14.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = source.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+                NomadStatusBadge(text = status, tone = tone)
+            }
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+            if (actionLabel != null && actionIcon != null && onAction != null) {
+                NomadActionChip(
+                    label = actionLabel,
+                    icon = actionIcon,
+                    onClick = onAction,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TravelDetailRow(
+    label: String,
+    value: String,
+    supporting: String? = null,
+    actionIcon: ImageVector? = null,
+    actionDescription: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            NomadMetricBlock("Region", state.snapshot.travelContext.region ?: "Unavailable")
-            NomadMetricBlock("Country", state.snapshot.travelContext.country ?: "Unavailable")
-            NomadMetricBlock("Time Zone", state.snapshot.travelContext.timeZoneId ?: state.snapshot.connectivity.timeZoneId)
-            NomadMetricBlock("VPN", if (state.snapshot.connectivity.vpnActive) "Active" else "Inactive")
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            supporting?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+        }
+        if (actionIcon != null && actionDescription != null && onAction != null) {
+            IconButton(onClick = onAction) {
+                Icon(
+                    imageVector = actionIcon,
+                    contentDescription = actionDescription,
+                )
+            }
         }
     }
 }
@@ -689,26 +1278,225 @@ private fun TravelContextSectionCard(
 private fun PowerSectionCard(
     state: DashboardUiState,
 ) {
-    NomadCard {
-        NomadSectionClusterHeader(
-            title = "Power",
-            subtitle = state.snapshot.power.batteryHealthSummary,
-            badges = listOf(state.snapshot.powerSummary.headline to toneForLevel(state.snapshot.powerSummary.level)),
-        )
+    val power = state.snapshot.power
+    NomadCard(modifier = Modifier.testTag("dashboard_power_card")) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Power",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = powerContextLine(power),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+            NomadStatusBadge(
+                text = power.statusLabel,
+                tone = toneForLevel(state.snapshot.powerSummary.level),
+            )
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             maxItemsInEachRow = 2,
         ) {
-            NomadMetricBlock("Battery", state.snapshot.power.batteryPercent?.let { "$it%" } ?: "Estimating")
-            NomadMetricBlock("Charging", if (state.snapshot.power.charging) "Yes" else "No")
-            NomadMetricBlock("Drain", state.snapshot.power.dischargeWatts?.let { "%.1f W".format(it) } ?: "Unavailable")
-            NomadMetricBlock("State", state.snapshot.powerSummary.detail)
+            NomadMetricBlock(
+                label = "Battery",
+                value = power.batteryPercent?.let { "$it%" } ?: "Estimating",
+                supportingText = power.voltageVolts.formatVoltage(),
+            )
+            NomadMetricBlock(
+                label = if (power.charging) "Charge Rate" else "Drain",
+                value = power.dischargeWatts.formatWatts(),
+                supportingText = if (power.dischargeWatts != null) {
+                    if (power.charging) "Estimated input power" else "Estimated device draw"
+                } else {
+                    "This device does not expose power flow"
+                },
+            )
+            NomadMetricBlock(
+                label = "Health",
+                value = power.batteryHealthSummary,
+                supportingText = power.temperatureCelsius.formatTemperature(),
+            )
+            NomadMetricBlock(
+                label = "Source",
+                value = power.powerSourceLabel ?: "Unavailable",
+                supportingText = powerSourceSupportingLine(power),
+            )
         }
-        NomadChartShell(
-            title = "Battery History",
-            subtitle = "Retention-backed charge and drain charts are queued next; this shell reserves the phone layout.",
+        PowerHistoryPanel(
+            power = power,
+            signalLevel = state.snapshot.powerSummary.level,
         )
+    }
+}
+
+@Composable
+private fun PowerHistoryPanel(
+    power: com.iloapps.nomaddashboard.core.model.PowerSnapshot,
+    signalLevel: SignalLevel,
+    modifier: Modifier = Modifier,
+) {
+    val history = power.batteryPercentHistory
+    val trendColor = when {
+        signalLevel == SignalLevel.WARNING || signalLevel == SignalLevel.BAD -> MaterialTheme.colorScheme.secondary
+        power.charging -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.tertiary
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            .padding(14.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "Battery History",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        text = historyHeadline(power, history),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                NomadStatusBadge(
+                    text = if (history.isEmpty()) "Waiting" else "${history.size} Samples",
+                    tone = if (history.isEmpty()) NomadBadgeTone.Info else NomadBadgeTone.Accent,
+                )
+            }
+            PowerHistoryChart(
+                history = history,
+                lineColor = trendColor,
+            )
+            Text(
+                text = historySupportLine(power, history),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PowerHistoryChart(
+    history: List<MetricHistoryPoint>,
+    lineColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (history.isEmpty()) {
+            Text(
+                text = "Builds locally as the dashboard refreshes",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            return@Box
+        }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(104.dp)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+        ) {
+            val chartWidth = size.width
+            val chartHeight = size.height
+            val values = history.map(MetricHistoryPoint::value)
+            val strokeWidth = 3.dp.toPx()
+            val pointRadius = 3.5.dp.toPx()
+            val fillBrush = Brush.verticalGradient(
+                colors = listOf(
+                    lineColor.copy(alpha = 0.24f),
+                    lineColor.copy(alpha = 0.04f),
+                ),
+                startY = 0f,
+                endY = chartHeight,
+            )
+
+            listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
+                val y = chartHeight * fraction
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x = 0f, y = y),
+                    end = Offset(x = chartWidth, y = y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+
+            val points = values.mapIndexed { index, value ->
+                val x = if (values.size == 1) {
+                    chartWidth / 2f
+                } else {
+                    chartWidth * index / values.lastIndex.toFloat()
+                }
+                val normalized = (value / 100.0).toFloat().coerceIn(0f, 1f)
+                val y = chartHeight - (normalized * chartHeight)
+                Offset(x = x, y = y)
+            }
+
+            if (points.size == 1) {
+                drawCircle(
+                    color = lineColor,
+                    radius = pointRadius,
+                    center = points.single(),
+                )
+            } else {
+                val linePath = Path().apply {
+                    moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { point -> lineTo(point.x, point.y) }
+                }
+                val fillPath = Path().apply {
+                    addPath(linePath)
+                    lineTo(points.last().x, chartHeight)
+                    lineTo(points.first().x, chartHeight)
+                    close()
+                }
+                drawPath(path = fillPath, brush = fillBrush)
+                drawPath(
+                    path = linePath,
+                    color = lineColor,
+                    style = Stroke(
+                        width = strokeWidth,
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round,
+                    ),
+                )
+                drawCircle(
+                    color = lineColor,
+                    radius = pointRadius,
+                    center = points.last(),
+                )
+            }
+        }
     }
 }
 
@@ -899,7 +1687,17 @@ internal fun TravelAlertsSectionCard(
         NomadSectionClusterHeader(
             title = "Travel Alerts",
             subtitle = snapshot.primaryCountryName?.let { travelAlertsCoverageText(snapshot, it) } ?: "Monitoring travel signals",
-            badges = listOf(travelAlertsSubtitle(snapshot) to badgeToneForAlerts(snapshot)),
+            actions = {
+                NomadStatusBadge(
+                    text = travelAlertsSubtitle(snapshot),
+                    tone = badgeToneForAlerts(snapshot),
+                )
+            },
+        )
+        Text(
+            text = travelAlertsContextLine(snapshot),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
         )
         snapshot.enabledKinds.forEach { kind ->
             snapshot.state(kind)?.let { state ->
@@ -917,34 +1715,46 @@ private fun TravelAlertRow(
     state: TravelAlertSignalState,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+            .padding(14.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = state.kind.displayName(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                NomadStatusBadge(
+                    text = travelAlertStatusLabel(state),
+                    tone = badgeToneForAlertState(state),
+                )
+            }
             Text(
-                text = state.kind.displayName(),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
+                text = travelAlertImpactLabel(state).uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = summaryToneColor(badgeToneForAlertState(state)).copy(alpha = 0.88f),
             )
-            NomadStatusBadge(
-                text = travelAlertStatusLabel(state),
-                tone = badgeToneForAlertState(state),
+            Text(
+                text = travelAlertSummary(state),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+            )
+            Text(
+                text = travelAlertFreshnessLine(state),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
             )
         }
-        Text(
-            text = travelAlertSummary(state),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
-        )
-        Text(
-            text = state.signal?.sourceName ?: state.sourceName,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-        )
     }
 }
 
@@ -968,24 +1778,76 @@ private fun DashboardNarrativeCard(
 
 @Composable
 private fun ForecastCheckpoint(
-    day: WeatherDayForecast,
-    label: String,
+    slot: WeatherHourlyForecastSlot,
+    modifier: Modifier = Modifier,
 ) {
-    NomadCard(modifier = Modifier.width(132.dp)) {
+    NomadCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+    ) {
         Text(
-            text = label,
+            text = slot.hourOffsetLabel(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = weatherIconFor(slot.weatherCode),
+                contentDescription = slot.summary,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = slot.summary,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = slot.temperatureCelsius?.let(::formatCompactTemperature) ?: "Unavailable",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = listOfNotNull(
+                slot.rainChancePercent?.let { "Rain $it%" },
+                slot.windSpeedKph?.let { "${it.roundToInt()} km/h ${windDirectionLabel(slot.windDirectionDegrees)}" },
+            ).joinToString(" · ").ifBlank { slot.summary },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+        )
+    }
+}
+
+@Composable
+private fun SurfForecastCheckpoint(
+    slot: MarineForecastSlot,
+    referenceTime: Instant,
+    modifier: Modifier = Modifier,
+) {
+    NomadCard(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+    ) {
+        Text(
+            text = slot.hourOffsetLabel(referenceTime),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )
         Text(
-            text = day.summary,
+            text = slot.waveHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" } ?: "n/a",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "${day.minCelsius?.toInt() ?: 0}° / ${day.maxCelsius?.toInt() ?: 0}°",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
+            text = slot.windSpeedKph?.let { "${it.roundToInt()} km/h ${windDirectionLabel(slot.windDirectionDegrees)}" } ?: "Wind n/a",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
         )
     }
 }
@@ -1018,15 +1880,17 @@ private fun badgeToneForEmergency(snapshot: EmergencyCareSnapshot): NomadBadgeTo
 
 private fun badgeToneForAlerts(snapshot: TravelAlertsSnapshot): NomadBadgeTone = when {
     snapshot.highestSeverity?.rank ?: 0 >= TravelAlertSeverity.WARNING.rank -> NomadBadgeTone.Warning
+    snapshot.hasUnavailableStates -> NomadBadgeTone.Warning
+    snapshot.hasStaleStates -> NomadBadgeTone.Info
     snapshot.highestSeverity != null -> NomadBadgeTone.Good
     else -> NomadBadgeTone.Info
 }
 
 private fun badgeToneForAlertState(state: TravelAlertSignalState): NomadBadgeTone = when (state.status) {
     TravelAlertSignalStatus.CHECKING,
-    TravelAlertSignalStatus.STALE,
-    TravelAlertSignalStatus.UNAVAILABLE,
     -> NomadBadgeTone.Info
+    TravelAlertSignalStatus.STALE -> NomadBadgeTone.Info
+    TravelAlertSignalStatus.UNAVAILABLE -> NomadBadgeTone.Warning
     TravelAlertSignalStatus.READY -> when (state.signal?.severity) {
         TravelAlertSeverity.CAUTION,
         TravelAlertSeverity.WARNING,
@@ -1108,7 +1972,7 @@ private fun weatherOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewT
         title = "Weather",
         headline = snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" } ?: "Waiting",
         detail = listOfNotNull(
-            snapshot.weather.summary.takeUnless { it.equals("Weather unavailable", ignoreCase = true) },
+            snapshot.weather.conditionDescription.takeUnless { it.equals("Weather unavailable", ignoreCase = true) },
             travelAlertsCompactLabel(snapshot.travelAlerts),
         ).joinToString(" · ").ifBlank { "Refresh to load current conditions" },
         tone = statusBadgeForWeather(snapshot.weather).second,
@@ -1131,10 +1995,14 @@ private fun networkOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewT
 private fun powerOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel {
     val dischargeWatts = snapshot.power.dischargeWatts
     val headline = snapshot.power.batteryPercent?.let { "$it%" }
+        ?: snapshot.power.statusLabel.takeUnless { it.equals("Checking", ignoreCase = true) }
         ?: if (snapshot.power.charging) "Charging" else "Waiting"
     val detail = when {
-        snapshot.power.charging -> "Charging now"
-        dischargeWatts != null -> "${dischargeWatts.roundToInt()} W drain"
+        snapshot.power.charging -> listOfNotNull(
+            snapshot.power.powerSourceLabel?.takeUnless { it == "Battery" }?.let { "$it power" },
+            snapshot.power.batteryHealthSummary.takeUnless { it.equals("Estimating", ignoreCase = true) },
+        ).joinToString(" · ").ifBlank { "Charging now" }
+        dischargeWatts != null -> "${dischargeWatts.roundToInt()} W draw"
         else -> snapshot.power.batteryHealthSummary
     }
 
@@ -1152,6 +2020,59 @@ private fun connectivityContextLine(connectivity: com.iloapps.nomaddashboard.cor
         connectivity.wifiSignalDbm?.let { "$it dBm" },
     ).joinToString(" · ").ifBlank { "Local network context unavailable" }
 
+private fun powerContextLine(power: com.iloapps.nomaddashboard.core.model.PowerSnapshot): String =
+    listOfNotNull(
+        power.batteryHealthSummary.takeUnless { it.equals("Estimating", ignoreCase = true) },
+        power.powerSourceLabel?.let { source ->
+            if (source.equals("Battery", ignoreCase = true)) {
+                "Running on battery"
+            } else {
+                "$source power"
+            }
+        },
+        power.temperatureCelsius?.let { String.format(Locale.US, "%.1f°C", it) },
+    ).joinToString(" · ").ifBlank { "Device battery telemetry" }
+
+private fun powerSourceSupportingLine(power: com.iloapps.nomaddashboard.core.model.PowerSnapshot): String =
+    if (power.powerSourceLabel?.equals("Battery", ignoreCase = true) == true) {
+        "Running untethered"
+    } else {
+        power.statusLabel
+    }
+
+private fun historyHeadline(
+    power: com.iloapps.nomaddashboard.core.model.PowerSnapshot,
+    history: List<MetricHistoryPoint>,
+): String = when {
+    history.isNotEmpty() && power.batteryPercent != null -> "${power.batteryPercent}% now"
+    history.isNotEmpty() -> "Recent charge trend"
+    else -> "Waiting for local samples"
+}
+
+private fun historySupportLine(
+    power: com.iloapps.nomaddashboard.core.model.PowerSnapshot,
+    history: List<MetricHistoryPoint>,
+): String {
+    if (history.isEmpty()) {
+        return "Android does not expose a public recent battery timeline, so the app retains local history as refreshes happen."
+    }
+
+    val values = history.map(MetricHistoryPoint::value)
+    val low = values.minOrNull()?.roundToInt() ?: return "Recent battery history ready."
+    val high = values.maxOrNull()?.roundToInt() ?: return "Recent battery history ready."
+    val flowText = power.dischargeWatts?.let { watts ->
+        if (power.charging) {
+            "Estimated charge rate ${watts.formatSingleDecimal()} W."
+        } else {
+            "Estimated draw ${watts.formatSingleDecimal()} W."
+        }
+    }
+    return listOf(
+        "Range $low%-$high% across ${history.size} refreshes.",
+        flowText,
+    ).filterNotNull().joinToString(" ")
+}
+
 private fun List<MetricHistoryPoint>.values(): List<Double> = map(MetricHistoryPoint::value)
 
 private fun Double?.formatThroughput(): String {
@@ -1166,11 +2087,38 @@ private fun Double?.formatThroughput(): String {
 private fun Double?.formatMilliseconds(): String =
     this?.let { "${it.roundToInt()} ms" } ?: "Unavailable"
 
+private fun Double?.formatWatts(): String =
+    this?.let { String.format(Locale.US, "%.1f W", it) } ?: "Unavailable"
+
+private fun Double?.formatVoltage(): String =
+    this?.let { String.format(Locale.US, "%.2f V", it) } ?: "Voltage unavailable"
+
+private fun Double?.formatTemperature(): String =
+    this?.let { String.format(Locale.US, "%.1f°C", it) } ?: "Temperature unavailable"
+
+private fun Double.formatSingleDecimal(): String =
+    String.format(Locale.US, "%.1f", this)
+
 private fun dashboardLocationLabel(state: DashboardUiState): String =
     listOfNotNull(
         state.snapshot.travelContext.city,
         state.snapshot.travelContext.country,
     ).joinToString(", ").ifBlank { "Location unavailable" }
+
+private fun travelContextSubtitle(
+    state: DashboardUiState,
+    hasLocationPermission: Boolean,
+): String {
+    val travelContext = state.snapshot.travelContext
+    val alignment = travelLocationAlignment(travelContext)
+    return when {
+        alignment?.label == "Mismatch" -> "Device and network location differ."
+        travelContext.hasDeviceLocation() -> "Device-aware travel context."
+        hasLocationPermission.not() -> "Allow location to compare your physical position."
+        state.settings.publicIpGeolocationEnabled && travelContext.hasIpLocation() -> "Public IP-based travel context."
+        else -> "Network identity and environment."
+    }
+}
 
 private fun dashboardSupportLine(state: DashboardUiState): String {
     val lastRefresh = state.snapshot.lastRefresh
@@ -1231,12 +2179,34 @@ private fun travelAlertsCoverageText(
     }
 }
 
+private fun travelAlertsContextLine(snapshot: TravelAlertsSnapshot): String =
+    if (snapshot.primaryCountryCode == null) {
+        "Checks advisory and regional security as soon as the app can resolve your current country."
+    } else {
+        "Checks your current country plus bordering countries so nearby changes show up before you cross the next border."
+    }
+
 private fun travelAlertStatusLabel(state: TravelAlertSignalState): String =
     when (state.status) {
         TravelAlertSignalStatus.CHECKING -> "Checking"
         TravelAlertSignalStatus.READY -> state.signal?.severity?.badgeTitle() ?: "Ready"
         TravelAlertSignalStatus.STALE -> "Stale"
         TravelAlertSignalStatus.UNAVAILABLE -> "Unavailable"
+    }
+
+private fun travelAlertImpactLabel(state: TravelAlertSignalState): String =
+    when (state.status) {
+        TravelAlertSignalStatus.CHECKING -> "Live check"
+        TravelAlertSignalStatus.READY -> when (state.signal?.severity) {
+            TravelAlertSeverity.CLEAR -> "No elevated signal"
+            TravelAlertSeverity.INFO -> "Nearby watch"
+            TravelAlertSeverity.CAUTION -> "Plan carefully"
+            TravelAlertSeverity.WARNING -> "Review before travel"
+            TravelAlertSeverity.CRITICAL -> "Immediate attention"
+            null -> "Signal ready"
+        }
+        TravelAlertSignalStatus.STALE -> "Last known signal"
+        TravelAlertSignalStatus.UNAVAILABLE -> "Source issue"
     }
 
 private fun travelAlertSummary(state: TravelAlertSignalState): String =
@@ -1249,6 +2219,20 @@ private fun travelAlertSummary(state: TravelAlertSignalState): String =
             ?: state.reason?.summary()
             ?: "Source unavailable"
     }
+
+private fun travelAlertFreshnessLine(state: TravelAlertSignalState): String {
+    val sourceName = state.signal?.sourceName ?: state.sourceName
+    val dateText = when (state.status) {
+        TravelAlertSignalStatus.READY -> state.signal?.updatedAt?.formatTravelAlertDate()
+            ?.let { "Updated $it" }
+        TravelAlertSignalStatus.STALE -> state.lastSuccessAt?.formatTravelAlertDate()
+            ?.let { "Last good refresh $it" }
+        TravelAlertSignalStatus.UNAVAILABLE -> state.lastAttemptedAt?.formatTravelAlertDate()
+            ?.let { "Checked $it" }
+        TravelAlertSignalStatus.CHECKING -> "Refreshing now"
+    }
+    return listOfNotNull(sourceName, dateText).joinToString(" · ").ifBlank { sourceName }
+}
 
 private fun TravelAlertKind.displayName(): String = when (this) {
     TravelAlertKind.ADVISORY -> "Travel Advisory"
@@ -1270,7 +2254,11 @@ private fun TravelAlertUnavailableReason.summary(): String = when (this) {
     TravelAlertUnavailableReason.SOURCE_CONFIGURATION_REQUIRED -> "Source setup required"
 }
 
-private fun Double?.formatDegrees(): String = this?.let { "%.0f C".format(it) } ?: "Unavailable"
+private fun Double?.formatDegrees(): String = this?.let { formatCompactTemperature(it) } ?: "Unavailable"
+
+private fun Double?.formatWindSpeed(): String = this?.let { "${it.roundToInt()} km/h" } ?: "Unavailable"
+
+private fun formatCompactTemperature(value: Double): String = "${value.roundToInt()} C"
 
 private fun windDirectionLabel(directionDegrees: Double?): String {
     if (directionDegrees == null) return "Unavailable"
@@ -1279,11 +2267,175 @@ private fun windDirectionLabel(directionDegrees: Double?): String {
     return labels[index]
 }
 
-private fun mapSearchUrl(latitude: Double, longitude: Double): String =
-    "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
+private fun weatherIconFor(code: Int?): ImageVector = when (code) {
+    0 -> Icons.Rounded.WbSunny
+    1, 2, 3 -> Icons.Rounded.Cloud
+    45, 48 -> Icons.Rounded.BlurOn
+    51, 53, 55, 61, 63, 65, 80, 81, 82 -> Icons.Rounded.WaterDrop
+    71, 73, 75 -> Icons.Rounded.AcUnit
+    95, 96, 99 -> Icons.Rounded.Thunderstorm
+    else -> Icons.Rounded.Cloud
+}
+
+private fun WeatherHourlyForecastSlot.hourOffsetLabel(): String {
+    val hours = ((at.epochSecond - Instant.now().epochSecond) / 3_600.0).roundToInt().coerceAtLeast(0)
+    return "+${hours}h"
+}
+
+private fun MarineForecastSlot.hourOffsetLabel(referenceTime: Instant): String {
+    val hours = ((at.epochSecond - referenceTime.epochSecond) / 3_600.0).roundToInt().coerceAtLeast(0)
+    return "+${hours}h"
+}
+
+private fun MarineSnapshot.waveSummary(): String = listOfNotNull(
+    waveHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" },
+    wavePeriodSeconds?.let { "${it.roundToInt()} s" },
+).joinToString(" · ").ifBlank { "n/a" }
+
+private fun MarineSnapshot.swellSummary(): String = listOfNotNull(
+    swellHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" },
+    swellDirectionDegrees?.let(::windDirectionLabel),
+).joinToString(" · ").ifBlank { "n/a" }
+
+private fun MarineSnapshot.windSummary(): String = listOfNotNull(
+    windSpeedKph?.let { "${it.roundToInt()} km/h" },
+    windDirectionDegrees?.let(::windDirectionLabel),
+).joinToString(" · ").ifBlank { "n/a" }
+
+private data class TravelMapTarget(
+    val latitude: Double,
+    val longitude: Double,
+    val label: String,
+)
+
+private data class TravelLocationAlignment(
+    val label: String,
+    val tone: NomadBadgeTone,
+)
+
+private fun travelContextMapTarget(snapshot: DashboardSnapshot): TravelMapTarget? {
+    val travelContext = snapshot.travelContext
+    val latitude = travelContext.latitude ?: return null
+    val longitude = travelContext.longitude ?: return null
+    val label = travelContext.ipLocationLabel()
+    return TravelMapTarget(
+        latitude = latitude,
+        longitude = longitude,
+        label = label,
+    )
+}
+
+private fun travelLocationAlignment(
+    travelContext: com.iloapps.nomaddashboard.core.model.TravelContextSnapshot,
+): TravelLocationAlignment? {
+    if (travelContext.hasIpLocation().not()) {
+        return null
+    }
+
+    return TravelLocationAlignment(label = "IP Context", tone = NomadBadgeTone.Good)
+}
+
+private fun travelWifiLabel(
+    connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
+): String = connectivity.wifiName
+    ?: if (connectivity.isOnline) {
+        "Not on Wi-Fi"
+    } else {
+        "Offline"
+    }
+
+private fun travelWifiSupportingText(
+    connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
+): String {
+    return when {
+        connectivity.wifiName != null ->
+            "Connected network identity"
+        connectivity.isOnline ->
+            "The active connection is online, but Android is not exposing a Wi-Fi SSID."
+        else ->
+            "Reconnect and refresh to capture Wi-Fi context."
+    }
+}
+
+private fun travelWifiSignalSummary(
+    connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
+): String = listOfNotNull(
+    connectivity.wifiSignalDbm?.let { "RSSI $it" },
+).joinToString(" · ").ifBlank {
+    if (connectivity.wifiName != null) {
+        "Connected"
+    } else {
+        "Unavailable"
+    }
+}
+
+private fun travelTimeZoneSummary(
+    snapshot: DashboardSnapshot,
+): String {
+    val deviceZone = snapshot.connectivity.timeZoneId
+    val ipZone = snapshot.travelContext.timeZoneId
+    return when {
+        ipZone.isNullOrBlank() || ipZone == deviceZone -> deviceZone
+        else -> "Device $deviceZone · IP $ipZone"
+    }
+}
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.hasDeviceLocation(): Boolean =
+    false
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.hasIpLocation(): Boolean =
+    country != null || latitude != null || longitude != null
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.deviceLocationLabel(): String =
+    "Waiting for device place"
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.ipLocationLabel(): String =
+    listOfNotNull(city, country).joinToString(", ").ifBlank {
+        country ?: "Location unavailable"
+    }
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.deviceRegionCountryLine(): String =
+    "Current-location comparison is not wired into this card yet."
+
+private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.cityCountryOrRegion(): String =
+    listOfNotNull(city, region, country).joinToString(" · ").ifBlank { "Network-derived location" }
+
+private fun Context.openMapLocation(
+    latitude: Double,
+    longitude: Double,
+    label: String,
+) {
+    val geoUri = Uri.parse(
+        "geo:0,0?q=${latitude},${longitude}(${Uri.encode(label)})",
+    )
+    val browserUri = Uri.parse(
+        "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude",
+    )
+
+    val geoIntent = Intent(Intent.ACTION_VIEW, geoUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val browserIntent = Intent(Intent.ACTION_VIEW, browserUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    try {
+        when {
+            geoIntent.resolveActivity(packageManager) != null -> startActivity(geoIntent)
+            browserIntent.resolveActivity(packageManager) != null -> startActivity(browserIntent)
+        }
+    } catch (_: ActivityNotFoundException) {
+        // Ignore missing map handlers and leave the user on the dashboard.
+    }
+}
+
+private fun Context.hasDashboardLocationPermission(): Boolean =
+    ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
 private fun Instant.formatDashboardTimestamp(): String =
     DateTimeFormatter.ofPattern("HH.mm")
+        .withZone(ZoneId.systemDefault())
+        .format(this)
+
+private fun Instant.formatTravelAlertDate(): String =
+    DateTimeFormatter.ofPattern("dd MMM")
         .withZone(ZoneId.systemDefault())
         .format(this)
 

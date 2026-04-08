@@ -72,6 +72,7 @@ fun NomadTopBar(
     supportingText: String? = null,
     badgeText: String? = null,
     badgeTone: NomadBadgeTone = NomadBadgeTone.Neutral,
+    titleLeading: @Composable (() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -84,11 +85,17 @@ fun NomadTopBar(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    titleLeading?.invoke()
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,

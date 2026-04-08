@@ -29,6 +29,8 @@ data class ConnectivitySnapshot(
     val uploadHistoryMbps: List<MetricHistoryPoint> = emptyList(),
     val wifiName: String? = null,
     val wifiSignalDbm: Int? = null,
+    val wifiLinkSpeedMbps: Int? = null,
+    val wifiFrequencyMhz: Int? = null,
     val vpnActive: Boolean = false,
     val timeZoneId: String = "UTC",
 )
@@ -60,6 +62,12 @@ data class TravelContextSnapshot(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val timeZoneId: String? = null,
+    val deviceCity: String? = null,
+    val deviceRegion: String? = null,
+    val deviceCountry: String? = null,
+    val deviceCountryCode: String? = null,
+    val deviceLatitude: Double? = null,
+    val deviceLongitude: Double? = null,
 )
 
 data class WeatherDayForecast(
@@ -68,6 +76,43 @@ data class WeatherDayForecast(
     val minCelsius: Double?,
     val maxCelsius: Double?,
     val rainChancePercent: Int?,
+    val weatherCode: Int? = null,
+    val windSpeedKph: Double? = null,
+    val windDirectionDegrees: Double? = null,
+)
+
+data class WeatherHourlyForecastSlot(
+    val at: Instant,
+    val summary: String,
+    val temperatureCelsius: Double?,
+    val rainChancePercent: Int?,
+    val windSpeedKph: Double?,
+    val windDirectionDegrees: Double?,
+    val weatherCode: Int? = null,
+)
+
+data class MarineForecastSlot(
+    val at: Instant,
+    val waveHeightMeters: Double?,
+    val swellHeightMeters: Double?,
+    val windSpeedKph: Double?,
+    val windDirectionDegrees: Double?,
+)
+
+data class MarineSnapshot(
+    val spotName: String,
+    val sourceName: String = "Open-Meteo",
+    val waveHeightMeters: Double? = null,
+    val wavePeriodSeconds: Double? = null,
+    val swellHeightMeters: Double? = null,
+    val swellPeriodSeconds: Double? = null,
+    val swellDirectionDegrees: Double? = null,
+    val windSpeedKph: Double? = null,
+    val windGustKph: Double? = null,
+    val windDirectionDegrees: Double? = null,
+    val seaSurfaceTemperatureCelsius: Double? = null,
+    val forecastSlots: List<MarineForecastSlot> = emptyList(),
+    val fetchedAt: Instant? = null,
 )
 
 data class WeatherSnapshot(
@@ -77,8 +122,12 @@ data class WeatherSnapshot(
     val windDirectionDegrees: Double? = null,
     val rainChancePercent: Int? = null,
     val summary: String = "Weather unavailable",
+    val conditionDescription: String = "Weather unavailable",
+    val weatherCode: Int? = null,
+    val hourlyForecast: List<WeatherHourlyForecastSlot> = emptyList(),
     val dailyForecast: List<WeatherDayForecast> = emptyList(),
     val sourceName: String = "Open-Meteo",
+    val fetchedAt: Instant? = null,
 )
 
 enum class EmergencyCareStatus {
@@ -141,6 +190,7 @@ data class DashboardSnapshot(
     val power: PowerSnapshot = PowerSnapshot(),
     val travelContext: TravelContextSnapshot = TravelContextSnapshot(),
     val weather: WeatherSnapshot = WeatherSnapshot(),
+    val marine: MarineSnapshot? = null,
     val travelAlerts: TravelAlertsSnapshot = TravelAlertsSnapshot(),
     val fuelPrices: FuelPriceSnapshot = FuelPriceSnapshot(),
     val emergencyCare: EmergencyCareSnapshot = EmergencyCareSnapshot(),

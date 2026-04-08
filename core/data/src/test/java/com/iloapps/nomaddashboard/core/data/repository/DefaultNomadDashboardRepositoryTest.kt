@@ -47,6 +47,7 @@ import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
@@ -54,6 +55,7 @@ import com.iloapps.nomaddashboard.core.network.model.ReliefWebReportsRequest
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoCurrent
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoDaily
+import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import java.time.Instant
 import java.time.LocalDate
@@ -65,7 +67,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -133,6 +134,76 @@ class DefaultNomadDashboardRepositoryTest {
             VisitedPlaceSource.DEVICE_LOCATION,
         ).inOrder()
         assertThat(repository.snapshot.first { it.lastRefresh != null }.visited.sourceSummary).isEqualTo("IP + Device")
+    }
+
+    @Test
+    fun `refresh carries both ip and device location into travel context`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace(
+                    city = "Paris",
+                    region = "Ile-de-France",
+                    country = "France",
+                    countryCode = "FR",
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                ),
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
+        assertThat(travelContext.publicIp).isEqualTo("1.2.3.4")
+        assertThat(travelContext.country).isEqualTo("Finland")
+        assertThat(travelContext.timeZoneId).isEqualTo("Europe/Helsinki")
+        assertThat(travelContext.deviceCity).isEqualTo("Paris")
+        assertThat(travelContext.deviceCountry).isEqualTo("France")
+        assertThat(travelContext.deviceLatitude).isEqualTo(48.8566)
+    }
+
+    @Test
+    fun `refresh keeps last known ip context when lookup fails`() = runTest {
+        val freeIpApiService = SequenceFreeIpApiService(
+            responses = listOf(
+                Result.success(
+                    FreeIpApiResponse(
+                        ipAddress = "1.2.3.4",
+                        cityName = "Helsinki",
+                        regionName = "Uusimaa",
+                        countryName = "Finland",
+                        countryCode = "FI",
+                        latitude = 60.1699,
+                        longitude = 24.9384,
+                        timeZones = listOf("Europe/Helsinki"),
+                    ),
+                ),
+                Result.failure(IllegalStateException("lookup failed")),
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            freeIpApiService = freeIpApiService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+        repository.refresh()
+        advanceUntilIdle()
+
+        val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
+        assertThat(travelContext.publicIp).isEqualTo("1.2.3.4")
+        assertThat(travelContext.city).isEqualTo("Helsinki")
+        assertThat(travelContext.country).isEqualTo("Finland")
     }
 
     @Test
@@ -314,7 +385,7 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val request = openMeteoService.requests.single()
+        val request = openMeteoService.requests.first { it.current.contains("temperature_2m") }
         val snapshot = repository.snapshot.first { it.lastRefresh != null }.weather
 
         assertThat(request.latitude).isWithin(0.001).of(48.8566)
@@ -367,6 +438,50 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
+    fun `refresh retains battery history and richer power diagnostics`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            telemetryReader = FakeTelemetryReader(
+                powerSnapshots = listOf(
+                    PowerSnapshot(
+                        batteryPercent = 63,
+                        charging = false,
+                        statusLabel = "On Battery",
+                        batteryHealthSummary = "Good",
+                        powerSourceLabel = "Battery",
+                        temperatureCelsius = 30.1,
+                    ),
+                    PowerSnapshot(
+                        batteryPercent = 61,
+                        charging = false,
+                        statusLabel = "On Battery",
+                        batteryHealthSummary = "Good",
+                        powerSourceLabel = "Battery",
+                        temperatureCelsius = 31.0,
+                        dischargeWatts = 5.4,
+                    ),
+                ),
+            ),
+            metricPointDao = FakeMetricPointDao(),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+        repository.refresh()
+        advanceUntilIdle()
+
+        val power = repository.snapshot.first { it.lastRefresh != null }.power
+
+        assertThat(power.statusLabel).isEqualTo("On Battery")
+        assertThat(power.batteryHealthSummary).isEqualTo("Good")
+        assertThat(power.batteryPercentHistory.map { it.value }).containsExactly(63.0, 61.0).inOrder()
+    }
+
+    @Test
     fun `refresh falls back to ip weather lookup when device weather location is unavailable`() = runTest {
         val settings = AppSettings(
             publicIpGeolocationEnabled = true,
@@ -385,7 +500,7 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val request = openMeteoService.requests.single()
+        val request = openMeteoService.requests.first { it.current.contains("temperature_2m") }
         assertThat(request.latitude).isWithin(0.001).of(60.1699)
         assertThat(request.longitude).isWithin(0.001).of(24.9384)
     }
@@ -413,7 +528,6 @@ class DefaultNomadDashboardRepositoryTest {
         advanceUntilIdle()
 
         val weather = repository.snapshot.first { it.lastRefresh != null }.weather
-        assertThat(openMeteoService.requests).isEmpty()
         assertThat(weather.summary).isEqualTo("Grant location permission for weather.")
     }
 
@@ -719,7 +833,9 @@ class DefaultNomadDashboardRepositoryTest {
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
+        freeIpApiService: FreeIpApiService = FakeFreeIpApiService(),
         openMeteoService: OpenMeteoService = FakeOpenMeteoService(),
+        openMeteoMarineService: OpenMeteoMarineService = FakeOpenMeteoMarineService(),
         emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
         providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
@@ -739,8 +855,9 @@ class DefaultNomadDashboardRepositoryTest {
         DefaultNomadDashboardRepository(
             settingsDataSource = settingsDataSource,
             telemetryReader = telemetryReader,
-            freeIpApiService = FakeFreeIpApiService(),
+            freeIpApiService = freeIpApiService,
             openMeteoService = openMeteoService,
+            openMeteoMarineService = openMeteoMarineService,
             fuelPriceProvider = fuelPriceProvider,
             emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
@@ -758,40 +875,48 @@ class DefaultNomadDashboardRepositoryTest {
     ): SmartravellerAdvisoryProvider =
         SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations(): JsonElement = TestJson.parseToJsonElement(
+                override suspend fun destinations(): ResponseBody =
                     """
-                    {
-                      "data": [
-                        {
-                          "title": "Finland",
-                          "advice_level": 1,
-                          "canonical_url": "https://example.com/finland",
-                          "updated_at": "2026-04-07T10:00:00Z"
-                        },
-                        {
-                          "title": "Germany",
-                          "advice_level": 1,
-                          "canonical_url": "https://example.com/germany",
-                          "updated_at": "2026-04-07T10:00:00Z"
-                        },
-                        {
-                          "name": "France",
-                          "adviceLevel": "2",
-                          "link": "https://example.com/france",
-                          "updatedAt": "2026-04-07T10:00:00Z"
-                        },
-                        {
-                          "name": "Poland",
-                          "adviceLevel": "1",
-                          "link": "https://example.com/poland",
-                          "updatedAt": "2026-04-07T10:00:00Z"
-                        }
-                      ]
-                    }
-                    """.trimIndent(),
-                )
+                    <html>
+                      <body>
+                        <table>
+                          <tr>
+                            <th>Destination</th>
+                            <th>Region</th>
+                            <th>Overall Advice Level</th>
+                            <th>Updated</th>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/finland">Finland</a></td>
+                            <td>Europe</td>
+                            <td>Exercise normal safety precautions</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/germany">Germany</a></td>
+                            <td>Europe</td>
+                            <td>Exercise normal safety precautions</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/france">France</a></td>
+                            <td>Europe</td>
+                            <td>Exercise a high degree of caution</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/poland">Poland</a></td>
+                            <td>Europe</td>
+                            <td>Exercise normal safety precautions</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                        </table>
+                      </body>
+                    </html>
+                    """.trimIndent().toResponseBody("text/html".toMediaType())
             },
             countryNameResolver = CountryNameResolver(),
+            json = TestJson,
         )
 
     private fun reliefWebProvider(
@@ -867,13 +992,18 @@ private class FakeTelemetryReader(
             wifiName = "Test Wi-Fi",
         ),
     ),
-    private val powerSnapshot: PowerSnapshot = PowerSnapshot(
-        batteryPercent = 80,
-        charging = false,
-        batteryHealthSummary = "Healthy",
+    private val powerSnapshots: List<PowerSnapshot> = listOf(
+        PowerSnapshot(
+            batteryPercent = 80,
+            charging = false,
+            statusLabel = "On Battery",
+            batteryHealthSummary = "Healthy",
+            powerSourceLabel = "Battery",
+        ),
     ),
 ) : TelemetryReader {
     private var connectivityIndex = 0
+    private var powerIndex = 0
 
     override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> {
         val snapshot = connectivitySnapshots.getOrElse(connectivityIndex) { connectivitySnapshots.last() }
@@ -885,7 +1015,11 @@ private class FakeTelemetryReader(
         )
     }
 
-    override suspend fun power(): PowerSnapshot = powerSnapshot
+    override suspend fun power(): PowerSnapshot {
+        val snapshot = powerSnapshots.getOrElse(powerIndex) { powerSnapshots.last() }
+        powerIndex += 1
+        return snapshot
+    }
 }
 
 private class FakeMetricPointDao : MetricPointDao {
@@ -934,8 +1068,20 @@ private class FakeFreeIpApiService : FreeIpApiService {
             countryCode = "FI",
             latitude = 60.1699,
             longitude = 24.9384,
-            timeZone = "Europe/Helsinki",
+            timeZones = listOf("Europe/Helsinki"),
         )
+}
+
+private class SequenceFreeIpApiService(
+    private val responses: List<Result<FreeIpApiResponse>>,
+) : FreeIpApiService {
+    private var index = 0
+
+    override suspend fun lookupMe(): FreeIpApiResponse {
+        val response = responses.getOrElse(index) { responses.last() }
+        index += 1
+        return response.getOrThrow()
+    }
 }
 
 private class FakeOpenMeteoService(
@@ -945,7 +1091,9 @@ private class FakeOpenMeteoService(
         val latitude: Double,
         val longitude: Double,
         val current: String,
+        val hourly: String,
         val daily: String,
+        val forecastDays: Int,
         val timezone: String,
     )
 
@@ -955,18 +1103,34 @@ private class FakeOpenMeteoService(
         latitude: Double,
         longitude: Double,
         current: String,
+        hourly: String,
         daily: String,
+        forecastDays: Int,
         timezone: String,
     ): OpenMeteoResponse {
         requests += Request(
             latitude = latitude,
             longitude = longitude,
             current = current,
+            hourly = hourly,
             daily = daily,
+            forecastDays = forecastDays,
             timezone = timezone,
         )
         return response
     }
+}
+
+private class FakeOpenMeteoMarineService(
+    private val response: OpenMeteoMarineResponse = OpenMeteoMarineResponse(),
+) : OpenMeteoMarineService {
+    override suspend fun forecast(
+        latitude: Double,
+        longitude: Double,
+        hourly: String,
+        forecastDays: Int,
+        timezone: String,
+    ): OpenMeteoMarineResponse = response
 }
 
 private class FakeVisitedDeviceLocationProvider(

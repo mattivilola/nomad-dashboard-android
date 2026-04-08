@@ -38,6 +38,7 @@ import com.iloapps.nomaddashboard.core.network.api.FranceFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
+import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
 import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
 import com.iloapps.nomaddashboard.core.network.api.SpainFuelPriceService
@@ -98,6 +99,19 @@ object NomadInfrastructureModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(OpenMeteoService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideOpenMeteoMarineService(
+        client: OkHttpClient,
+        json: Json,
+    ): OpenMeteoMarineService =
+        Retrofit.Builder()
+            .baseUrl("https://marine-api.open-meteo.com/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(OpenMeteoMarineService::class.java)
 
     @Provides
     @Singleton

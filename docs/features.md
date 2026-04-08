@@ -16,9 +16,9 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header, visible refresh progress, a weather-first three-up overview strip, and metric-led detail cards without duplicate top navigation |
+| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header with the Nomad symbol mark, visible refresh progress, a weather-first three-up overview strip, and metric-led detail cards without duplicate top navigation |
 | Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
-| About screen | Implemented | About now explains product purpose, local-first data handling, and current parity direction instead of bootstrap filler |
+| About screen | Implemented | About now acts as a real trust and brand surface with stronger product framing, local-first privacy explanation, live app version metadata, and direct links to the website and GitHub project |
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Implemented | Route now shares the same product language as the rest of the app, with clearer overview, active-state, and recent-session sections |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
@@ -33,11 +33,12 @@ This document tracks Android parity against the macOS app at the feature level.
 | Internet reachability summary | Implemented | Uses `ConnectivityManager` |
 | Latency probe | Implemented | Socket connect probe with retained local history now shown on the dashboard mini-chart |
 | Passive throughput estimate | Implemented | Based on `TrafficStats` delta with retained local download/upload history for the dashboard chart |
-| Wi-Fi SSID / RSSI | Implemented | Uses `WifiManager`; current API is basic |
+| Wi-Fi SSID / RSSI | Implemented | Uses `WifiManager`; the dashboard now also shows link speed and Wi-Fi band when Android exposes them |
 | VPN detection | Implemented | Uses network transport check |
-| Public IP lookup | Implemented | FreeIPAPI |
-| IP geolocation | Implemented | FreeIPAPI |
-| Travel context card | Implemented | Uses current bootstrap geolocation data |
+| Public IP lookup | Implemented | FreeIPAPI with copyable dashboard presentation and last-known retention during transient lookup failures |
+| IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema |
+| Device vs IP location comparison | Implemented | Travel Context now shows the current device place and the public-IP-derived place side by side when available |
+| Travel context card | Implemented | Card now compares device and public-IP location, exposes Android-native map actions, and shows denser Wi-Fi travel telemetry instead of only basic region/country fields |
 
 ## Dashboard UX polish
 
@@ -52,26 +53,28 @@ This document tracks Android parity against the macOS app at the feature level.
 | --- | --- | --- |
 | Battery percentage | Implemented | From battery intent |
 | Charging state | Implemented | From battery intent |
-| Battery health summary | Implemented | Heuristic bootstrap summary |
+| Battery health summary | Implemented | Uses Android battery-health signals when available, with a heuristic fallback |
 | Discharge watts estimate | Implemented | Uses current-now and voltage where available |
-| Detailed power diagnostics | Bootstrap | Stronger power card layout and chart shells are in place; retained-history telemetry is still missing |
+| Battery history chart | Implemented | Retained Room-backed battery percentage samples from dashboard refreshes now drive the power card history graph |
+| Detailed power diagnostics | Implemented | Power now shows an inline status chip plus health, source, temperature, voltage, and power-flow context in the main dashboard card |
 
 ## Weather And Surf
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Current weather | Implemented | Open-Meteo with device-location-first lookup when enabled in Settings, otherwise IP geolocation fallback |
-| Daily forecast summary | Implemented | Open-Meteo daily data with a metric-led dashboard presentation and compact 3-day list |
+| Hourly weather checkpoints | Implemented | Open-Meteo hourly data now drives real `+3h`, `+6h`, and `+12h` dashboard checkpoints with icons, rain chance, and wind |
+| Daily forecast summary | Implemented | Open-Meteo daily data now renders icon-led forecast rows with temperature, rain chance, and wind detail |
 | Weather expand/collapse preference | Implemented | Setting is wired |
-| Surf spot settings model | Implemented | Persisted in settings |
-| Surf card parity | Bootstrap | Weather now reserves a dedicated surf subsection and surf-spot framing, but marine metrics still need fuller provider parity |
+| Surf spot settings model | Implemented | Persisted in settings with manual name/coordinate editing plus current-location autofill |
+| Surf card parity | Implemented | Open-Meteo marine data now powers wave, swell, wind, sea temperature, and near-term checkpoints for the saved surf spot |
 
 ## Travel Alerts
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Travel alerts card | Implemented | Dashboard card now shows an aggregate status plus dedicated Travel Advisory and Regional Security rows with checking, ready, stale, and unavailable states, compact status pills, and coverage context |
-| Smartraveller advisory | Implemented | Uses Smartraveller destination export data with tolerant country-name matching and Level 1/2/3/4 severity mapping |
+| Travel alerts card | Implemented | Dashboard card now shows an aggregate status in the header row plus dedicated Travel Advisory and Regional Security panels with checking, ready, stale, and unavailable states, compact summaries, and explicit border-country coverage context |
+| Smartraveller advisory | Implemented | Uses the live Smartraveller destinations page with tolerant country-name matching and Level 1/2/3/4 severity mapping across the current country plus all bordering countries |
 | ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires an approved ReliefWeb app name saved in Settings |
 | Weather alerts | Deferred | Provider decision still pending |
 
@@ -90,11 +93,11 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Visited screen route | Implemented | UI route now leads with the travel footprint and capture controls instead of explanatory copy, then shows the world map, saved places, permission state, and country-day summaries |
+| Visited screen route | Implemented | UI route now leads with a local-first travel overview, map-first footprint, denser country-day summaries, and clearer saved-stop rows instead of explanatory filler |
 | Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
 | Country-day export | Planned | No Android export flow yet |
-| World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
+| World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; the camera now opens around the latest relevant region while keeping the selected-year footprint in frame, and visited-country contrast is stronger; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
 
 ## Time Tracking
 

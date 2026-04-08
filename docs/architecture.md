@@ -115,18 +115,29 @@ Current dashboard data flow:
 1. `MainActivity` hosts navigation.
 2. `DashboardViewModel` subscribes to repository state.
 3. `DefaultNomadDashboardRepository` refreshes:
-   - Android connectivity and Wi-Fi state
+   - Android connectivity and Wi-Fi state, including SSID, RSSI, link speed,
+     and Wi-Fi band when the platform exposes them
    - retained connectivity metric history in Room for download, upload, and
      latency mini-charts
-   - battery and charging state
-   - FreeIPAPI public IP and geolocation
+   - battery state, health/source/thermal diagnostics, and retained local
+     battery percentage history for the power card chart
+   - FreeIPAPI public IP and geolocation, with tolerant timezone parsing plus
+     retained last-known IP context when a later lookup fails
+   - current device place whenever Android location permission is available so
+     the dashboard can compare physical device location against public-IP
+     location in the same Travel Context card
    - device-first, IP-fallback fuel lookup context when fuel prices are enabled
    - country-specific fuel provider selection for Spain, France, Italy, and Germany
    - device-place-first, IP-country-fallback travel-alert context
-   - Smartraveller advisory lookup for the resolved primary country
+   - Smartraveller advisory lookup from the live destinations page for the
+     resolved primary country plus bordering-country coverage
    - ReliefWeb regional security lookup for the primary country plus bordering countries
    - Open-Meteo weather using the current device coordinate when the weather
      location toggle is enabled, otherwise the resolved IP-geolocation fallback
+   - Open-Meteo hourly weather slots for `+3h`, `+6h`, and `+12h` dashboard
+     checkpoints plus richer daily forecast metadata such as rain chance and wind
+   - Open-Meteo marine forecast for the saved surf spot using the marine API
+     plus the weather API’s wind series for near-term surf checkpoints
 4. Repository emits a `DashboardSnapshot`.
 5. Compose renders the snapshot through feature and design-system components.
 
@@ -138,7 +149,9 @@ Settings flow:
 3. UI toggles emit update lambdas for general app settings.
 4. Provider credential edits are saved explicitly from the Settings screen into
    Android Keystore-backed encrypted local storage.
-5. Repository persists general settings through Proto DataStore and refreshes
+5. Surf-spot edits are saved from the Settings screen as a name plus
+   coordinates, and can be autofilled from the device’s current location on demand.
+6. Repository persists general settings through Proto DataStore and refreshes
    dashboard state using the updated settings plus provider credentials.
 
 Visited history flow:
@@ -236,9 +249,11 @@ Emergency care flow:
 ### Implemented
 
 - Proto DataStore for app settings
+  Includes surf-spot name and coordinates used by the dashboard marine section
 - Android Keystore-backed encrypted provider credential storage
 - Room-backed metric points for retained connectivity throughput and latency
   history
+- Room-backed metric points for retained battery percentage history
 - Room-backed visited places with merged source provenance
 - Room-backed visited country days with observed and inferred rows
 - Room-backed time-tracking projects

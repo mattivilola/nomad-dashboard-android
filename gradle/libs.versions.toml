@@ -30,6 +30,7 @@ mapsCompose = "6.6.0"
 places = "5.0.0"
 androidxTestMonitor = "1.7.2"
 uiautomator = "2.3.0"
+jsoup = "1.18.3"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -77,6 +78,7 @@ truth = { module = "com.google.truth:truth", version.ref = "truth" }
 javax-inject = { module = "javax.inject:javax.inject", version.ref = "javaxInject" }
 google-maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 google-places = { module = "com.google.android.libraries.places:places", version.ref = "places" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

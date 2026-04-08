@@ -13,5 +13,5 @@ data class FreeIpApiResponse(
     @SerialName("latitude") val latitude: Double? = null,
     @SerialName("longitude") val longitude: Double? = null,
     @SerialName("timeZone") val timeZone: String? = null,
+    @SerialName("timeZones") val timeZones: List<String> = emptyList(),
 )
-

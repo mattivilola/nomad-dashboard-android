@@ -31,6 +31,33 @@ class VisitedMapPresentationTest {
     }
 
     @Test
+    fun `highlighted viewport also keeps the latest marker region in frame`() {
+        val presentation = buildVisitedMapPresentation(
+            places = listOf(
+                place(
+                    city = "Tarifa",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.013,
+                    longitude = -5.606,
+                    lastVisitedAt = "2026-04-06T18:20:00Z",
+                ),
+            ),
+            countryDays = listOf(countryDay(countryCode = "FR", year = 2026)),
+            selectedYear = 2026,
+            countryBoundsByCode = mapOf(
+                "FR" to bounds(42.0, -5.5, 51.5, 8.5),
+            ),
+        )
+
+        assertThat(presentation.viewport.source).isEqualTo(VisitedMapViewportSource.HIGHLIGHTED_COUNTRIES)
+        assertThat(presentation.focusLabel).isEqualTo("Tarifa, Spain")
+        assertThat(presentation.viewport.bounds.southWest.latitude).isLessThan(36.1)
+        assertThat(presentation.viewport.bounds.southWest.longitude).isLessThan(-5.6)
+        assertThat(presentation.viewport.bounds.northEast.longitude).isGreaterThan(8.0)
+    }
+
+    @Test
     fun `marker extraction ignores entries without valid pin coordinates`() {
         val presentation = buildVisitedMapPresentation(
             places = listOf(
@@ -47,6 +74,38 @@ class VisitedMapPresentationTest {
         assertThat(presentation.markers).hasSize(1)
         assertThat(presentation.markers.single().title).isEqualTo("Helsinki, Finland")
         assertThat(presentation.viewport.source).isEqualTo(VisitedMapViewportSource.MARKERS)
+    }
+
+    @Test
+    fun `marker viewport favors the latest region over global spread`() {
+        val presentation = buildVisitedMapPresentation(
+            places = listOf(
+                place(
+                    city = "Tokyo",
+                    country = "Japan",
+                    countryCode = "JP",
+                    latitude = 35.6764,
+                    longitude = 139.65,
+                    lastVisitedAt = "2026-02-02T10:00:00Z",
+                ),
+                place(
+                    city = "Tarifa",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.013,
+                    longitude = -5.606,
+                    lastVisitedAt = "2026-04-06T18:20:00Z",
+                ),
+            ),
+            countryDays = emptyList(),
+            selectedYear = 2026,
+            countryBoundsByCode = emptyMap(),
+        )
+
+        assertThat(presentation.viewport.source).isEqualTo(VisitedMapViewportSource.MARKERS)
+        assertThat(presentation.focusLabel).isEqualTo("Tarifa, Spain")
+        assertThat(presentation.viewport.bounds.longitudeSpan).isLessThan(25.0)
+        assertThat(presentation.viewport.bounds.center.longitude).isWithin(6.0).of(-5.606)
     }
 
     @Test
@@ -83,18 +142,21 @@ class VisitedMapPresentationTest {
 
     private fun place(
         city: String?,
+        country: String = "Finland",
+        countryCode: String? = "FI",
         latitude: Double?,
         longitude: Double?,
+        lastVisitedAt: String = "2026-04-07T10:15:30Z",
     ) = VisitedPlace(
         city = city,
         region = "Region",
-        country = "Finland",
-        countryCode = "FI",
+        country = country,
+        countryCode = countryCode,
         latitude = latitude,
         longitude = longitude,
         sources = listOf(VisitedPlaceSource.PUBLIC_IP_GEOLOCATION),
         firstVisitedAt = Instant.parse("2026-04-07T10:15:30Z"),
-        lastVisitedAt = Instant.parse("2026-04-07T10:15:30Z"),
+        lastVisitedAt = Instant.parse(lastVisitedAt),
     )
 
     private fun bounds(

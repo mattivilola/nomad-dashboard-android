@@ -53,6 +53,7 @@ class ScreenshotReviewActivity : ComponentActivity() {
                             uiState = ScreenshotReviewFixtures.settingsState(),
                             onUpdate = { _ -> },
                             onUpdateProviderCredentials = { _ -> },
+                            onFillSurfSpotFromCurrentLocation = {},
                             modifier = screenModifier,
                         )
 
