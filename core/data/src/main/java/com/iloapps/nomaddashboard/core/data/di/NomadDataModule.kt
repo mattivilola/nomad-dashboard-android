@@ -13,6 +13,8 @@ import com.iloapps.nomaddashboard.core.data.emergency.GooglePlacesNearbySearchCl
 import com.iloapps.nomaddashboard.core.data.emergency.PlacesNearbySearchClient
 import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.localprice.DefaultLocalPriceLevelProvider
+import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.fuel.DefaultFuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
@@ -30,6 +32,7 @@ import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
@@ -37,7 +40,10 @@ import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsSerializer
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.network.api.FranceFuelPriceService
+import com.iloapps.nomaddashboard.core.network.api.CensusGeocoderService
+import com.iloapps.nomaddashboard.core.network.api.EurostatService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.HudUserFmrService
 import com.iloapps.nomaddashboard.core.network.api.IpifyService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
@@ -110,6 +116,45 @@ object NomadInfrastructureModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(FreeIpApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideEurostatService(
+        client: OkHttpClient,
+        json: Json,
+    ): EurostatService =
+        Retrofit.Builder()
+            .baseUrl("https://ec.europa.eu/eurostat/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(EurostatService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCensusGeocoderService(
+        client: OkHttpClient,
+        json: Json,
+    ): CensusGeocoderService =
+        Retrofit.Builder()
+            .baseUrl("https://geocoding.geo.census.gov/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(CensusGeocoderService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideHudUserFmrService(
+        client: OkHttpClient,
+        json: Json,
+    ): HudUserFmrService =
+        Retrofit.Builder()
+            .baseUrl("https://www.huduser.gov/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(HudUserFmrService::class.java)
 
     @Provides
     @Singleton
@@ -238,10 +283,14 @@ object NomadInfrastructureModule {
         Room.databaseBuilder(context, NomadDatabase::class.java, "nomad-dashboard.db")
             .addMigrations(NomadDatabase.MIGRATION_1_2)
             .addMigrations(NomadDatabase.MIGRATION_2_3)
+            .addMigrations(NomadDatabase.MIGRATION_3_4)
             .build()
 
     @Provides
     fun provideMetricPointDao(database: NomadDatabase): MetricPointDao = database.metricPointDao()
+
+    @Provides
+    fun provideLocalPriceCacheDao(database: NomadDatabase): LocalPriceCacheDao = database.localPriceCacheDao()
 
     @Provides
     fun provideVisitedPlaceDao(database: NomadDatabase): VisitedPlaceDao = database.visitedPlaceDao()
@@ -311,6 +360,12 @@ abstract class NomadRepositoryModule {
     abstract fun bindFuelPriceProvider(
         impl: DefaultFuelPriceProvider,
     ): FuelPriceProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalPriceLevelProvider(
+        impl: DefaultLocalPriceLevelProvider,
+    ): LocalPriceLevelProvider
 
     @Binds
     @Singleton

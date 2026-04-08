@@ -23,6 +23,7 @@ class SettingsProtoMapperTest {
             useCurrentLocationForWeather = true,
             useCurrentLocationForVisitedPlaces = true,
             weatherForecastExpanded = false,
+            localPriceLevelEnabled = true,
             fuelPricesEnabled = true,
             emergencyCareEnabled = true,
             visitedPlacesEnabled = false,
@@ -43,6 +44,7 @@ class SettingsProtoMapperTest {
         assertThat(restored.publicIpGeolocationEnabled).isFalse()
         assertThat(restored.useCurrentLocationForWeather).isTrue()
         assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
+        assertThat(restored.localPriceLevelEnabled).isTrue()
         assertThat(restored.projectTimeTrackingAutoStartMinutes).isEqualTo(6 * 60 + 30)
         assertThat(restored.projectTimeTrackingAutoStopMinutes).isEqualTo(20 * 60 + 15)
         assertThat(restored.surfSpot.latitude).isEqualTo(36.01)

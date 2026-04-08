@@ -142,6 +142,13 @@ fun SettingsScreen(
                     onUpdate { current -> current.copy(weatherForecastExpanded = it) }
                 }
                 SettingsToggleRow(
+                    title = "Show local price level",
+                    description = "Show compact traveler-facing cost signals from official public sources.",
+                    checked = settings.localPriceLevelEnabled,
+                ) {
+                    onUpdate { current -> current.copy(localPriceLevelEnabled = it) }
+                }
+                SettingsToggleRow(
                     title = "Enable fuel prices",
                     description = "Keep nearby fuel rows visible when country coverage is available.",
                     checked = settings.fuelPricesEnabled,
@@ -195,6 +202,11 @@ fun SettingsScreen(
         item {
             ProviderCredentialCard(
                 providerCredentials = uiState.providerCredentials,
+                onSaveHudUserApiToken = { token ->
+                    onUpdateProviderCredentials { current ->
+                        current.copy(hudUserApiToken = token)
+                    }
+                },
                 onSaveTankerkoenigApiKey = { apiKey ->
                     onUpdateProviderCredentials { current ->
                         current.copy(tankerkoenigApiKey = apiKey)
@@ -454,15 +466,20 @@ private fun SurfSpotSettingsCard(
 @Composable
 private fun ProviderCredentialCard(
     providerCredentials: ProviderCredentialSettings,
+    onSaveHudUserApiToken: (String) -> Unit,
     onSaveTankerkoenigApiKey: (String) -> Unit,
     onSaveReliefWebAppName: (String) -> Unit,
 ) {
+    var hudUserApiToken by rememberSaveable(providerCredentials.hudUserApiToken) {
+        mutableStateOf(providerCredentials.hudUserApiToken)
+    }
     var tankerkoenigApiKey by rememberSaveable(providerCredentials.tankerkoenigApiKey) {
         mutableStateOf(providerCredentials.tankerkoenigApiKey)
     }
     var reliefWebAppName by rememberSaveable(providerCredentials.reliefWebAppName) {
         mutableStateOf(providerCredentials.reliefWebAppName)
     }
+    val isHudUserDirty = hudUserApiToken != providerCredentials.hudUserApiToken
     val isTankerkoenigDirty = tankerkoenigApiKey != providerCredentials.tankerkoenigApiKey
     val isReliefWebDirty = reliefWebAppName != providerCredentials.reliefWebAppName
 
@@ -472,6 +489,41 @@ private fun ProviderCredentialCard(
             subtitle = "User-managed provider values stay encrypted on this device only and never ship inside the app artifact.",
             badges = listOf("Encrypted on-device" to NomadBadgeTone.Good),
         )
+        OutlinedTextField(
+            value = hudUserApiToken,
+            onValueChange = { hudUserApiToken = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(HudUserApiTokenFieldTag),
+            label = { Text("HUD USER API token (US 1BR rent)") },
+            supportingText = {
+                Text("Europe works without it. Only needed for US 1-bedroom rent benchmarks.")
+            },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            TextButton(
+                enabled = providerCredentials.hudUserApiToken.isNotBlank() || hudUserApiToken.isNotBlank(),
+                onClick = {
+                    hudUserApiToken = ""
+                    onSaveHudUserApiToken("")
+                },
+            ) {
+                Text("Clear token")
+            }
+            Button(
+                enabled = isHudUserDirty,
+                modifier = Modifier.testTag(HudUserApiTokenSaveButtonTag),
+                onClick = { onSaveHudUserApiToken(hudUserApiToken) },
+            ) {
+                Text("Save token")
+            }
+        }
+
         OutlinedTextField(
             value = tankerkoenigApiKey,
             onValueChange = { tankerkoenigApiKey = it },
@@ -544,7 +596,7 @@ private fun ProviderCredentialCard(
         }
 
         Text(
-            text = "Map SDK keys remain app-level local configuration, not per-user secrets in this screen.",
+            text = "Map SDK keys remain app-level local configuration, not per-user secrets in this screen. Local price level uses Eurostat in Europe and HUD USER plus US Census Geocoder in the US.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
         )
@@ -619,6 +671,7 @@ private fun enabledSourceCount(settings: AppSettings): Int =
         settings.useCurrentLocationForWeather,
         settings.useCurrentLocationForVisitedPlaces,
         settings.publicIpGeolocationEnabled,
+        settings.localPriceLevelEnabled,
         settings.fuelPricesEnabled,
         settings.emergencyCareEnabled,
         settings.projectTimeTrackingEnabled,
@@ -649,6 +702,8 @@ private fun parseTimeWindow(raw: String): Int? {
     return hour * 60 + minute
 }
 
+private const val HudUserApiTokenFieldTag = "settings_hud_user_api_token_field"
+private const val HudUserApiTokenSaveButtonTag = "settings_hud_user_api_token_save_button"
 private const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
 private const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"
 private const val ReliefWebAppNameFieldTag = "settings_reliefweb_app_name_field"

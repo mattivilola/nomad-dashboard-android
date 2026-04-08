@@ -6,11 +6,13 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.migration.Migration
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
+import com.iloapps.nomaddashboard.core.database.entity.LocalPriceCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedCountryDayEntity
@@ -19,17 +21,19 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
 @Database(
     entities = [
         MetricPointEntity::class,
+        LocalPriceCacheEntity::class,
         VisitedPlaceEntity::class,
         VisitedCountryDayEntity::class,
         TimeTrackingProjectEntity::class,
         TimeTrackingEntryEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(NomadDatabaseConverters::class)
 abstract class NomadDatabase : RoomDatabase() {
     abstract fun metricPointDao(): MetricPointDao
+    abstract fun localPriceCacheDao(): LocalPriceCacheDao
     abstract fun visitedPlaceDao(): VisitedPlaceDao
     abstract fun visitedCountryDayDao(): VisitedCountryDayDao
     abstract fun timeTrackingProjectDao(): TimeTrackingProjectDao
@@ -150,6 +154,27 @@ abstract class NomadDatabase : RoomDatabase() {
                     UPDATE time_tracking_entries
                     SET projectId = '$LEGACY_TIME_TRACKING_PROJECT_ID'
                     WHERE projectId IS NULL OR projectId = ''
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_price_cache (
+                        cacheKey TEXT NOT NULL PRIMARY KEY,
+                        status TEXT NOT NULL,
+                        summaryBand TEXT,
+                        countryCode TEXT,
+                        countryName TEXT,
+                        rowsJson TEXT NOT NULL,
+                        sourcesJson TEXT NOT NULL,
+                        fetchedAtEpochMillis INTEGER,
+                        detail TEXT,
+                        note TEXT
+                    )
                     """.trimIndent(),
                 )
             }

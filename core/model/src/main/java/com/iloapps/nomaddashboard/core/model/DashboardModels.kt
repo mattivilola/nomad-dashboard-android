@@ -192,6 +192,7 @@ data class DashboardSnapshot(
     val weather: WeatherSnapshot = WeatherSnapshot(),
     val marine: MarineSnapshot? = null,
     val travelAlerts: TravelAlertsSnapshot = TravelAlertsSnapshot(),
+    val localPriceLevel: LocalPriceLevelSnapshot = LocalPriceLevelSnapshot(),
     val fuelPrices: FuelPriceSnapshot = FuelPriceSnapshot(),
     val emergencyCare: EmergencyCareSnapshot = EmergencyCareSnapshot(),
     val timeTracking: TimeTrackingDashboardState = TimeTrackingDashboardState(),

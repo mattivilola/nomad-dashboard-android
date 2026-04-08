@@ -33,6 +33,7 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
         useCurrentLocationForWeather = useCurrentLocationForWeather,
         useCurrentLocationForVisitedPlaces = useCurrentLocationForVisitedPlaces,
         weatherForecastExpanded = weatherForecastExpanded,
+        localPriceLevelEnabled = localPriceLevelEnabled,
         fuelPricesEnabled = fuelPricesEnabled,
         emergencyCareEnabled = emergencyCareEnabled,
         visitedPlacesEnabled = visitedPlacesEnabled,
@@ -57,6 +58,7 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setUseCurrentLocationForWeather(useCurrentLocationForWeather)
         .setUseCurrentLocationForVisitedPlaces(useCurrentLocationForVisitedPlaces)
         .setWeatherForecastExpanded(weatherForecastExpanded)
+        .setLocalPriceLevelEnabled(localPriceLevelEnabled)
         .setFuelPricesEnabled(fuelPricesEnabled)
         .setEmergencyCareEnabled(emergencyCareEnabled)
         .setVisitedPlacesEnabled(visitedPlacesEnabled)

@@ -165,6 +165,12 @@ private fun AppNavHost(
             DashboardRoute(
                 onStartForegroundTracking = { TimeTrackingForegroundService.start(context) },
                 onStopForegroundTracking = { TimeTrackingForegroundService.stop(context) },
+                onOpenSettings = {
+                    navController.navigate(TopDestination.Settings.route) {
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                },
             )
         }
         composable(TopDestination.Settings.route) { SettingsRoute() }

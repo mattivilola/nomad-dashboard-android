@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Thunderstorm
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WaterDrop
@@ -106,6 +107,11 @@ import com.iloapps.nomaddashboard.core.model.FuelType
 import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
 import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
+import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
+import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
+import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
+import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
@@ -132,6 +138,7 @@ import kotlinx.coroutines.flow.collect
 fun DashboardRoute(
     onStartForegroundTracking: () -> Unit,
     onStopForegroundTracking: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -201,6 +208,7 @@ fun DashboardRoute(
         },
         onStopTracking = viewModel::stopTracking,
         onAllocateTrackedTime = viewModel::allocateTrackedTime,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -215,6 +223,7 @@ fun DashboardScreen(
     onStartTracking: () -> Unit = {},
     onStopTracking: () -> Unit = {},
     onAllocateTrackedTime: (java.util.UUID) -> Unit = {},
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -308,6 +317,12 @@ fun DashboardScreen(
                             )
                         }
                     },
+                )
+
+                DashboardCardId.LOCAL_PRICE_LEVEL -> LocalPriceLevelSectionCard(
+                    enabled = state.settings.localPriceLevelEnabled,
+                    snapshot = state.snapshot.localPriceLevel,
+                    onOpenSettings = onOpenSettings,
                 )
 
                 DashboardCardId.FUEL_PRICES -> FuelPricesSectionCard(
@@ -1795,6 +1810,121 @@ private fun FuelPricesSectionCard(
 }
 
 @Composable
+private fun LocalPriceLevelSectionCard(
+    enabled: Boolean,
+    snapshot: LocalPriceLevelSnapshot,
+    onOpenSettings: () -> Unit,
+) {
+    val badge = localPriceBadge(snapshot)
+    val sourceLine = "Sources: " + (
+        if (enabled) snapshot.sources.ifEmpty { LocalPriceCapabilitySources }
+        else LocalPriceCapabilitySources
+    ).joinToString(" · ")
+
+    NomadCard(modifier = Modifier.testTag(LocalPriceLevelCardTag)) {
+        NomadSectionClusterHeader(
+            title = "Local Price Level",
+            subtitle = localPriceSubtitle(enabled = enabled, snapshot = snapshot),
+            actions = {
+                badge?.let {
+                    NomadStatusBadge(text = it.first, tone = it.second)
+                }
+                if (localPriceNeedsSettingsAction(enabled = enabled, status = snapshot.status)) {
+                    NomadActionChip(
+                        label = "Open Settings",
+                        icon = Icons.Rounded.Settings,
+                        onClick = onOpenSettings,
+                    )
+                }
+            },
+        )
+
+        if (enabled.not()) {
+            Text(
+                text = "Enable local price level in Settings.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = sourceLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+            )
+            return@NomadCard
+        }
+
+        if (snapshot.rows.isNotEmpty() && snapshot.status in setOf(LocalPriceLevelStatus.READY, LocalPriceLevelStatus.PARTIAL)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                snapshot.rows.take(3).forEach { row ->
+                    LocalPriceIndicatorRowView(snapshot = row)
+                }
+            }
+        } else {
+            Text(
+                text = snapshot.detail ?: "Local price level is unavailable right now.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+
+        listOfNotNull(
+            snapshot.detail?.takeIf { snapshot.rows.isNotEmpty() },
+            snapshot.note,
+        ).forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            )
+        }
+        Text(
+            text = sourceLine,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+        )
+    }
+}
+
+@Composable
+private fun LocalPriceIndicatorRowView(
+    snapshot: com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorRow,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = snapshot.kind.displayName(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = snapshot.detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+            Text(
+                text = snapshot.value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+    }
+}
+
+@Composable
 private fun FuelPriceRow(
     price: FuelStationPrice,
     onOpenMap: () -> Unit,
@@ -2713,5 +2843,76 @@ private fun Instant.formatTravelAlertDate(): String =
         .withZone(ZoneId.systemDefault())
         .format(this)
 
+private fun localPriceSubtitle(
+    enabled: Boolean,
+    snapshot: LocalPriceLevelSnapshot,
+): String {
+    if (enabled.not()) {
+        return "Traveller price levels are disabled"
+    }
+
+    val countryName = snapshot.countryName ?: "Current country"
+    return when (snapshot.status) {
+        LocalPriceLevelStatus.READY,
+        LocalPriceLevelStatus.PARTIAL,
+        -> {
+            val precisionSummary = snapshot.rows.map { it.precision.displayName() }.distinct().joinToString(" · ")
+            listOf(countryName, precisionSummary.takeIf(String::isNotBlank))
+                .filterNotNull()
+                .joinToString(" · ")
+        }
+
+        LocalPriceLevelStatus.LOCATION_REQUIRED -> "Country context is required"
+        LocalPriceLevelStatus.CONFIGURATION_REQUIRED,
+        LocalPriceLevelStatus.UNSUPPORTED,
+        LocalPriceLevelStatus.UNAVAILABLE,
+        -> countryName
+    }
+}
+
+private fun localPriceNeedsSettingsAction(
+    enabled: Boolean,
+    status: LocalPriceLevelStatus,
+): Boolean =
+    enabled.not() ||
+        status == LocalPriceLevelStatus.CONFIGURATION_REQUIRED ||
+        status == LocalPriceLevelStatus.LOCATION_REQUIRED
+
+private fun localPriceBadge(
+    snapshot: LocalPriceLevelSnapshot,
+): Pair<String, NomadBadgeTone>? = when (snapshot.status) {
+    LocalPriceLevelStatus.READY,
+    LocalPriceLevelStatus.PARTIAL,
+    -> when (snapshot.summaryBand) {
+        LocalPriceSummaryBand.LOW -> "Low" to NomadBadgeTone.Good
+        LocalPriceSummaryBand.HIGH -> "High" to NomadBadgeTone.Warning
+        LocalPriceSummaryBand.LIMITED -> "Limited" to NomadBadgeTone.Info
+        LocalPriceSummaryBand.MEDIUM,
+        null,
+        -> "Medium" to NomadBadgeTone.Info
+    }
+
+    LocalPriceLevelStatus.CONFIGURATION_REQUIRED -> "Setup" to NomadBadgeTone.Warning
+    LocalPriceLevelStatus.UNSUPPORTED -> "Unsupported" to NomadBadgeTone.Info
+    LocalPriceLevelStatus.UNAVAILABLE -> "Unavailable" to NomadBadgeTone.Warning
+    LocalPriceLevelStatus.LOCATION_REQUIRED -> "Location Needed" to NomadBadgeTone.Warning
+}
+
+private fun LocalPriceIndicatorKind.displayName(): String = when (this) {
+    LocalPriceIndicatorKind.MEAL_OUT -> "Meal Out"
+    LocalPriceIndicatorKind.GROCERIES -> "Groceries"
+    LocalPriceIndicatorKind.RENT_ONE_BEDROOM -> "1BR Rent"
+    LocalPriceIndicatorKind.OVERALL -> "Overall"
+}
+
+private fun LocalPricePrecision.displayName(): String = when (this) {
+    LocalPricePrecision.COUNTRY_FALLBACK -> "Country fallback"
+    LocalPricePrecision.COUNTY_BENCHMARK -> "County benchmark"
+    LocalPricePrecision.METRO_BENCHMARK -> "Metro benchmark"
+}
+
+private val LocalPriceCapabilitySources = listOf("Eurostat", "HUD USER", "US Census Geocoder")
+
 internal const val TravelAlertsCardTag = "travel-alerts-card"
 internal const val EmergencyCareCardTag = "emergency-care-card"
+internal const val LocalPriceLevelCardTag = "local-price-level-card"

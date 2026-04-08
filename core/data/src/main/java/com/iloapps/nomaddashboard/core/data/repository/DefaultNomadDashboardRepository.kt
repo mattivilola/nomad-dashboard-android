@@ -10,6 +10,8 @@ import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
+import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelRequest
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryResolver
@@ -32,6 +34,8 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
 import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
+import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.SummaryTile
@@ -88,6 +92,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val ipifyService: IpifyService,
     private val openMeteoService: OpenMeteoService,
     private val openMeteoMarineService: OpenMeteoMarineService,
+    private val localPriceLevelProvider: LocalPriceLevelProvider,
     private val fuelPriceProvider: FuelPriceProvider,
     private val emergencyCareProvider: EmergencyCareProvider,
     private val timeTrackingRepository: TimeTrackingRepository,
@@ -248,6 +253,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
             currentDevicePlace = currentDevicePlace,
             travelContext = travelContext,
         )
+        val localPriceLevel = refreshLocalPriceLevel(
+            currentSettings = currentSettings,
+            currentProviderCredentials = currentProviderCredentials,
+            currentDevicePlace = currentDevicePlace,
+            travelContext = travelContext,
+        )
 
         val overallHeadline = when {
             connectivityWithHistory.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
@@ -314,6 +325,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             weather = weather,
             marine = marine,
             travelAlerts = travelAlerts,
+            localPriceLevel = localPriceLevel,
             fuelPrices = fuelPrices,
             emergencyCare = emergencyCare,
             timeTracking = TimeTrackingDashboardState(
@@ -356,7 +368,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     override suspend fun updateProviderCredentials(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings) {
+        val previous = providerCredentials.first()
         providerCredentialStore.update(transform)
+        val updated = providerCredentials.first()
+        if (previous.hudUserApiToken != updated.hudUserApiToken) {
+            localPriceLevelProvider.clearUsCache()
+        }
         refresh()
     }
 
@@ -727,6 +744,39 @@ class DefaultNomadDashboardRepository @Inject constructor(
         return ipTravelContext.withDeviceLocation(currentDevicePlace)
     }
 
+    private suspend fun refreshLocalPriceLevel(
+        currentSettings: AppSettings,
+        currentProviderCredentials: ProviderCredentialSettings,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): LocalPriceLevelSnapshot {
+        if (currentSettings.localPriceLevelEnabled.not()) {
+            return LocalPriceLevelSnapshot(
+                detail = "Enable local price level in Settings",
+            )
+        }
+
+        val request = buildLocalPriceLevelRequest(
+            currentDevicePlace = currentDevicePlace,
+            travelContext = travelContext,
+        )
+        return runCatching {
+            localPriceLevelProvider.prices(
+                request = request,
+                hudUserApiToken = currentProviderCredentials.hudUserApiToken,
+            )
+        }.getOrElse {
+            LocalPriceLevelSnapshot(
+                status = LocalPriceLevelStatus.UNAVAILABLE,
+                countryCode = request.countryCode,
+                countryName = request.countryName,
+                sources = listOf("Eurostat", "HUD USER", "US Census Geocoder"),
+                fetchedAt = Instant.now(),
+                detail = "Local price level is unavailable right now.",
+            )
+        }
+    }
+
     private suspend fun fetchCurrentTravelContext(
         previous: TravelContextSnapshot,
     ): TravelContextSnapshot? {
@@ -817,6 +867,21 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
         return null
     }
+
+    private fun buildLocalPriceLevelRequest(
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+    ): LocalPriceLevelRequest =
+        LocalPriceLevelRequest(
+            latitude = currentDevicePlace?.latitude,
+            longitude = currentDevicePlace?.longitude,
+            countryCode = currentDevicePlace?.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+                ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+            countryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
+                ?: travelContext.country?.trim()?.takeIf(String::isNotBlank),
+            locality = currentDevicePlace?.city?.trim()?.takeIf(String::isNotBlank)
+                ?: travelContext.city?.trim()?.takeIf(String::isNotBlank),
+        )
 
     private fun buildWeatherLocation(
         currentSettings: AppSettings,

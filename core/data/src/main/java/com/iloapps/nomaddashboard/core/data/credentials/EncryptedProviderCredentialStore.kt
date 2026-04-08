@@ -37,6 +37,7 @@ class EncryptedProviderCredentialStore @Inject constructor(
         withContext(ioDispatcher) {
             val updated = transform(loadCredentials()).normalized()
             sharedPreferences.edit {
+                putEncryptedString(HUD_USER_API_TOKEN, updated.hudUserApiToken)
                 putEncryptedString(TANKERKOENIG_API_KEY, updated.tankerkoenigApiKey)
                 putEncryptedString(RELIEFWEB_APP_NAME, updated.reliefWebAppName)
             }
@@ -46,12 +47,14 @@ class EncryptedProviderCredentialStore @Inject constructor(
 
     private fun loadCredentials(): ProviderCredentialSettings =
         ProviderCredentialSettings(
+            hudUserApiToken = sharedPreferences.getEncryptedString(HUD_USER_API_TOKEN).orEmpty(),
             tankerkoenigApiKey = sharedPreferences.getEncryptedString(TANKERKOENIG_API_KEY).orEmpty(),
             reliefWebAppName = sharedPreferences.getEncryptedString(RELIEFWEB_APP_NAME).orEmpty(),
         ).normalized()
 
     private fun ProviderCredentialSettings.normalized(): ProviderCredentialSettings =
         copy(
+            hudUserApiToken = hudUserApiToken.trim(),
             tankerkoenigApiKey = tankerkoenigApiKey.trim(),
             reliefWebAppName = reliefWebAppName.trim(),
         )
@@ -125,6 +128,7 @@ class EncryptedProviderCredentialStore @Inject constructor(
     private companion object {
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val GCM_TAG_LENGTH_BITS = 128
+        const val HUD_USER_API_TOKEN = "hud_user_api_token"
         const val KEY_ALIAS = "nomad-provider-credentials"
         const val KEY_SIZE_BITS = 256
         const val RELIEFWEB_APP_NAME = "reliefweb_app_name"
