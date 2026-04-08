@@ -606,14 +606,14 @@ private fun SurfMetricTile(
             )
             Text(
                 text = primaryValue,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
                 maxLines = 1,
             )
             Text(
                 text = secondaryValue,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
                 maxLines = 1,
