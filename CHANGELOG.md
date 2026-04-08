@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-04-08
+
+### Added
+- Implemented emergency care dashboard with Google Places.
+- Implemented major design system overhaul and UI refresh.
+- Implemented retained connectivity history and dashboard mini-charts.
+- Implemented detailed power telemetry and battery history tracking.
+
+### Improved
+- Respect settings for weather location sourcing.
+- Improved Google Places API key retrieval and clarify debug key configuration.
+- Enhanced dashboard with richer weather, marine, power, and travel context.
+- Enhanced dashboard with device location context and detailed WiFi information.
+- Redesign time tracking with unallocated capture and auto-window.
+- Refined dashboard wind summary and marine metrics presentation.
+- Enhanced Smartraveller API robustness and refine time tracking UI and state.
+
+### Build & Release
+- Enhanced Emergency Care card UI and testability.
+- Added test tag to Visited Overview Card for UI testing.
+- Added UI test for Dashboard screen rendering.
+- Added UI test for Time Tracking screen active state.
+
 ## [0.2.0] - 2026-04-07
 
 ### Added
