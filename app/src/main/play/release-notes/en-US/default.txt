@@ -1,1 +1,1 @@
-This update adds smartraveller advisory fetch with multiple fallbacks, refined travel alert message for caution severity, refined dashboard surf metric text sizes, and local price level indicators for Europe and the United States.
+This update adds time tracking interruption logging and focus reports and time tracking UI, optimize data observation, and stabilize tests.

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-04-08
+
+### Added
+- Added time tracking interruption logging and focus reports.
+
+### Fixed
+- Enhanced time tracking UI, optimize data observation, and stabilize tests.
+
 ## [0.4.0] - 2026-04-08
 
 ### Added
