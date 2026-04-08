@@ -176,6 +176,9 @@ Current verified result:
 - `run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest --tests com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh\ resolves\ travel\ alerts\ and\ prefers\ device\ country\ coverage :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after switching Smartraveller advisory parsing to the
   live destinations page and tightening the Travel Alerts card UI
+- `run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest --tests com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh\ resolves\ travel\ alerts\ and\ prefers\ device\ country\ coverage :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-08 after adding Smartraveller fallback coverage for the
+  legacy `destinations-export` path and the hidden WebView fetch
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-07 for the
   travel-alert card after switching the test to an activity-backed Compose rule
 - `:feature:dashboard:connectedDebugAndroidTest` passed again on 2026-04-07

@@ -22,6 +22,7 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryR
 import com.iloapps.nomaddashboard.core.data.travelalerts.CountryNameResolver
 import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebSecurityProvider
 import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryProvider
+import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerBrowserFetcher
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
@@ -980,9 +981,15 @@ class DefaultNomadDashboardRepositoryTest {
                         </html>
                         """.trimIndent().toResponseBody("text/html".toMediaType()),
                     )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> =
+                    Response.error(404, "{}".toResponseBody("application/json".toMediaType()))
             },
             countryNameResolver = CountryNameResolver(),
             json = TestJson,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String = error("browser fallback should not be used")
+            },
         )
 
     private fun reliefWebProvider(

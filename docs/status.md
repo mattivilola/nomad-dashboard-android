@@ -59,10 +59,12 @@ Current repository state:
   an array, and falls back through a plain-IP lookup plus by-address
   geolocation when the current-IP endpoint fails
 - travel alerts reliability and UX pass landed: Smartraveller advisory now
-  parses the live destinations page, coverage remains `current country +
-  bordering countries` for cases like France plus 8 neighbors, and the card
-  now keeps its overall status chip in the top row with denser per-signal
-  panels
+  tries the live destinations page first, falls back to the legacy
+  `destinations-export` feed, and finally uses a hidden WebView fetch on
+  Android when Smartraveller stalls direct client requests; coverage remains
+  `current country + bordering countries` for cases like France plus 8
+  neighbors, and the card now keeps its overall status chip in the top row
+  with denser per-signal panels
 - whole-app UX parity pass expanded across settings, about, and time tracking;
   shared badges, metric blocks, chart shells, and stronger section headers now
   give the app a more coherent product language

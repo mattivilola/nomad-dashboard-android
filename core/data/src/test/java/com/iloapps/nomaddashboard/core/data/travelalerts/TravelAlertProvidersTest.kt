@@ -61,9 +61,15 @@ class TravelAlertProvidersTest {
                         </html>
                         """.trimIndent().toResponseBody(HtmlMediaType),
                     )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> =
+                    Response.error(404, "{}".toResponseBody(JsonMediaType))
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String = error("browser fallback should not be used")
+            },
         )
 
         val signal = provider.advisory(
@@ -94,14 +100,70 @@ class TravelAlertProvidersTest {
                         ]
                         """.trimIndent().toResponseBody(JsonMediaType),
                     )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> =
+                    Response.error(404, "{}".toResponseBody(JsonMediaType))
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String = error("browser fallback should not be used")
+            },
         )
 
         val signal = provider.advisory(
             countryCodes = listOf("TR"),
             primaryCountryCode = "TR",
+        )
+
+        assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)
+        assertThat(signal.summary).contains("exercise a high degree of caution")
+    }
+
+    @Test
+    fun `smartraveller provider falls back to browser fetch when both direct endpoints fail`() = runTest {
+        val provider = SmartravellerAdvisoryProvider(
+            service = object : SmartravellerService {
+                override suspend fun destinations(): Response<ResponseBody> = Response.error(
+                    504,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> = Response.error(
+                    504,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+            },
+            countryNameResolver = CountryNameResolver(),
+            json = json,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String =
+                    """
+                    <html>
+                      <body>
+                        <table>
+                          <tr>
+                            <th>Destination</th>
+                            <th>Region</th>
+                            <th>Overall Advice Level</th>
+                            <th>Updated</th>
+                          </tr>
+                          <tr>
+                            <td><a href="/destinations/france">France</a></td>
+                            <td>Europe</td>
+                            <td>Exercise a high degree of caution</td>
+                            <td>07 Apr 2026</td>
+                          </tr>
+                        </table>
+                      </body>
+                    </html>
+                    """.trimIndent()
+            },
+        )
+
+        val signal = provider.advisory(
+            countryCodes = listOf("FR"),
+            primaryCountryCode = "FR",
         )
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)

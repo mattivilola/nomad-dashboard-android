@@ -74,7 +74,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Travel alerts card | Implemented | Dashboard card now shows an aggregate status in the header row plus dedicated Travel Advisory and Regional Security panels with checking, ready, stale, and unavailable states, compact summaries, and explicit border-country coverage context |
-| Smartraveller advisory | Implemented | Uses the live Smartraveller destinations page with tolerant country-name matching and Level 1/2/3/4 severity mapping across the current country plus all bordering countries |
+| Smartraveller advisory | Implemented | Uses the live Smartraveller destinations page first, falls back to the legacy `destinations-export` feed, and then retries through a hidden WebView fetch on Android; tolerant country-name matching and Level 1/2/3/4 severity mapping still cover the current country plus all bordering countries |
 | ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires an approved ReliefWeb app name saved in Settings |
 | Weather alerts | Deferred | Provider decision still pending |
 

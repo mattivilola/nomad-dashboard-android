@@ -26,6 +26,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
     private val service: SmartravellerService,
     private val countryNameResolver: CountryNameResolver,
     private val json: Json,
+    private val browserFetcher: SmartravellerBrowserFetcher,
 ) {
     suspend fun advisory(
         countryCodes: List<String>,
@@ -36,44 +37,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             LOG_TAG,
             "Smartraveller advisory request primary=$primaryCountryCode coverage=${normalizedCountryCodes.joinToString(",")}",
         )
-        val response = try {
-            service.destinations()
-        } catch (error: IOException) {
-            logWarn(LOG_TAG, "Smartraveller request failed before response", error)
-            throw TravelAlertSourceException(
-                diagnosticSummary = "Smartraveller could not be reached.",
-                message = "Smartraveller request failed before a response was received.",
-                cause = error,
-            )
-        }
-        val contentType = response.headers()["Content-Type"]
-        val bodyText = response.body()?.string().orEmpty()
-        if (response.isSuccessful.not()) {
-            val snippet = response.errorBody()?.string().orEmpty().ifBlank { bodyText }.trim().take(240)
-            logWarn(
-                LOG_TAG,
-                "Smartraveller returned HTTP ${response.code()} contentType=$contentType snippet=$snippet",
-            )
-            throw TravelAlertSourceException(
-                diagnosticSummary = "Smartraveller returned HTTP ${response.code()}.",
-                message = buildString {
-                    append("Smartraveller returned HTTP ${response.code()}.")
-                    if (contentType.isNullOrBlank().not()) {
-                        append(" Content-Type: $contentType.")
-                    }
-                    if (snippet.isNotBlank()) {
-                        append(" Body snippet: $snippet")
-                    }
-                },
-            )
-        }
-
-        val trimmedSnippet = bodyText.trim().take(120).replace('\n', ' ')
-        logDebug(
-            LOG_TAG,
-            "Smartraveller response HTTP ${response.code()} contentType=$contentType bytes=${bodyText.length} snippet=$trimmedSnippet",
-        )
-        val destinations = parseDestinations(bodyText)
+        val destinations = loadDestinations()
         val matches = normalizedCountryCodes.mapNotNull { countryCode ->
             val destination = bestDestinationMatch(countryCode, destinations) ?: return@mapNotNull null
             AdvisoryMatch(
@@ -232,6 +196,95 @@ class SmartravellerAdvisoryProvider @Inject constructor(
                 DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH),
             ).atStartOfDay().toInstant(ZoneOffset.UTC)
         }.getOrNull()
+
+    private suspend fun loadDestinations(): List<SmartravellerDestination> {
+        val directResult = runCatching {
+            fetchDirect(
+                label = "destinations",
+                request = { service.destinations() },
+            )
+        }
+        directResult.getOrNull()?.let { return it }
+        val directError = directResult.exceptionOrNull()
+
+        logWarn(LOG_TAG, "Smartraveller direct destinations request failed, trying legacy export", directError)
+
+        val exportResult = runCatching {
+            fetchDirect(
+                label = "destinations-export",
+                request = { service.destinationsExport() },
+            )
+        }
+        exportResult.getOrNull()?.let { return it }
+
+        val exportError = exportResult.exceptionOrNull()
+        logWarn(LOG_TAG, "Smartraveller legacy export failed, trying WebView fallback", exportError)
+
+        return runCatching {
+            val browserHtml = browserFetcher.destinationsHtml()
+            logDebug(
+                LOG_TAG,
+                "Smartraveller WebView fallback returned bytes=${browserHtml.length} snippet=${browserHtml.trim().take(120).replace('\n', ' ')}",
+            )
+            parseDestinations(browserHtml)
+        }.getOrElse { browserError ->
+            logWarn(LOG_TAG, "Smartraveller WebView fallback failed", browserError)
+            throw TravelAlertSourceException(
+                diagnosticSummary = "Smartraveller could not be reached.",
+                message = buildString {
+                    append("Smartraveller direct fetch failed")
+                    directError?.message?.let { append(": $it") }
+                    exportError?.message?.let { append(" | legacy export failed: $it") }
+                    browserError.message?.let { append(" | WebView fallback failed: $it") }
+                },
+                cause = browserError,
+            )
+        }
+    }
+
+    private suspend fun fetchDirect(
+        label: String,
+        request: suspend () -> retrofit2.Response<okhttp3.ResponseBody>,
+    ): List<SmartravellerDestination> {
+        val response = try {
+            request()
+        } catch (error: IOException) {
+            logWarn(LOG_TAG, "Smartraveller $label request failed before response", error)
+            throw TravelAlertSourceException(
+                diagnosticSummary = "Smartraveller could not be reached.",
+                message = "Smartraveller $label request failed before a response was received.",
+                cause = error,
+            )
+        }
+        val contentType = response.headers()["Content-Type"]
+        val bodyText = response.body()?.string().orEmpty()
+        if (response.isSuccessful.not()) {
+            val snippet = response.errorBody()?.string().orEmpty().ifBlank { bodyText }.trim().take(240)
+            logWarn(
+                LOG_TAG,
+                "Smartraveller $label returned HTTP ${response.code()} contentType=$contentType snippet=$snippet",
+            )
+            throw TravelAlertSourceException(
+                diagnosticSummary = "Smartraveller returned HTTP ${response.code()}.",
+                message = buildString {
+                    append("Smartraveller $label returned HTTP ${response.code()}.")
+                    if (contentType.isNullOrBlank().not()) {
+                        append(" Content-Type: $contentType.")
+                    }
+                    if (snippet.isNotBlank()) {
+                        append(" Body snippet: $snippet")
+                    }
+                },
+            )
+        }
+
+        val trimmedSnippet = bodyText.trim().take(120).replace('\n', ' ')
+        logDebug(
+            LOG_TAG,
+            "Smartraveller $label response HTTP ${response.code()} contentType=$contentType bytes=${bodyText.length} snippet=$trimmedSnippet",
+        )
+        return parseDestinations(bodyText)
+    }
 
     private companion object {
         const val SOURCE_NAME = "Smartraveller"

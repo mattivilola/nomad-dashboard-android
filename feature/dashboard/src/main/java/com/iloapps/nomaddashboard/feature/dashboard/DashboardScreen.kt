@@ -588,7 +588,8 @@ private fun WeatherMetricTile(
 @Composable
 private fun SurfMetricTile(
     label: String,
-    value: String,
+    primaryValue: String,
+    secondaryValue: String,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -604,10 +605,18 @@ private fun SurfMetricTile(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
             )
             Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
+                text = primaryValue,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
+                maxLines = 1,
+            )
+            Text(
+                text = secondaryValue,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
+                maxLines = 1,
             )
         }
     }
@@ -731,17 +740,20 @@ private fun SurfSpotBand(
                 ) {
                     SurfMetricTile(
                         label = "Wave",
-                        value = marine.waveSummary(),
+                        primaryValue = marine.wavePrimaryValue(),
+                        secondaryValue = marine.waveSecondaryValue(),
                         modifier = Modifier.weight(1f),
                     )
                     SurfMetricTile(
                         label = "Swell",
-                        value = marine.swellSummary(),
+                        primaryValue = marine.swellPrimaryValue(),
+                        secondaryValue = marine.swellSecondaryValue(),
                         modifier = Modifier.weight(1f),
                     )
                     SurfMetricTile(
                         label = "Wind",
-                        value = marine.windSummary(),
+                        primaryValue = marine.windPrimaryValue(),
+                        secondaryValue = marine.windSecondaryValue(),
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -2516,20 +2528,23 @@ private fun MarineForecastSlot.hourOffsetLabel(referenceTime: Instant): String {
     return "+${hours}h"
 }
 
-private fun MarineSnapshot.waveSummary(): String = listOfNotNull(
-    waveHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" },
-    wavePeriodSeconds?.let { "${it.roundToInt()} s" },
-).joinToString(" · ").ifBlank { "n/a" }
+private fun MarineSnapshot.wavePrimaryValue(): String =
+    waveHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" } ?: "n/a"
 
-private fun MarineSnapshot.swellSummary(): String = listOfNotNull(
-    swellHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" },
-    swellDirectionDegrees?.let(::windDirectionLabel),
-).joinToString(" · ").ifBlank { "n/a" }
+private fun MarineSnapshot.waveSecondaryValue(): String =
+    wavePeriodSeconds?.let { "${it.roundToInt()} s" } ?: "n/a"
 
-private fun MarineSnapshot.windSummary(): String = listOfNotNull(
-    windSpeedKph?.let { "${it.roundToInt()} km/h" },
-    windDirectionDegrees?.let(::windDirectionLabel),
-).joinToString(" · ").ifBlank { "n/a" }
+private fun MarineSnapshot.swellPrimaryValue(): String =
+    swellHeightMeters?.let { "${String.format(Locale.US, "%.1f", it)} m" } ?: "n/a"
+
+private fun MarineSnapshot.swellSecondaryValue(): String =
+    swellDirectionDegrees?.let(::windDirectionLabel)?.takeUnless { it == "Unavailable" } ?: "n/a"
+
+private fun MarineSnapshot.windPrimaryValue(): String =
+    windSpeedKph?.let { "${it.roundToInt()} km/h" } ?: "n/a"
+
+private fun MarineSnapshot.windSecondaryValue(): String =
+    windDirectionDegrees?.let(::windDirectionLabel)?.takeUnless { it == "Unavailable" } ?: "n/a"
 
 private data class TravelMapTarget(
     val latitude: Double,

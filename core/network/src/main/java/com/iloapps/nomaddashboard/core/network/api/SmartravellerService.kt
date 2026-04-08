@@ -13,4 +13,12 @@ interface SmartravellerService {
     )
     @GET("destinations")
     suspend fun destinations(): Response<ResponseBody>
+
+    @Headers(
+        "Accept: application/json,text/plain,*/*",
+        "Accept-Language: en-AU,en;q=0.9",
+        "User-Agent: Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
+    )
+    @GET("destinations-export")
+    suspend fun destinationsExport(): Response<ResponseBody>
 }

@@ -132,7 +132,9 @@ Current dashboard data flow:
    - country-specific fuel provider selection for Spain, France, Italy, and Germany
    - device-place-first, IP-country-fallback travel-alert context
    - Smartraveller advisory lookup from the live destinations page for the
-     resolved primary country plus bordering-country coverage
+     resolved primary country plus bordering-country coverage, with Android
+     fallbacks through the legacy `destinations-export` endpoint and a hidden
+     WebView fetch when direct OkHttp transport stalls
    - ReliefWeb regional security lookup for the primary country plus bordering countries
    - Open-Meteo weather using the current device coordinate when the weather
      location toggle is enabled, otherwise the resolved IP-geolocation fallback

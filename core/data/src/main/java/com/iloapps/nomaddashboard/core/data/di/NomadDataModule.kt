@@ -22,6 +22,8 @@ import com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingReposit
 import com.iloapps.nomaddashboard.core.data.timetracking.RoomTimeTrackingTransactionRunner
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingTransactionRunner
+import com.iloapps.nomaddashboard.core.data.travelalerts.AndroidWebViewSmartravellerBrowserFetcher
+import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerBrowserFetcher
 import com.iloapps.nomaddashboard.core.data.visited.DatabaseTransactionRunner
 import com.iloapps.nomaddashboard.core.data.visited.RoomDatabaseTransactionRunner
 import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
@@ -57,6 +59,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import retrofit2.Retrofit
 import javax.inject.Singleton
@@ -207,7 +210,11 @@ object NomadInfrastructureModule {
     ): SmartravellerService =
         Retrofit.Builder()
             .baseUrl("https://www.smartraveller.gov.au/")
-            .client(client)
+            .client(
+                client.newBuilder()
+                    .protocols(listOf(Protocol.HTTP_1_1))
+                    .build(),
+            )
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(SmartravellerService::class.java)
@@ -322,6 +329,12 @@ abstract class NomadRepositoryModule {
     abstract fun bindProviderCredentialStore(
         impl: EncryptedProviderCredentialStore,
     ): ProviderCredentialStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSmartravellerBrowserFetcher(
+        impl: AndroidWebViewSmartravellerBrowserFetcher,
+    ): SmartravellerBrowserFetcher
 
     @Binds
     @Singleton
