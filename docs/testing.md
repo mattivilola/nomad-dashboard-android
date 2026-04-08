@@ -194,6 +194,9 @@ Current verified result:
 - `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the travel-context comparison redesign, IP model
   hardening, and Android-native map handoff fix
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh falls back to ipify plus freeip by-address lookup when current lookup fails' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.free ip model decodes string timeZones' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh keeps last known ip context when lookup fails' -Pksp.incremental=false`
+  passed on 2026-04-08 after the public-IP fallback and FreeIPAPI schema
+  hardening pass
 - `make build` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
 - `make build` passed on 2026-04-08 after the power telemetry/history and
@@ -223,6 +226,9 @@ Latest verification attempt:
   time-tracking/dashboard slice is still blocked on that repo-wide issue
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed after the Travel Context device-vs-IP redesign and map-intent fix
+- on 2026-04-08, the narrowed public-IP verification command above passed even
+  though the wider `:core:data:testDebugUnitTest` suite still contains
+  unrelated existing time-tracking failures
 - on 2026-04-08, `make build` passed after the weather hourly + surf parity
   slice, including the new Open-Meteo hourly checkpoint and marine surf code paths
 - on 2026-04-08, `make lint` passed after the weather hourly + surf parity

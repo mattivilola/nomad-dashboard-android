@@ -518,8 +518,7 @@ private fun WeatherSectionCard(
             )
             WeatherMetricTile(
                 label = "Wind",
-                value = snapshot.windSpeedKph.formatWindSpeed(),
-                supportingText = windDirectionLabel(snapshot.windDirectionDegrees),
+                value = snapshot.windSpeedKph.formatWindSummary(snapshot.windDirectionDegrees),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -583,6 +582,34 @@ private fun WeatherMetricTile(
             value = value,
             supportingText = supportingText,
         )
+    }
+}
+
+@Composable
+private fun SurfMetricTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.66f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
+            )
+        }
     }
 }
 
@@ -702,17 +729,17 @@ private fun SurfSpotBand(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    WeatherMetricTile(
+                    SurfMetricTile(
                         label = "Wave",
                         value = marine.waveSummary(),
                         modifier = Modifier.weight(1f),
                     )
-                    WeatherMetricTile(
+                    SurfMetricTile(
                         label = "Swell",
                         value = marine.swellSummary(),
                         modifier = Modifier.weight(1f),
                     )
-                    WeatherMetricTile(
+                    SurfMetricTile(
                         label = "Wind",
                         value = marine.windSummary(),
                         modifier = Modifier.weight(1f),
@@ -2453,6 +2480,12 @@ private fun TravelAlertUnavailableReason.summary(): String = when (this) {
 private fun Double?.formatDegrees(): String = this?.let { formatCompactTemperature(it) } ?: "Unavailable"
 
 private fun Double?.formatWindSpeed(): String = this?.let { "${it.roundToInt()} km/h" } ?: "Unavailable"
+
+private fun Double?.formatWindSummary(directionDegrees: Double?): String {
+    val speed = this?.let { "${it.roundToInt()} km/h" }
+    val direction = directionDegrees?.let(::windDirectionLabel)?.takeUnless { it == "Unavailable" }
+    return listOfNotNull(speed, direction).joinToString(" ").ifBlank { "Unavailable" }
+}
 
 private fun formatCompactTemperature(value: Double): String = "${value.roundToInt()} C"
 

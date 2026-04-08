@@ -59,8 +59,7 @@ class DashboardViewModel @Inject constructor(
         timeTrackingRepository.projects,
         timeTrackingRepository.pendingEntries,
         timeTrackingRepository.activeEntry,
-        timeTrackingMessage,
-    ) { snapshot, settings, projects, pendingEntries, activeEntry, message ->
+    ) { snapshot, settings, projects, pendingEntries, activeEntry ->
         DashboardUiState(
             snapshot = snapshot,
             settings = settings,
@@ -68,8 +67,11 @@ class DashboardViewModel @Inject constructor(
                 projects = projects,
                 pendingEntries = pendingEntries,
                 activeEntry = activeEntry,
-                message = message,
             ),
+        )
+    }.combine(timeTrackingMessage) { state, message ->
+        state.copy(
+            timeTracking = state.timeTracking.copy(message = message),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
