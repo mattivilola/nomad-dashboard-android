@@ -110,7 +110,9 @@ This document tracks Android parity against the macOS app at the feature level.
 | Foreground-service runtime | Implemented | Persistent special-use notification runs while the unallocated buffer is actively capturing and resumes after app relaunch or service recreation |
 | Allocation workflow | Implemented | Time is captured into a persistent unallocated buffer first, then assigned from dashboard or tracking-screen quick actions into a chosen project or `Other` |
 | Automatic daily tracking window | Implemented | Settings now define a same-day auto-capture window, defaulting to `07:00-19:00`; outside it, manual play/pause still works |
-| Reporting/export | Planned | Not implemented yet |
+| Interruption tracking | Implemented | Dashboard and tracking screens now expose a dedicated interruption action with a same-day counter, red flash, and a `23 minute` cooldown fade back toward the default warm tone |
+| Focus-loss reporting | Implemented | Local reports now estimate `interruptions x 23 minutes`, show same-day totals, and break allocated work down by project with estimated focused time |
+| Reporting/export | Bootstrap | In-app interruption and focus reporting is live, but external export is still not implemented |
 
 ## Build, Release, And Distribution
 

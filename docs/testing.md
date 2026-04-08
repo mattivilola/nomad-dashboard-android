@@ -563,6 +563,8 @@ Perform these checks on the first installed build:
 - starting tracking requires a selected project
 - an active session shows elapsed time in-app and posts a persistent notification
 - stopping tracking closes the active session and moves it into recent entries
+- reporting an interruption increments the local interruption log and updates the
+  same-day focus report once the UI state refreshes
 
 ### Build and environment
 
@@ -584,6 +586,7 @@ Implemented now:
 - repository emergency-care refresh tests for device-first lookup, IP fallback,
   and permission-required wiring
 - time-tracking repository tests for project creation, start/stop behavior, single-active-session enforcement, and persisted active-session recovery
+- time-tracking interruption tests for local persistence and report-event wiring
 - dashboard repository tests for disabled, idle, and active time-tracking summaries
 - foreground-service runtime tests for notification formatting and stop-command handling
 - Compose UI smoke tests for:
@@ -613,3 +616,5 @@ File:
 Planned next:
 - storage migration tests
 - physical-device notification smoke verification for the time-tracking foreground service
+- physical-device smoke verification of the new interruption button, flash, and
+  cooldown-color behavior

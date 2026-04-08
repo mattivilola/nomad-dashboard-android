@@ -181,9 +181,11 @@ Time tracking flow:
 
 1. `TimeTrackingViewModel` and `DashboardViewModel` combine `AppSettings` with
    `TimeTrackingRepository` flows for projects, the active unallocated entry,
-   pending buffered segments, and recent allocated entries.
+   pending buffered segments, recent allocated entries, and the interruption
+   report snapshot.
 2. `RoomTimeTrackingRepository` owns local project creation plus the
-   continuous-capture lifecycle for entries stored in Room.
+   continuous-capture lifecycle for entries stored in Room plus interruption
+   events stored in a dedicated Room table.
 3. The repository keeps one open unallocated entry at most. Closed unallocated
    entries act as the paused buffer waiting for allocation; allocated entries
    are normal completed ledger rows.
@@ -193,9 +195,16 @@ Time tracking flow:
 5. The repository watches the configured same-day auto-tracking window and
    starts a new automatic unallocated row only when tracking is enabled, the
    current time is inside the window, and no paused buffer is waiting.
-6. `MainActivity`, the dashboard route, and the tracking route start or stop
+6. Reporting an interruption stores a timestamp plus the current entry id when
+   one exists. Once that entry is allocated, the interruption is attributed to
+   the chosen project in the local report model.
+7. The repository derives day reports by combining allocated entry durations
+   with interruption timestamps, then estimates focus loss as
+   `interruptions x 23 minutes` and focused time as
+   `allocated duration - estimated focus loss`.
+8. `MainActivity`, the dashboard route, and the tracking route start or stop
    the app-owned foreground service from explicit user-visible capture actions.
-7. `TimeTrackingForegroundService` reloads the active unallocated entry from
+9. `TimeTrackingForegroundService` reloads the active unallocated entry from
    persistence and rebuilds the persistent notification after app relaunch or
    service recreation, but not after device reboot.
 
