@@ -2315,9 +2315,10 @@ private data class TravelLocationAlignment(
 
 private fun travelContextMapTarget(snapshot: DashboardSnapshot): TravelMapTarget? {
     val travelContext = snapshot.travelContext
-    val latitude = travelContext.latitude ?: return null
-    val longitude = travelContext.longitude ?: return null
-    val label = travelContext.ipLocationLabel()
+    val latitude = travelContext.deviceLatitude ?: travelContext.latitude ?: return null
+    val longitude = travelContext.deviceLongitude ?: travelContext.longitude ?: return null
+    val label = travelContext.deviceLocationLabel().takeUnless { it == "Location unavailable" }
+        ?: travelContext.ipLocationLabel()
     return TravelMapTarget(
         latitude = latitude,
         longitude = longitude,
@@ -2328,11 +2329,20 @@ private fun travelContextMapTarget(snapshot: DashboardSnapshot): TravelMapTarget
 private fun travelLocationAlignment(
     travelContext: com.iloapps.nomaddashboard.core.model.TravelContextSnapshot,
 ): TravelLocationAlignment? {
-    if (travelContext.hasIpLocation().not()) {
+    if (travelContext.hasDeviceLocation().not() || travelContext.hasIpLocation().not()) {
         return null
     }
 
-    return TravelLocationAlignment(label = "IP Context", tone = NomadBadgeTone.Good)
+    val sameCountry = travelContext.deviceCountryCode?.equals(travelContext.countryCode, ignoreCase = true) == true
+    val sameCity = travelContext.deviceCity?.equals(travelContext.city, ignoreCase = true) == true
+    return when {
+        sameCountry && (sameCity || travelContext.deviceCity == null || travelContext.city == null) ->
+            TravelLocationAlignment(label = "Aligned", tone = NomadBadgeTone.Good)
+        sameCountry ->
+            TravelLocationAlignment(label = "Nearby", tone = NomadBadgeTone.Info)
+        else ->
+            TravelLocationAlignment(label = "Mismatch", tone = NomadBadgeTone.Warning)
+    }
 }
 
 private fun travelWifiLabel(
@@ -2347,7 +2357,10 @@ private fun travelWifiLabel(
 private fun travelWifiSupportingText(
     connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
 ): String {
+    val wifiFrequencyMhz = connectivity.wifiFrequencyMhz
     return when {
+        connectivity.wifiName != null && wifiFrequencyMhz != null ->
+            "Band ${wifiBandLabel(wifiFrequencyMhz)}"
         connectivity.wifiName != null ->
             "Connected network identity"
         connectivity.isOnline ->
@@ -2361,6 +2374,8 @@ private fun travelWifiSignalSummary(
     connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
 ): String = listOfNotNull(
     connectivity.wifiSignalDbm?.let { "RSSI $it" },
+    connectivity.wifiLinkSpeedMbps?.let { "$it Mbps" },
+    connectivity.wifiFrequencyMhz?.let(::wifiBandLabel),
 ).joinToString(" · ").ifBlank {
     if (connectivity.wifiName != null) {
         "Connected"
@@ -2381,13 +2396,15 @@ private fun travelTimeZoneSummary(
 }
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.hasDeviceLocation(): Boolean =
-    false
+    deviceCountry != null || deviceLatitude != null || deviceLongitude != null
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.hasIpLocation(): Boolean =
     country != null || latitude != null || longitude != null
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.deviceLocationLabel(): String =
-    "Waiting for device place"
+    listOfNotNull(deviceCity, deviceCountry).joinToString(", ").ifBlank {
+        deviceCountry ?: "Location unavailable"
+    }
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.ipLocationLabel(): String =
     listOfNotNull(city, country).joinToString(", ").ifBlank {
@@ -2395,10 +2412,19 @@ private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.ipLocati
     }
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.deviceRegionCountryLine(): String =
-    "Current-location comparison is not wired into this card yet."
+    listOfNotNull(deviceRegion, deviceCountry).joinToString(" · ").ifBlank {
+        "Resolved from Android location services."
+    }
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.cityCountryOrRegion(): String =
     listOfNotNull(city, region, country).joinToString(" · ").ifBlank { "Network-derived location" }
+
+private fun wifiBandLabel(frequencyMhz: Int): String = when (frequencyMhz) {
+    in 2400..2500 -> "2.4 GHz"
+    in 4900..5900 -> "5 GHz"
+    in 5925..7125 -> "6 GHz"
+    else -> "${frequencyMhz} MHz"
+}
 
 private fun Context.openMapLocation(
     latitude: Double,
