@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
+import android.util.Log
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
@@ -465,6 +466,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
         providerCredentials: ProviderCredentialSettings,
     ): TravelAlertsSnapshot {
         val attemptedAt = Instant.now()
+        travelAlertLogDebug(
+            TravelAlertsLogTag,
+            "refreshTravelAlerts primary=${primaryCountryCode ?: "none"} country=${primaryCountryName ?: "none"} coverage=${coverageCountryCodes.joinToString(",")}",
+        )
         val advisoryState = refreshAlertState(
             kind = TravelAlertKind.ADVISORY,
             previous = previous.state(TravelAlertKind.ADVISORY),
@@ -533,6 +538,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val retainedSourceUrl = previous?.sourceUrl ?: sourceUrl(kind)
 
         if (primaryCountryCode.isNullOrBlank()) {
+            travelAlertLogWarn(
+                TravelAlertsLogTag,
+                "travel alert ${kind.name.lowercase()} unavailable: no primary country context",
+            )
             return TravelAlertSignalState(
                 kind = kind,
                 status = TravelAlertSignalStatus.UNAVAILABLE,
@@ -546,6 +555,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
         return try {
             val signal = fetch()
+            travelAlertLogInfo(
+                TravelAlertsLogTag,
+                "travel alert ${kind.name.lowercase()} ready severity=${signal.severity.name.lowercase()} source=${signal.sourceName}",
+            )
             TravelAlertSignalState(
                 kind = kind,
                 status = TravelAlertSignalStatus.READY,
@@ -558,6 +571,11 @@ class DefaultNomadDashboardRepository @Inject constructor(
         } catch (error: Throwable) {
             val reason = unavailableReason(error)
             val diagnosticSummary = diagnosticSummary(error)
+            travelAlertLogWarn(
+                TravelAlertsLogTag,
+                "travel alert ${kind.name.lowercase()} failed reason=${reason.name.lowercase()} diagnostic=${diagnosticSummary ?: "none"} message=${error.message ?: "none"}",
+                error,
+            )
             val previousSignal = previous?.signal
             if (previousSignal != null) {
                 TravelAlertSignalState(
@@ -1083,7 +1101,26 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
 private const val ConnectivityHistoryRetentionCount = 24
 private const val PowerHistoryRetentionCount = 48
+private const val TravelAlertsLogTag = "NomadTravelAlerts"
 private const val ConnectivityDownloadMetricKind = "connectivity_download_mbps"
 private const val ConnectivityUploadMetricKind = "connectivity_upload_mbps"
 private const val ConnectivityLatencyMetricKind = "connectivity_latency_ms"
 private const val PowerBatteryPercentMetricKind = "power_battery_percent"
+
+private fun travelAlertLogDebug(tag: String, message: String) {
+    runCatching { Log.d(tag, message) }
+}
+
+private fun travelAlertLogInfo(tag: String, message: String) {
+    runCatching { Log.i(tag, message) }
+}
+
+private fun travelAlertLogWarn(tag: String, message: String, error: Throwable? = null) {
+    runCatching {
+        if (error != null) {
+            Log.w(tag, message, error)
+        } else {
+            Log.w(tag, message)
+        }
+    }
+}

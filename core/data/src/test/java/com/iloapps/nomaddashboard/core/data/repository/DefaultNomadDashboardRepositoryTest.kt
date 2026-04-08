@@ -939,45 +939,47 @@ class DefaultNomadDashboardRepositoryTest {
     ): SmartravellerAdvisoryProvider =
         SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations(): ResponseBody =
-                    """
-                    <html>
-                      <body>
-                        <table>
-                          <tr>
-                            <th>Destination</th>
-                            <th>Region</th>
-                            <th>Overall Advice Level</th>
-                            <th>Updated</th>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/finland">Finland</a></td>
-                            <td>Europe</td>
-                            <td>Exercise normal safety precautions</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/germany">Germany</a></td>
-                            <td>Europe</td>
-                            <td>Exercise normal safety precautions</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/france">France</a></td>
-                            <td>Europe</td>
-                            <td>Exercise a high degree of caution</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/poland">Poland</a></td>
-                            <td>Europe</td>
-                            <td>Exercise normal safety precautions</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                        </table>
-                      </body>
-                    </html>
-                    """.trimIndent().toResponseBody("text/html".toMediaType())
+                override suspend fun destinations(): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        <html>
+                          <body>
+                            <table>
+                              <tr>
+                                <th>Destination</th>
+                                <th>Region</th>
+                                <th>Overall Advice Level</th>
+                                <th>Updated</th>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/finland">Finland</a></td>
+                                <td>Europe</td>
+                                <td>Exercise normal safety precautions</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/germany">Germany</a></td>
+                                <td>Europe</td>
+                                <td>Exercise normal safety precautions</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/france">France</a></td>
+                                <td>Europe</td>
+                                <td>Exercise a high degree of caution</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/poland">Poland</a></td>
+                                <td>Europe</td>
+                                <td>Exercise normal safety precautions</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                            </table>
+                          </body>
+                        </html>
+                        """.trimIndent().toResponseBody("text/html".toMediaType()),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = TestJson,

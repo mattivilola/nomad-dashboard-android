@@ -70,9 +70,9 @@ class ScreenshotReviewActivity : ComponentActivity() {
                         ScreenshotReviewScreen.TimeTracking -> TimeTrackingScreen(
                             state = ScreenshotReviewFixtures.timeTrackingState(),
                             hasNotificationPermission = true,
-                            onProjectSelected = { _ -> },
                             onProjectNameChanged = { _ -> },
                             onCreateProject = {},
+                            onAllocateTrackedTime = { _ -> },
                             onStartTracking = {},
                             onStopTracking = {},
                             modifier = screenModifier,

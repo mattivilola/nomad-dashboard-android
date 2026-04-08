@@ -32,33 +32,35 @@ class TravelAlertProvidersTest {
     fun `smartraveller provider parses tolerant payload shapes and picks highest nearby severity`() = runTest {
         val provider = SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations() =
-                    """
-                    <html>
-                      <body>
-                        <table>
-                          <tr>
-                            <th>Destination</th>
-                            <th>Region</th>
-                            <th>Overall Advice Level</th>
-                            <th>Updated</th>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/spain">Spain</a></td>
-                            <td>Europe</td>
-                            <td>Exercise normal safety precautions</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                          <tr>
-                            <td><a href="/destinations/france">France</a></td>
-                            <td>Europe</td>
-                            <td>Reconsider your need to travel</td>
-                            <td>07 Apr 2026</td>
-                          </tr>
-                        </table>
-                      </body>
-                    </html>
-                    """.trimIndent().toResponseBody(HtmlMediaType)
+                override suspend fun destinations(): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        <html>
+                          <body>
+                            <table>
+                              <tr>
+                                <th>Destination</th>
+                                <th>Region</th>
+                                <th>Overall Advice Level</th>
+                                <th>Updated</th>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/spain">Spain</a></td>
+                                <td>Europe</td>
+                                <td>Exercise normal safety precautions</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                              <tr>
+                                <td><a href="/destinations/france">France</a></td>
+                                <td>Europe</td>
+                                <td>Reconsider your need to travel</td>
+                                <td>07 Apr 2026</td>
+                              </tr>
+                            </table>
+                          </body>
+                        </html>
+                        """.trimIndent().toResponseBody(HtmlMediaType),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
@@ -79,17 +81,19 @@ class TravelAlertProvidersTest {
     fun `smartraveller provider resolves alias country names`() = runTest {
         val provider = SmartravellerAdvisoryProvider(
             service = object : SmartravellerService {
-                override suspend fun destinations() =
-                    """
-                    [
-                      {
-                        "country": "Turkiye",
-                        "level": 2,
-                        "url": "https://example.com/turkiye",
-                        "last_updated": "2026-04-07T09:00:00Z"
-                      }
-                    ]
-                    """.trimIndent().toResponseBody(JsonMediaType)
+                override suspend fun destinations(): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        [
+                          {
+                            "country": "Turkiye",
+                            "level": 2,
+                            "url": "https://example.com/turkiye",
+                            "last_updated": "2026-04-07T09:00:00Z"
+                          }
+                        ]
+                        """.trimIndent().toResponseBody(JsonMediaType),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = json,

@@ -240,7 +240,7 @@ fun DashboardScreen(
                         Image(
                             painter = painterResource(id = R.drawable.nomad_symbol_mark),
                             contentDescription = null,
-                            modifier = Modifier.size(38.dp),
+                            modifier = Modifier.size(44.dp),
                         )
                     },
                     trailing = {

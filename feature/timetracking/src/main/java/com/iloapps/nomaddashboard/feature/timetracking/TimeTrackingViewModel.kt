@@ -45,6 +45,14 @@ private data class TrackingInputs(
     val message: String?,
 )
 
+private data class TrackingSnapshot(
+    val settings: AppSettings,
+    val projects: List<TimeTrackingProject>,
+    val pendingEntries: List<TimeTrackingRecord>,
+    val recentEntries: List<TimeTrackingRecord>,
+    val activeEntry: TimeTrackingRecord?,
+)
+
 @HiltViewModel
 class TimeTrackingViewModel @Inject constructor(
     private val dashboardRepository: NomadDashboardRepository,
@@ -62,20 +70,32 @@ class TimeTrackingViewModel @Inject constructor(
         ::TrackingInputs,
     )
 
-    val uiState: StateFlow<TimeTrackingUiState> = combine(
+    private val trackingSnapshot = combine(
         dashboardRepository.settings,
         timeTrackingRepository.projects,
         timeTrackingRepository.pendingEntries,
         timeTrackingRepository.recentEntries,
         timeTrackingRepository.activeEntry,
-        inputs,
-    ) { settings, projects, pendingEntries, recentEntries, activeEntry, inputs ->
-        TimeTrackingUiState(
+    ) { settings, projects, pendingEntries, recentEntries, activeEntry ->
+        TrackingSnapshot(
             settings = settings,
             projects = projects,
             pendingEntries = pendingEntries,
             recentEntries = recentEntries,
             activeEntry = activeEntry,
+        )
+    }
+
+    val uiState: StateFlow<TimeTrackingUiState> = combine(
+        trackingSnapshot,
+        inputs,
+    ) { snapshot, inputs ->
+        TimeTrackingUiState(
+            settings = snapshot.settings,
+            projects = snapshot.projects,
+            pendingEntries = snapshot.pendingEntries,
+            recentEntries = snapshot.recentEntries,
+            activeEntry = snapshot.activeEntry,
             draftProjectName = inputs.draftProjectName,
             message = inputs.message,
         )
