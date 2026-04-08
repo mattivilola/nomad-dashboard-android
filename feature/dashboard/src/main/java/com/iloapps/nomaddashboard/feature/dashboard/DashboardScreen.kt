@@ -2435,7 +2435,7 @@ private fun travelAlertImpactLabel(state: TravelAlertSignalState): String =
         TravelAlertSignalStatus.READY -> when (state.signal?.severity) {
             TravelAlertSeverity.CLEAR -> "No elevated signal"
             TravelAlertSeverity.INFO -> "Nearby watch"
-            TravelAlertSeverity.CAUTION -> "Plan carefully"
+            TravelAlertSeverity.CAUTION -> "Exercise caution"
             TravelAlertSeverity.WARNING -> "Review before travel"
             TravelAlertSeverity.CRITICAL -> "Immediate attention"
             null -> "Signal ready"
