@@ -87,6 +87,8 @@ Responsibilities:
 - encrypted provider credential storage backed by Android Keystore
 - Google Places-backed emergency-care lookup using the app-level Android
   Maps/Places key from manifest metadata
+- local price-level orchestration with Room-backed response cache, Eurostat
+  Europe fallback rows, and HUD USER plus US Census county resolution in the US
 - travel-alert provider orchestration and country-coverage resolution
 - orchestration of local and remote data
 
@@ -248,6 +250,25 @@ Emergency care flow:
    `configuration-required`, `permission-required`, `unavailable`, or `error`
    states and exposes an open-in-maps handoff only when a hospital is resolved.
 
+Local price level flow:
+
+1. `DashboardViewModel` triggers repository refresh.
+2. `DefaultNomadDashboardRepository` resolves local-price context in this order:
+   - current device place for country plus coordinate when Android permission is available
+   - public-IP country fallback only for Europe when device location is unavailable
+3. `DefaultLocalPriceLevelProvider` caches snapshots in Room for at least `6 hours`.
+4. Europe requests use Eurostat `prc_ppp_ind_1` with `PLI_EU27_2020` and
+   `ppp_cat18` values `A0111`, `A0101`, and `A01`, then map the latest
+   available annual value into traveler-facing `Below Avg` / `Moderate` /
+   `Above Avg` rows with `Country fallback` precision only.
+5. US requests require the encrypted HUD USER token plus current device
+   coordinates, resolve county GEOID through US Census Geocoder, then query HUD
+   fair market rent data for the `One-Bedroom` benchmark and map the response
+   into `metro` or `county` precision.
+6. Repository output uses `ready`, `partial`, `location-required`,
+   `configuration-required`, `unsupported`, or `unavailable` states and the
+   dashboard always shows explicit source attribution.
+
 ## State Management Rules
 
 - ViewModels own screen-level state exposure.
@@ -271,12 +292,15 @@ Emergency care flow:
 - Room-backed time-tracking projects
 - Room-backed time-tracking entries with project linkage and a single active
   entry invariant
+- Room-backed local price level cache entries with a `6 hour` minimum TTL
 
 ## Current External Integrations
 
 Implemented now:
 - FreeIPAPI
 - Open-Meteo
+- Eurostat `prc_ppp_ind_1` for Europe local price levels
+- HUD USER fair market rent plus US Census Geocoder for US local price levels
 - Google Places Nearby Search (New) for emergency care
 - Smartraveller travel advisories
 - ReliefWeb regional security reports

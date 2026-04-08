@@ -9,6 +9,7 @@ Native Android port scaffold for Nomad Dashboard.
 - Hilt, Room, Proto DataStore, Retrofit/OkHttp, WorkManager-ready setup
 - Adaptive navigation for dashboard, settings, visited map, time tracking, and about
 - Real bootstrap data flow for connectivity, public IP geolocation, power, and Open-Meteo weather
+- Optional local price level card using Eurostat in Europe and HUD USER plus US Census Geocoder in the US
 - Local-first build, release, signing, and Google Play internal-track helper scripts
 
 ## Quick Start
@@ -23,7 +24,7 @@ make screenshots
 make lint
 ```
 
-Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env`. `Config/AppConfig.env` is only for non-secret helper config and is not used for provider credentials or Maps/Places SDK keys. The visited Google Maps view and the dashboard emergency-care hospital lookup both use an app-level Android Maps/Places key from local `local.properties`, Gradle properties, or environment variables, not from the in-app Settings screen; enable Places API (New) on that same restricted key before using emergency care. User-supplied provider credentials such as the Germany Tankerkonig key and the ReliefWeb app name must be entered in the app's Settings screen after install and are stored only in encrypted device-local storage.
+Android Studio should use its bundled JDK automatically through the helper scripts. Local signing and Play publishing values belong in gitignored `Config/Signing.env`. `Config/AppConfig.env` is only for non-secret helper config and is not used for provider credentials or Maps/Places SDK keys. The visited Google Maps view and the dashboard emergency-care hospital lookup both use an app-level Android Maps/Places key from local `local.properties`, Gradle properties, or environment variables, not from the in-app Settings screen; enable Places API (New) on that same restricted key before using emergency care. User-supplied provider credentials such as the HUD USER token, Germany Tankerkonig key, and the ReliefWeb app name must be entered in the app's Settings screen after install and are stored only in encrypted device-local storage. Europe price levels work without the HUD token; the token is only used for the US 1-bedroom rent benchmark.
 
 `make screenshots` runs the deterministic emulator review lane and exports local PNGs to `output/screenshots/android/phone`. For faster iteration, use `SCREEN=dashboard make screenshots` or replace `dashboard` with `settings`, `visited`, `timetracking`, or `about`.
 
