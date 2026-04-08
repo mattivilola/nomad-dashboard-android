@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 ## Overall
 
@@ -39,14 +39,19 @@ Current repository state:
 - dashboard UX parity pass started: compact quick actions, denser top-level
   summary strip, weather-first default ordering, and metric-led detail cards
   are now implemented in the dashboard UI layer
+- connectivity dashboard refinement landed: the card header now carries the
+  live status chip, duplicate online copy is removed, empty throughput values
+  render as `0 Mbps`, and retained Room-backed throughput/latency samples now
+  drive real mini-charts
+- whole-app UX parity pass expanded across settings, about, and time tracking;
+  shared badges, metric blocks, chart shells, and stronger section headers now
+  give the app a more coherent product language
 - weather refresh now honors the existing device-location weather setting and
   falls back to IP geolocation when device coordinates are unavailable
 - visited UX parity pass started: the screen now opens with an operational
   overview card and keeps capture guidance behind the map/history content
-- repo-level KSP build/lint stability restored by disabling broken KSP
-  incremental output reuse in Gradle
-- emulator startup helper now fails fast with the emulator log when the
-  screenshot/test AVD exits before `adb` can see it
+- screenshot review workflow now captures both light and dark theme exports for
+  each review screen
 
 ## Completed
 
@@ -96,6 +101,8 @@ Current repository state:
 - release/signing/publish helper scripts scaffolded
 - tracked changelog and Google Play release-notes generation added to the local release bump flow
 - README and docs set added
+- connectivity throughput/latency history retention and dashboard mini-charts
+  implemented
 
 ## In Progress
 
@@ -104,17 +111,15 @@ Current repository state:
 - visited UX parity pass is underway; the first implementation landed for a
   map-first screen structure, but screenshot verification and deeper polish are
   still pending
+- settings/about/time-tracking UX parity pass is underway; the new productized
+  layouts compile and test-compile, but still need screenshot review
 - physical-device notification smoke verification for the new time-tracking runtime
 - emulator-backed screenshot verification remains blocked intermittently by the
   local `Pixel_5_API_31` emulator exiting before it appears in `adb devices`
 
 ## Not Started
 
-- weather card parity pass for forecast disclosure, clearer current metrics, and
-  surf sub-section polish
-- dashboard action parity for fuel/open-map flows and other compact in-card
-  actions
-- power/connectivity history visuals and mini-chart parity
+- power history visuals and retained battery charts
 - time-tracking reporting/export parity
 - analytics/privacy parity implementation
 
@@ -150,6 +155,12 @@ Verified:
   passed on 2026-04-07 after the first dashboard UX parity refactor
 - `run_gradle :feature:visited:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
   passed on 2026-04-07 after the first visited UX parity refactor
+- `run_gradle :core:designsystem:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:about:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-07 after the shared UX foundation and whole-app screen redesign pass
+- `run_gradle :app:assembleDebug :app:compileDebugAndroidTestKotlin :feature:dashboard:compileDebugAndroidTestKotlin :feature:visited:compileDebugAndroidTestKotlin :feature:timetracking:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-07 after adding the new dashboard, visited, and time-tracking UI checks
+- `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after the connectivity history and mini-chart slice
 - `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
   repo-level Gradle properties
 - `make lint` passed on 2026-04-07 after setting `ksp.incremental=false` in
@@ -158,32 +169,15 @@ Verified:
   worktree for first-release, later-release, dirty-worktree, and tag-collision
   scenarios
 
-Not yet fully re-verified after the emergency-care slice in this session:
-- `make build` currently still fails in generated KSP output, now as
-  `FileAlreadyExistsException` under `feature:visited:kspDebugKotlin`,
-  `feature:dashboard:kspDebugKotlin`, and the app module; the emergency-care
-  slice compiled before those existing generated-source failures
-- `make lint` currently still fails in `:app:kspDebugKotlin` with a generated
-  `FileAlreadyExistsException` under
-  `app/build/generated/ksp/debug/java`; the emergency-care slice's
-  `core:data:lintDebug` issues were fixed before the run hit the existing app
-  KSP blocker
-- `make test` now gets through the emergency-care unit and dashboard-card
-  coverage, but still fails in existing `app:connectedDebugAndroidTest`
-  settings smoke tests (`expand_weather_forecast_toggle_persists_across_recreate_and_is_restored`,
-  `reliefweb_app_name_persists_across_recreate_and_can_be_cleared`, and
-  `tankerkoenig_api_key_persists_across_recreate_and_can_be_cleared`) plus the
-  recurring `ActivityInvoker` instrumentation crash
-- `make screenshots` is no longer blocked by KSP, but it still cannot complete
-  reliably when the local `Pixel_5_API_31` emulator exits before `adb` exposes
-  a serial; the hardened helper now prints the failing emulator log instead of
-  stalling silently
-- full Android screenshot set after the new UX parity backlog was documented;
-  only `dashboard`, `visited`, and `about` phone captures were available for
-  the 2026-04-07 comparison
-- rerun of `make screenshots` after the KSP fix still hit an emulator-launch
-  failure with Crashpad permission errors before `adb devices` exposed a target,
-  so the new dashboard and visited layouts have not been visually re-reviewed yet
+Not yet fully re-verified after the whole-app UX parity slice in this session:
+- `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
+  now gets through the updated repository test and dashboard compile path, but
+  still fails later in existing app assembly work under `:app:compileDebugKotlin`
+  with a missing `app/build/tmp/kotlin-classes/debug/com` output path
+- `make screenshots` still cannot complete reliably when the local
+  `Pixel_5_API_31` emulator exits before `adb` exposes a serial
+- fresh light-and-dark screenshot exports for the redesigned dashboard,
+  settings, visited, time-tracking, and about screens
 - end-to-end physical-device smoke pass with the explicit `make test-device`
   path
 - signed release AAB generation with real keystore
@@ -191,20 +185,17 @@ Not yet fully re-verified after the emergency-care slice in this session:
 
 ## Immediate Next Steps
 
-1. Rework the dashboard information hierarchy first: replace low-value header
-   pills with quick actions, tighten top-level status cards, and make the
-   weather/travel sections easier to scan on a phone.
-2. Re-run the screenshot review flow against the new dashboard layout once the
-   local emulator launch crash is resolved, then refine spacing and card
-   density from that output.
-3. Refine the visited screen from the new map-first baseline, especially the
-   country-day summaries and saved-place density once fresh screenshots exist.
-4. Resolve the current intermittent emulator launch crash, then rerun the full
-   `make screenshots` parity pass.
-5. Add the missing action-level parity that is already feasible without new
-   providers, especially map/open actions and richer weather presentation.
-6. Treat time-tracking reporting/export and power/connectivity history visuals
-   as follow-up slices after the UX foundation is improved.
+1. Resolve the current intermittent emulator launch crash, then rerun the full
+   light-and-dark `make screenshots` parity pass.
+2. Review the new dashboard and visited screenshots against the macOS
+   reference set and tune spacing, card density, and vertical order from the
+   rendered output.
+3. Review the redesigned settings/about/time-tracking screens the same way and
+   tighten any sections that still look form-heavy or generic.
+4. Add retained-history-backed power visuals next so the remaining chart shell
+   becomes a real telemetry module too.
+5. Extend time tracking with reporting/export only after the current UX layer
+   settles.
 
 ## Parallel-Safe Workstreams
 

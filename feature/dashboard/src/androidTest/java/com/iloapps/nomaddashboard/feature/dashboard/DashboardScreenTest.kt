@@ -48,15 +48,28 @@ class DashboardScreenTest {
                         ),
                     ),
                     onRefresh = {},
-                    onOpenSettings = {},
-                    onOpenVisited = {},
-                    onOpenTimeTracking = {},
-                    onOpenAbout = {},
                 )
             }
         }
 
         composeRule.onNodeWithTag("dashboard_top_bar").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_summary_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("dashboard_weather_card").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsRefreshProgressWhileRefreshing() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        snapshot = DashboardSnapshot(isRefreshing = true),
+                    ),
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dashboard_refresh_progress").assertIsDisplayed()
     }
 }

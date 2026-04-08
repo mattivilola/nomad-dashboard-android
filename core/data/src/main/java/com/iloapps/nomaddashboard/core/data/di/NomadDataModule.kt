@@ -27,6 +27,7 @@ import com.iloapps.nomaddashboard.core.data.visited.RoomDatabaseTransactionRunne
 import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
+import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
@@ -183,6 +184,9 @@ object NomadInfrastructureModule {
             .addMigrations(NomadDatabase.MIGRATION_1_2)
             .addMigrations(NomadDatabase.MIGRATION_2_3)
             .build()
+
+    @Provides
+    fun provideMetricPointDao(database: NomadDatabase): MetricPointDao = database.metricPointDao()
 
     @Provides
     fun provideVisitedPlaceDao(database: NomadDatabase): VisitedPlaceDao = database.visitedPlaceDao()

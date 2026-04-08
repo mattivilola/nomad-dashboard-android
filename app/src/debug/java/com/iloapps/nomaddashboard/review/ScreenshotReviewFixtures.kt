@@ -11,6 +11,7 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 import com.iloapps.nomaddashboard.core.model.SignalLevel
@@ -92,6 +93,24 @@ object ScreenshotReviewFixtures {
                     jitterMs = 8.0,
                     downloadMbps = 114.0,
                     uploadMbps = 19.0,
+                    latencyHistoryMs = listOf(48.0, 44.0, 46.0, 40.0, 42.0).mapIndexed { index, value ->
+                        MetricHistoryPoint(
+                            recordedAt = fixtureNow.minusSeconds(((4 - index) * 60).toLong()),
+                            value = value,
+                        )
+                    },
+                    downloadHistoryMbps = listOf(72.0, 88.0, 94.0, 108.0, 114.0).mapIndexed { index, value ->
+                        MetricHistoryPoint(
+                            recordedAt = fixtureNow.minusSeconds(((4 - index) * 60).toLong()),
+                            value = value,
+                        )
+                    },
+                    uploadHistoryMbps = listOf(11.0, 14.0, 16.0, 18.0, 19.0).mapIndexed { index, value ->
+                        MetricHistoryPoint(
+                            recordedAt = fixtureNow.minusSeconds(((4 - index) * 60).toLong()),
+                            value = value,
+                        )
+                    },
                     wifiName = "Nomad Cabin",
                     wifiSignalDbm = -56,
                     vpnActive = false,

@@ -46,10 +46,6 @@ class ScreenshotReviewActivity : ComponentActivity() {
                         ScreenshotReviewScreen.Dashboard -> DashboardScreen(
                             state = ScreenshotReviewFixtures.dashboardState(),
                             onRefresh = {},
-                            onOpenSettings = {},
-                            onOpenVisited = {},
-                            onOpenTimeTracking = {},
-                            onOpenAbout = {},
                             modifier = screenModifier,
                         )
 

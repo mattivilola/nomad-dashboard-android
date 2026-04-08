@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -17,26 +17,34 @@ This document tracks Android parity against the macOS app at the feature level.
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now has an action-first header, a denser summary strip, and metric-led detail cards |
-| Settings screen | Implemented | Settings persist via Proto DataStore |
-| About screen | Implemented | Minimal bootstrap content |
+| Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
+| About screen | Implemented | About now explains product purpose, local-first data handling, and current parity direction instead of bootstrap filler |
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
-| Time tracking route | Bootstrap | Route exists, runtime not complete |
+| Time tracking route | Implemented | Route now shares the same product language as the rest of the app, with clearer overview, active-state, and recent-session sections |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
 | Compact dashboard UX parity pass | Implemented | Default dashboard order now starts with weather and travel alerts; quick actions replace the old non-interactive route pills |
+| Shared product UI foundation | Implemented | Design system now includes stronger status badges, metric blocks, chart shells, and product top-bar/header patterns reused across screens |
 
 ## Connectivity And Travel Context
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Internet reachability summary | Implemented | Uses `ConnectivityManager` |
-| Latency probe | Implemented | Socket connect probe |
-| Passive throughput estimate | Implemented | Based on `TrafficStats` delta |
+| Latency probe | Implemented | Socket connect probe with retained local history now shown on the dashboard mini-chart |
+| Passive throughput estimate | Implemented | Based on `TrafficStats` delta with retained local download/upload history for the dashboard chart |
 | Wi-Fi SSID / RSSI | Implemented | Uses `WifiManager`; current API is basic |
 | VPN detection | Implemented | Uses network transport check |
 | Public IP lookup | Implemented | FreeIPAPI |
 | IP geolocation | Implemented | FreeIPAPI |
 | Travel context card | Implemented | Uses current bootstrap geolocation data |
+
+## Dashboard UX polish
+
+| Feature | Android status | Notes |
+| --- | --- | --- |
+| Connectivity card hierarchy | Implemented | Status chip now lives in the card header, duplicate online copy is removed, and empty throughput values default to `0 Mbps` instead of `n/a` |
+| Connectivity mini-charts | Implemented | Throughput and latency panels now render simple retained-history charts from local Room-backed metric samples |
 
 ## Power
 
@@ -46,7 +54,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Charging state | Implemented | From battery intent |
 | Battery health summary | Implemented | Heuristic bootstrap summary |
 | Discharge watts estimate | Implemented | Uses current-now and voltage where available |
-| Detailed power diagnostics | Planned | Not yet at macOS richness |
+| Detailed power diagnostics | Bootstrap | Stronger power card layout and chart shells are in place; retained-history telemetry is still missing |
 
 ## Weather And Surf
 
@@ -56,7 +64,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Daily forecast summary | Implemented | Open-Meteo daily data with a metric-led dashboard presentation and compact 3-day list |
 | Weather expand/collapse preference | Implemented | Setting is wired |
 | Surf spot settings model | Implemented | Persisted in settings |
-| Surf card parity | Bootstrap | Data model and settings are present; dedicated UI is next |
+| Surf card parity | Bootstrap | Weather now reserves a dedicated surf subsection and surf-spot framing, but marine metrics still need fuller provider parity |
 
 ## Travel Alerts
 
@@ -92,7 +100,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Time tracking screen route | Implemented | Route now shows disabled guidance, local projects, active session state, and recent entries |
+| Time tracking screen route | Implemented | Route now opens with an overview card, stronger active/ready state treatment, and denser project/session hierarchy |
 | Project list and settings | Implemented | Add-only local project list with inline creation and project selection before start |
 | Ledger persistence | Implemented | Room-backed projects and entries with a single active session invariant |
 | Foreground-service runtime | Implemented | Persistent special-use notification runs while tracking and resumes after app relaunch or service recreation |
@@ -106,7 +114,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Gradle wrapper project | Implemented | Android Studio-compatible |
 | Make targets | Implemented | Build/test/lint/run/release helper targets |
 | Wireless ADB helper | Implemented | `make connect-wireless` |
-| Emulator screenshot review workflow | Implemented | `make screenshots` renders deterministic fixture screens and exports PNGs to `output/screenshots/android/phone` |
+| Emulator screenshot review workflow | Implemented | `make screenshots` renders deterministic fixture screens and exports light and dark theme PNGs to `output/screenshots/android/phone` |
 | Signed AAB/APK script flow | Implemented | Requires local signing env only; shipped app credentials are not read from local env files |
 | Google Play internal publish script | Implemented | Requires local Play service account |
 | Release version bump helper | Implemented | `prepare-release.sh` now bumps tracked version metadata, prepends `CHANGELOG.md`, writes Play release notes, and creates a local release commit plus tag without auto-pushing |

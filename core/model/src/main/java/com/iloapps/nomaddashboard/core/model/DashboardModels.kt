@@ -24,10 +24,18 @@ data class ConnectivitySnapshot(
     val jitterMs: Double? = null,
     val downloadMbps: Double? = null,
     val uploadMbps: Double? = null,
+    val latencyHistoryMs: List<MetricHistoryPoint> = emptyList(),
+    val downloadHistoryMbps: List<MetricHistoryPoint> = emptyList(),
+    val uploadHistoryMbps: List<MetricHistoryPoint> = emptyList(),
     val wifiName: String? = null,
     val wifiSignalDbm: Int? = null,
     val vpnActive: Boolean = false,
     val timeZoneId: String = "UTC",
+)
+
+data class MetricHistoryPoint(
+    val recordedAt: Instant,
+    val value: Double,
 )
 
 data class PowerSnapshot(

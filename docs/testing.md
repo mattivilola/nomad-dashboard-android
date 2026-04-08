@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 ## Local Setup
 
@@ -121,7 +121,7 @@ Current behavior:
   it appears in `adb devices` or finishes booting
 - streams `ScreenshotReview` logcat lines during capture so you can see which
   screen is being rendered
-- exports PNGs to
+- exports both light and dark theme PNGs to
   `/Users/matti/Development/ILOapps/nomad-dashboard-android/output/screenshots/android/phone`
 
 For faster local iteration, capture a single screen:
@@ -136,6 +136,18 @@ Supported screen filters:
 - `visited`
 - `timetracking`
 - `about`
+
+Current screenshot filenames:
+- `dashboard-phone-light.png`
+- `dashboard-phone-dark.png`
+- `settings-phone-light.png`
+- `settings-phone-dark.png`
+- `visited-phone-light.png`
+- `visited-phone-dark.png`
+- `timetracking-phone-light.png`
+- `timetracking-phone-dark.png`
+- `about-phone-light.png`
+- `about-phone-dark.png`
 
 Run lint:
 
@@ -162,9 +174,22 @@ Current verified result:
   after adding the emergency-care card test
 - `run_gradle -Pksp.incremental=false lintDebug` passed on 2026-04-07 after the
   travel-alert slice
+- `run_gradle :core:designsystem:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:about:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-07 after the shared UX foundation and whole-app screen redesign pass
+- `run_gradle :app:assembleDebug :app:compileDebugAndroidTestKotlin :feature:dashboard:compileDebugAndroidTestKotlin :feature:visited:compileDebugAndroidTestKotlin :feature:timetracking:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-07 after the screenshot contract and UI test updates
+- `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after adding retained connectivity history and the
+  new dashboard mini-chart UI
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
+- on 2026-04-08, `run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
+  got through the updated repository unit tests and dashboard Kotlin plus
+  Android-test compilation, then failed in existing app assembly work under
+  `:app:compileDebugKotlin` with `Cannot access output property
+  'destinationDirectory'` and a missing
+  `app/build/tmp/kotlin-classes/debug/com` path
 - on 2026-04-07, `make build` still failed in generated KSP output, now as
   `FileAlreadyExistsException` under `feature:visited:kspDebugKotlin`,
   `feature:dashboard:kspDebugKotlin`, and the app module; the emergency-care
@@ -195,6 +220,8 @@ Latest verification attempt:
 - on 2026-04-07, the local-dev path was tightened so
   `SCREEN=<name> make screenshots` runs just one screenshot method and streams
   `ScreenshotReview` logcat progress while the emulator test is running
+- on 2026-04-07, the screenshot review lane was extended to export both light
+  and dark theme renders for every review screen instead of a single theme only
 - the default workflow now routes `make test` through the emulator path and
   reserves the phone for explicit smoke checks via `make test-device`
 - Hilt-backed Android library modules needed both

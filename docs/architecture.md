@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-04-07
+Last updated: 2026-04-08
 
 ## Overview
 
@@ -116,6 +116,8 @@ Current dashboard data flow:
 2. `DashboardViewModel` subscribes to repository state.
 3. `DefaultNomadDashboardRepository` refreshes:
    - Android connectivity and Wi-Fi state
+   - retained connectivity metric history in Room for download, upload, and
+     latency mini-charts
    - battery and charging state
    - FreeIPAPI public IP and geolocation
    - device-first, IP-fallback fuel lookup context when fuel prices are enabled
@@ -235,16 +237,13 @@ Emergency care flow:
 
 - Proto DataStore for app settings
 - Android Keystore-backed encrypted provider credential storage
+- Room-backed metric points for retained connectivity throughput and latency
+  history
 - Room-backed visited places with merged source provenance
 - Room-backed visited country days with observed and inferred rows
 - Room-backed time-tracking projects
 - Room-backed time-tracking entries with project linkage and a single active
   entry invariant
-
-### Scaffolded
-
-- Room database and DAOs for:
-  - metric points
 
 ## Current External Integrations
 

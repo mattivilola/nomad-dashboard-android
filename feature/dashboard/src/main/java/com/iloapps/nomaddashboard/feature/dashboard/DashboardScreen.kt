@@ -1,23 +1,29 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,9 +31,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,17 +53,17 @@ import com.iloapps.nomaddashboard.core.designsystem.component.NomadChartShell
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadStatusBadge
-import com.iloapps.nomaddashboard.core.designsystem.component.NomadSummaryTile
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadTopBar
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
+import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.SignalLevel
-import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
 import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
@@ -62,23 +77,16 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun DashboardRoute(
-    onOpenSettings: () -> Unit,
-    onOpenVisited: () -> Unit,
-    onOpenTimeTracking: () -> Unit,
-    onOpenAbout: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     DashboardScreen(
         state = uiState,
         onRefresh = viewModel::refresh,
-        onOpenSettings = onOpenSettings,
-        onOpenVisited = onOpenVisited,
-        onOpenTimeTracking = onOpenTimeTracking,
-        onOpenAbout = onOpenAbout,
     )
 }
 
@@ -87,10 +95,6 @@ fun DashboardRoute(
 fun DashboardScreen(
     state: DashboardUiState,
     onRefresh: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onOpenVisited: () -> Unit,
-    onOpenTimeTracking: () -> Unit,
-    onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -108,34 +112,33 @@ fun DashboardScreen(
                     title = "Nomad Dashboard",
                     subtitle = dashboardLocationLabel(state),
                     supportingText = dashboardSupportLine(state),
-                    badgeText = state.snapshot.overallSummary.headline,
-                    badgeTone = toneForLevel(state.snapshot.overallSummary.level),
                     trailing = {
-                        IconButton(onClick = onRefresh) {
-                            Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
-                        }
-                        IconButton(onClick = onOpenSettings) {
-                            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                        IconButton(
+                            onClick = {
+                                if (state.snapshot.isRefreshing.not()) {
+                                    onRefresh()
+                                }
+                            },
+                            modifier = Modifier.testTag("dashboard_refresh_action"),
+                        ) {
+                            if (state.snapshot.isRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .testTag("dashboard_refresh_progress"),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
+                            }
                         }
                     },
                 )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    NomadActionChip(label = "Visited", icon = Icons.Rounded.Map, onClick = onOpenVisited)
-                    NomadActionChip(label = "Tracking", icon = Icons.Rounded.Timer, onClick = onOpenTimeTracking)
-                    NomadActionChip(label = "About", icon = Icons.Rounded.Info, onClick = onOpenAbout)
-                }
             }
         }
 
         item {
-            DashboardSummaryStrip(
-                overall = state.snapshot.overallSummary,
-                network = state.snapshot.networkSummary,
-                power = state.snapshot.powerSummary,
-            )
+            DashboardSummaryStrip(snapshot = state.snapshot)
         }
 
         items(state.settings.dashboardCardOrder, key = { it.name }) { cardId ->
@@ -197,38 +200,80 @@ fun DashboardScreen(
     }
 }
 
+private data class DashboardOverviewTileModel(
+    val title: String,
+    val headline: String,
+    val detail: String,
+    val tone: NomadBadgeTone,
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DashboardSummaryStrip(
-    overall: SummaryTile,
-    network: SummaryTile,
-    power: SummaryTile,
+    snapshot: DashboardSnapshot,
 ) {
+    val tiles = listOf(
+        weatherOverviewTile(snapshot),
+        networkOverviewTile(snapshot),
+        powerOverviewTile(snapshot),
+    )
     BoxWithConstraints(modifier = Modifier.testTag("dashboard_summary_strip")) {
-        val spacing = 12.dp
-        val columns = if (maxWidth > 330.dp) 3 else 2
+        val spacing = 8.dp
+        val columns = if (maxWidth >= 280.dp) 3 else 2
         val tileWidth = (maxWidth - spacing * (columns - 1)) / columns
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalArrangement = Arrangement.spacedBy(spacing),
             maxItemsInEachRow = columns,
         ) {
-            CompactSummaryTile(tile = overall, modifier = Modifier.width(tileWidth))
-            CompactSummaryTile(tile = network, modifier = Modifier.width(tileWidth))
-            CompactSummaryTile(tile = power, modifier = Modifier.width(tileWidth))
+            tiles.forEach { tile ->
+                CompactSummaryTile(tile = tile, modifier = Modifier.width(tileWidth))
+            }
         }
     }
 }
 
 @Composable
 private fun CompactSummaryTile(
-    tile: SummaryTile,
+    tile: DashboardOverviewTileModel,
     modifier: Modifier = Modifier,
 ) {
-    NomadSummaryTile(
-        tile = tile,
-        modifier = modifier.heightIn(min = 132.dp),
-    )
+    NomadCard(
+        modifier = modifier.heightIn(min = 118.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = tile.title.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box(
+                modifier = Modifier
+                    .padding(top = 3.dp)
+                    .size(8.dp)
+                    .background(summaryToneColor(tile.tone), CircleShape),
+            )
+        }
+        Text(
+            text = tile.headline,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = tile.detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -339,42 +384,266 @@ private fun WeatherSectionCard(
 private fun ConnectivitySectionCard(
     state: DashboardUiState,
 ) {
+    val connectivity = state.snapshot.connectivity
     NomadCard {
-        NomadSectionClusterHeader(
-            title = "Connectivity",
-            subtitle = listOfNotNull(
-                state.snapshot.connectivity.wifiName,
-                state.snapshot.connectivity.internetState,
-            ).joinToString(" · ").ifBlank { "Network detail" },
-            badges = listOf(state.snapshot.networkSummary.headline to toneForLevel(state.snapshot.networkSummary.level)),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Connectivity",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = connectivityContextLine(connectivity),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+            NomadStatusBadge(
+                text = connectivity.internetState,
+                tone = toneForLevel(state.snapshot.networkSummary.level),
+            )
+        }
 
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             maxItemsInEachRow = 2,
         ) {
-            NomadMetricBlock("Down", state.snapshot.connectivity.downloadMbps?.let { "%.1f Mbps".format(it) } ?: "n/a")
-            NomadMetricBlock("Up", state.snapshot.connectivity.uploadMbps?.let { "%.1f Mbps".format(it) } ?: "n/a")
-            NomadMetricBlock("Latency", state.snapshot.connectivity.latencyMs?.let { "${it.toInt()} ms" } ?: "n/a")
-            NomadMetricBlock("Jitter", state.snapshot.connectivity.jitterMs?.let { "${it.toInt()} ms" } ?: "n/a")
+            NomadMetricBlock("Down", connectivity.downloadMbps.formatThroughput())
+            NomadMetricBlock("Up", connectivity.uploadMbps.formatThroughput())
+            NomadMetricBlock("Latency", connectivity.latencyMs.formatMilliseconds())
+            NomadMetricBlock("Jitter", connectivity.jitterMs.formatMilliseconds())
         }
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            maxItemsInEachRow = 2,
+        ConnectivityTrendPanels(
+            throughputPanel = {
+                ConnectivityTrendPanel(
+                    title = "Throughput",
+                    supporting = "Retained local traffic samples from recent dashboard refreshes.",
+                    series = listOf(
+                        ConnectivityTrendSeries(
+                            label = "Down",
+                            values = connectivity.downloadHistoryMbps.values(),
+                            currentValue = connectivity.downloadMbps.formatThroughput(),
+                            color = MaterialTheme.colorScheme.primary,
+                        ),
+                        ConnectivityTrendSeries(
+                            label = "Up",
+                            values = connectivity.uploadHistoryMbps.values(),
+                            currentValue = connectivity.uploadMbps.formatThroughput(),
+                            color = MaterialTheme.colorScheme.secondary,
+                        ),
+                    ),
+                )
+            },
+            latencyPanel = {
+                ConnectivityTrendPanel(
+                    title = "Latency",
+                    supporting = connectivity.jitterMs?.let { "Jitter ${it.formatMilliseconds()} across the latest probe window." }
+                        ?: "Socket probe history builds locally as the dashboard refreshes.",
+                    series = listOf(
+                        ConnectivityTrendSeries(
+                            label = "Now",
+                            values = connectivity.latencyHistoryMs.values(),
+                            currentValue = connectivity.latencyMs.formatMilliseconds(),
+                            color = MaterialTheme.colorScheme.primary,
+                        ),
+                    ),
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun ConnectivityTrendPanels(
+    throughputPanel: @Composable () -> Unit,
+    latencyPanel: @Composable () -> Unit,
+) {
+    BoxWithConstraints {
+        if (maxWidth < 320.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                throughputPanel()
+                latencyPanel()
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    throughputPanel()
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    latencyPanel()
+                }
+            }
+        }
+    }
+}
+
+private data class ConnectivityTrendSeries(
+    val label: String,
+    val values: List<Double>,
+    val currentValue: String,
+    val color: Color,
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ConnectivityTrendPanel(
+    title: String,
+    supporting: String,
+    series: List<ConnectivityTrendSeries>,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
+            .padding(14.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                series.forEach { item ->
+                    ConnectivityTrendLegend(series = item)
+                }
+            }
+            ConnectivityMiniChart(series = series)
+            Text(
+                text = supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConnectivityTrendLegend(
+    series: ConnectivityTrendSeries,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(series.color),
+        )
+        Text(
+            text = "${series.label} ${series.currentValue}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+        )
+    }
+}
+
+@Composable
+private fun ConnectivityMiniChart(
+    series: List<ConnectivityTrendSeries>,
+    modifier: Modifier = Modifier,
+) {
+    val availableSeries = series.filter { it.values.isNotEmpty() }
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(92.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (availableSeries.isEmpty()) {
+            Text(
+                text = "Builds as you refresh",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            return@Box
+        }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(92.dp)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
         ) {
-            NomadChartShell(
-                title = "Throughput",
-                subtitle = "History surface reserved for retained down/up samples.",
-                modifier = Modifier.fillMaxWidth(0.48f),
-            )
-            NomadChartShell(
-                title = "Latency",
-                subtitle = "Realtime trend preview will unlock once retention lands.",
-                modifier = Modifier.fillMaxWidth(0.48f),
-            )
+            val allValues = availableSeries.flatMap(ConnectivityTrendSeries::values)
+            val maxValue = (allValues.maxOrNull() ?: 0.0).let { if (it <= 0.0) 1.0 else it * 1.1 }
+            val chartWidth = size.width
+            val chartHeight = size.height
+            val strokeWidth = 3.dp.toPx()
+            val pointRadius = 3.5.dp.toPx()
+
+            listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
+                val y = chartHeight * fraction
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x = 0f, y = y),
+                    end = Offset(x = chartWidth, y = y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
+
+            availableSeries.forEach { chartSeries ->
+                val points = chartSeries.values.mapIndexed { index, value ->
+                    val x = if (chartSeries.values.size == 1) {
+                        chartWidth / 2f
+                    } else {
+                        chartWidth * index / (chartSeries.values.lastIndex.toFloat())
+                    }
+                    val normalized = (value / maxValue).toFloat().coerceIn(0f, 1f)
+                    val y = chartHeight - (normalized * chartHeight)
+                    Offset(x = x, y = y)
+                }
+
+                if (points.size == 1) {
+                    drawCircle(
+                        color = chartSeries.color,
+                        radius = pointRadius,
+                        center = points.single(),
+                    )
+                } else {
+                    val path = Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        points.drop(1).forEach { point -> lineTo(point.x, point.y) }
+                    }
+                    drawPath(
+                        path = path,
+                        color = chartSeries.color,
+                        style = Stroke(
+                            width = strokeWidth,
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round,
+                        ),
+                    )
+                    drawCircle(
+                        color = chartSeries.color,
+                        radius = pointRadius,
+                        center = points.last(),
+                    )
+                }
+            }
         }
     }
 }
@@ -834,20 +1103,109 @@ private fun FuelStationPrice.toFuelLine(): String {
     return "$label: $price $currencyCode/L · $stationName · $distance km$localityText"
 }
 
+private fun weatherOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel =
+    DashboardOverviewTileModel(
+        title = "Weather",
+        headline = snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" } ?: "Waiting",
+        detail = listOfNotNull(
+            snapshot.weather.summary.takeUnless { it.equals("Weather unavailable", ignoreCase = true) },
+            travelAlertsCompactLabel(snapshot.travelAlerts),
+        ).joinToString(" · ").ifBlank { "Refresh to load current conditions" },
+        tone = statusBadgeForWeather(snapshot.weather).second,
+    )
+
+private fun networkOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel {
+    val detail = listOfNotNull(
+        snapshot.connectivity.wifiName,
+        snapshot.connectivity.latencyMs?.let { "${it.roundToInt()} ms" },
+    ).joinToString(" · ")
+
+    return DashboardOverviewTileModel(
+        title = "Network",
+        headline = snapshot.connectivity.internetState,
+        detail = detail.ifBlank { "Checking connection quality" },
+        tone = toneForLevel(snapshot.networkSummary.level),
+    )
+}
+
+private fun powerOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel {
+    val dischargeWatts = snapshot.power.dischargeWatts
+    val headline = snapshot.power.batteryPercent?.let { "$it%" }
+        ?: if (snapshot.power.charging) "Charging" else "Waiting"
+    val detail = when {
+        snapshot.power.charging -> "Charging now"
+        dischargeWatts != null -> "${dischargeWatts.roundToInt()} W drain"
+        else -> snapshot.power.batteryHealthSummary
+    }
+
+    return DashboardOverviewTileModel(
+        title = "Power",
+        headline = headline,
+        detail = detail,
+        tone = toneForLevel(snapshot.powerSummary.level),
+    )
+}
+
+private fun connectivityContextLine(connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot): String =
+    listOfNotNull(
+        connectivity.wifiName,
+        connectivity.wifiSignalDbm?.let { "$it dBm" },
+    ).joinToString(" · ").ifBlank { "Local network context unavailable" }
+
+private fun List<MetricHistoryPoint>.values(): List<Double> = map(MetricHistoryPoint::value)
+
+private fun Double?.formatThroughput(): String {
+    val value = this ?: 0.0
+    return if (value < 0.05) {
+        "0 Mbps"
+    } else {
+        String.format(Locale.US, "%.1f Mbps", value)
+    }
+}
+
+private fun Double?.formatMilliseconds(): String =
+    this?.let { "${it.roundToInt()} ms" } ?: "Unavailable"
+
 private fun dashboardLocationLabel(state: DashboardUiState): String =
     listOfNotNull(
         state.snapshot.travelContext.city,
         state.snapshot.travelContext.country,
-    ).joinToString(", ").ifBlank { "Travel-ready system telemetry" }
+    ).joinToString(", ").ifBlank { "Location unavailable" }
 
 private fun dashboardSupportLine(state: DashboardUiState): String {
-    val refreshText = state.snapshot.lastRefresh?.let { "Last refresh ${it.formatDashboardTimestamp()}" }
-        ?: if (state.snapshot.isRefreshing) "Refreshing dashboard..." else "Waiting for the first refresh"
-    return buildString {
-        append(refreshText)
-        append(" · ")
-        append(state.snapshot.overallSummary.detail)
+    val lastRefresh = state.snapshot.lastRefresh
+    val refreshText = when {
+        state.snapshot.isRefreshing -> "Refreshing travel signals..."
+        lastRefresh != null -> "Updated ${lastRefresh.formatDashboardTimestamp()}"
+        else -> "Tap refresh to load live travel signals"
     }
+    val liveSignals = listOfNotNull(
+        state.snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" },
+        state.snapshot.connectivity.internetState.takeIf { it != "Checking" },
+        state.snapshot.power.batteryPercent?.let { "$it% battery" },
+    )
+    return (listOf(refreshText) + liveSignals).joinToString(" · ")
+}
+
+private fun travelAlertsCompactLabel(snapshot: TravelAlertsSnapshot): String {
+    val highestSeverity = snapshot.highestSeverity
+    return when {
+        highestSeverity?.rank ?: 0 >= TravelAlertSeverity.WARNING.rank ->
+            "Alerts ${travelAlertsSubtitle(snapshot).lowercase()}"
+        highestSeverity != null -> "Alerts ${highestSeverity.badgeTitle().lowercase()}"
+        snapshot.hasStaleStates -> "Alerts stale"
+        snapshot.hasUnavailableStates -> "Alerts limited"
+        else -> "Alerts checking"
+    }
+}
+
+@Composable
+private fun summaryToneColor(tone: NomadBadgeTone) = when (tone) {
+    NomadBadgeTone.Good -> MaterialTheme.colorScheme.primary
+    NomadBadgeTone.Warning -> MaterialTheme.colorScheme.secondary
+    NomadBadgeTone.Accent -> MaterialTheme.colorScheme.tertiary
+    NomadBadgeTone.Info -> MaterialTheme.colorScheme.surfaceTint
+    NomadBadgeTone.Neutral -> MaterialTheme.colorScheme.outline
 }
 
 private fun travelAlertsSubtitle(snapshot: TravelAlertsSnapshot): String {

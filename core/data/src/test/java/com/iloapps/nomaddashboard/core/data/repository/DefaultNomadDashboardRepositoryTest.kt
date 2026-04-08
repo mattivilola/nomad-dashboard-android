@@ -22,6 +22,8 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.ReliefWebSecurityProvid
 import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryProvider
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
+import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.datastore.toProto
@@ -319,6 +321,49 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(request.longitude).isWithin(0.001).of(2.3522)
         assertThat(snapshot.currentTemperatureCelsius).isWithin(0.001).of(19.4)
         assertThat(snapshot.summary).isEqualTo("Today tops out at 21°C")
+    }
+
+    @Test
+    fun `refresh retains connectivity history and defaults missing throughput to zero`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            telemetryReader = FakeTelemetryReader(
+                connectivitySnapshots = listOf(
+                    ConnectivitySnapshot(
+                        internetState = "Online",
+                        isOnline = true,
+                        latencyMs = 34.0,
+                        downloadMbps = null,
+                        uploadMbps = null,
+                        wifiName = "Test Wi-Fi",
+                    ),
+                    ConnectivitySnapshot(
+                        internetState = "Online",
+                        isOnline = true,
+                        latencyMs = 41.0,
+                        downloadMbps = 86.4,
+                        uploadMbps = 18.2,
+                        wifiName = "Test Wi-Fi",
+                    ),
+                ),
+            ),
+            metricPointDao = FakeMetricPointDao(),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+        repository.refresh()
+        advanceUntilIdle()
+
+        val connectivity = repository.snapshot.first { it.lastRefresh != null }.connectivity
+
+        assertThat(connectivity.downloadHistoryMbps.map { it.value }).containsExactly(0.0, 86.4).inOrder()
+        assertThat(connectivity.uploadHistoryMbps.map { it.value }).containsExactly(0.0, 18.2).inOrder()
+        assertThat(connectivity.latencyHistoryMs.map { it.value }).containsExactly(34.0, 41.0).inOrder()
     }
 
     @Test
@@ -680,8 +725,10 @@ class DefaultNomadDashboardRepositoryTest {
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
         ),
         visitedHistoryStore: FakeVisitedHistoryStore,
+        metricPointDao: MetricPointDao = FakeMetricPointDao(),
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
+        telemetryReader: TelemetryReader = FakeTelemetryReader(),
         timeTrackingRepository: TimeTrackingRepository = FakeTimeTrackingRepository(),
         smartravellerAdvisoryProvider: SmartravellerAdvisoryProvider = smartravellerProvider(),
         reliefWebSecurityProvider: ReliefWebSecurityProvider = reliefWebProvider(),
@@ -691,13 +738,14 @@ class DefaultNomadDashboardRepositoryTest {
     ): DefaultNomadDashboardRepository =
         DefaultNomadDashboardRepository(
             settingsDataSource = settingsDataSource,
-            telemetryReader = FakeTelemetryReader(),
+            telemetryReader = telemetryReader,
             freeIpApiService = FakeFreeIpApiService(),
             openMeteoService = openMeteoService,
             fuelPriceProvider = fuelPriceProvider,
             emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
             visitedHistoryStore = visitedHistoryStore,
+            metricPointDao = metricPointDao,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
             providerCredentialStore = providerCredentialStore,
             smartravellerAdvisoryProvider = smartravellerAdvisoryProvider,
@@ -811,20 +859,69 @@ private class FakeAppSettingsDataStore(
     }
 }
 
-private class FakeTelemetryReader : TelemetryReader {
-    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
+private class FakeTelemetryReader(
+    private val connectivitySnapshots: List<ConnectivitySnapshot> = listOf(
         ConnectivitySnapshot(
             internetState = "Online",
             isOnline = true,
             wifiName = "Test Wi-Fi",
-        ) to TrafficSample(rxBytes = 0, txBytes = 0, capturedAtMillis = 0)
+        ),
+    ),
+    private val powerSnapshot: PowerSnapshot = PowerSnapshot(
+        batteryPercent = 80,
+        charging = false,
+        batteryHealthSummary = "Healthy",
+    ),
+) : TelemetryReader {
+    private var connectivityIndex = 0
 
-    override suspend fun power(): PowerSnapshot =
-        PowerSnapshot(
-            batteryPercent = 80,
-            charging = false,
-            batteryHealthSummary = "Healthy",
+    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> {
+        val snapshot = connectivitySnapshots.getOrElse(connectivityIndex) { connectivitySnapshots.last() }
+        connectivityIndex += 1
+        return snapshot to TrafficSample(
+            rxBytes = 0,
+            txBytes = 0,
+            capturedAtMillis = connectivityIndex.toLong(),
         )
+    }
+
+    override suspend fun power(): PowerSnapshot = powerSnapshot
+}
+
+private class FakeMetricPointDao : MetricPointDao {
+    private val points = mutableListOf<MetricPointEntity>()
+    private var nextId = 1L
+
+    override fun observeByKind(kind: String): Flow<List<MetricPointEntity>> =
+        MutableStateFlow(recentByKindSync(kind = kind, limit = Int.MAX_VALUE))
+
+    override suspend fun recentByKind(kind: String, limit: Int): List<MetricPointEntity> =
+        recentByKindSync(kind = kind, limit = limit)
+
+    override suspend fun upsert(point: MetricPointEntity) {
+        if (point.id == 0L) {
+            insert(point)
+            return
+        }
+        points.removeAll { it.id == point.id }
+        points += point
+    }
+
+    override suspend fun insert(point: MetricPointEntity): Long {
+        val storedPoint = point.copy(id = nextId++)
+        points += storedPoint
+        return storedPoint.id
+    }
+
+    override suspend fun trimToLatest(kind: String, keepCount: Int) {
+        val retainedIds = recentByKindSync(kind = kind, limit = keepCount).map(MetricPointEntity::id).toSet()
+        points.removeAll { it.kind == kind && it.id !in retainedIds }
+    }
+
+    private fun recentByKindSync(kind: String, limit: Int): List<MetricPointEntity> =
+        points.filter { it.kind == kind }
+            .sortedByDescending(MetricPointEntity::timestampEpochMillis)
+            .take(limit)
 }
 
 private class FakeFreeIpApiService : FreeIpApiService {

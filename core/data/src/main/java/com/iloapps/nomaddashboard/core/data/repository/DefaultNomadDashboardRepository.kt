@@ -18,6 +18,8 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryPr
 import com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertDiagnosticError
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
+import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
@@ -26,6 +28,7 @@ import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
 import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
+import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
@@ -73,6 +76,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val emergencyCareProvider: EmergencyCareProvider,
     private val timeTrackingRepository: TimeTrackingRepository,
     private val visitedHistoryStore: VisitedHistoryStore,
+    private val metricPointDao: MetricPointDao,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
     private val providerCredentialStore: ProviderCredentialStore,
     private val smartravellerAdvisoryProvider: SmartravellerAdvisoryProvider,
@@ -105,6 +109,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
         val (connectivity, currentTraffic) = telemetryReader.connectivity(previousTrafficSample)
         previousTrafficSample = currentTraffic
+        val connectivityWithHistory = enrichConnectivityWithHistory(
+            connectivity = connectivity,
+            recordedAtMillis = currentTraffic.capturedAtMillis,
+        )
         val power = telemetryReader.power()
 
         val travelContext = if (currentSettings.publicIpGeolocationEnabled) {
@@ -222,8 +230,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
         )
 
         val overallHeadline = when {
-            connectivity.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
-            connectivity.isOnline -> "Connected"
+            connectivityWithHistory.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
+            connectivityWithHistory.isOnline -> "Connected"
             else -> "Waiting"
         }
         val visitedPlaces = visitedHistoryStore.visitedPlaces.first()
@@ -259,13 +267,13 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 title = "Overall",
                 headline = overallHeadline,
                 detail = "${travelContext.city ?: "Travel-ready"} system telemetry",
-                level = if (connectivity.isOnline) SignalLevel.GOOD else SignalLevel.WARNING,
+                level = if (connectivityWithHistory.isOnline) SignalLevel.GOOD else SignalLevel.WARNING,
             ),
             networkSummary = SummaryTile(
                 title = "Network",
-                headline = connectivity.internetState,
-                detail = connectivity.wifiName ?: "Collecting network quality",
-                level = if (connectivity.isOnline) SignalLevel.GOOD else SignalLevel.BAD,
+                headline = connectivityWithHistory.internetState,
+                detail = connectivityWithHistory.wifiName ?: "Collecting network quality",
+                level = if (connectivityWithHistory.isOnline) SignalLevel.GOOD else SignalLevel.BAD,
             ),
             powerSummary = SummaryTile(
                 title = "Power",
@@ -277,7 +285,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                     else -> SignalLevel.WARNING
                 },
             ),
-            connectivity = connectivity,
+            connectivity = connectivityWithHistory,
             power = power,
             travelContext = travelContext,
             weather = weather,
@@ -323,6 +331,60 @@ class DefaultNomadDashboardRepository @Inject constructor(
         providerCredentialStore.update(transform)
         refresh()
     }
+
+    private suspend fun enrichConnectivityWithHistory(
+        connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
+        recordedAtMillis: Long,
+    ): com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot {
+        recordMetric(
+            kind = ConnectivityDownloadMetricKind,
+            recordedAtMillis = recordedAtMillis,
+            value = connectivity.downloadMbps ?: 0.0,
+        )
+        recordMetric(
+            kind = ConnectivityUploadMetricKind,
+            recordedAtMillis = recordedAtMillis,
+            value = connectivity.uploadMbps ?: 0.0,
+        )
+        connectivity.latencyMs?.let { latencyMs ->
+            recordMetric(
+                kind = ConnectivityLatencyMetricKind,
+                recordedAtMillis = recordedAtMillis,
+                value = latencyMs,
+            )
+        }
+
+        return connectivity.copy(
+            latencyHistoryMs = recentMetricHistory(ConnectivityLatencyMetricKind),
+            downloadHistoryMbps = recentMetricHistory(ConnectivityDownloadMetricKind),
+            uploadHistoryMbps = recentMetricHistory(ConnectivityUploadMetricKind),
+        )
+    }
+
+    private suspend fun recordMetric(
+        kind: String,
+        recordedAtMillis: Long,
+        value: Double,
+    ) {
+        metricPointDao.insert(
+            MetricPointEntity(
+                kind = kind,
+                timestampEpochMillis = recordedAtMillis,
+                value = value,
+            ),
+        )
+        metricPointDao.trimToLatest(kind = kind, keepCount = ConnectivityHistoryRetentionCount)
+    }
+
+    private suspend fun recentMetricHistory(kind: String): List<MetricHistoryPoint> =
+        metricPointDao.recentByKind(kind = kind, limit = ConnectivityHistoryRetentionCount)
+            .asReversed()
+            .map { point ->
+                MetricHistoryPoint(
+                    recordedAt = Instant.ofEpochMilli(point.timestampEpochMillis),
+                    value = point.value,
+                )
+            }
 
     private suspend fun migrateLegacyProviderCredentials() {
         val legacyKey = settingsDataSource.legacyTankerkoenigApiKey().trim()
@@ -712,3 +774,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
         else -> "Mixed"
     }
 }
+
+private const val ConnectivityHistoryRetentionCount = 24
+private const val ConnectivityDownloadMetricKind = "connectivity_download_mbps"
+private const val ConnectivityUploadMetricKind = "connectivity_upload_mbps"
+private const val ConnectivityLatencyMetricKind = "connectivity_latency_ms"
