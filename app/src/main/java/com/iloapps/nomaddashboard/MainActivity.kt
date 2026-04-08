@@ -162,7 +162,10 @@ private fun AppNavHost(
     val context = LocalContext.current
     NavHost(navController = navController, startDestination = TopDestination.Dashboard.route, modifier = modifier) {
         composable(TopDestination.Dashboard.route) {
-            DashboardRoute()
+            DashboardRoute(
+                onStartForegroundTracking = { TimeTrackingForegroundService.start(context) },
+                onStopForegroundTracking = { TimeTrackingForegroundService.stop(context) },
+            )
         }
         composable(TopDestination.Settings.route) { SettingsRoute() }
         composable(TopDestination.Visited.route) { VisitedRoute() }

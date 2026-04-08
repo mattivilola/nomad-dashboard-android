@@ -8,9 +8,11 @@ import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
 import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareSearchRequest
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
+import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.UpdateTimeTrackingEntryResult
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
@@ -47,10 +49,12 @@ import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.IpifyService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
+import com.iloapps.nomaddashboard.core.network.model.IpifyResponse
 import com.iloapps.nomaddashboard.core.network.model.ReliefWebReportsRequest
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoCurrent
@@ -66,6 +70,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody
@@ -204,6 +209,63 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(travelContext.publicIp).isEqualTo("1.2.3.4")
         assertThat(travelContext.city).isEqualTo("Helsinki")
         assertThat(travelContext.country).isEqualTo("Finland")
+    }
+
+    @Test
+    fun `refresh falls back to ipify plus freeip by-address lookup when current lookup fails`() = runTest {
+        val freeIpApiService = SequenceFreeIpApiService(
+            responses = listOf(
+                Result.failure(IllegalStateException("lookup me failed")),
+            ),
+            responsesByAddress = mapOf(
+                "198.51.100.12" to Result.success(
+                    FreeIpApiResponse(
+                        ipAddress = "198.51.100.12",
+                        cityName = "Paris",
+                        regionName = "Ile-de-France",
+                        countryName = "France",
+                        countryCode = "FR",
+                        latitude = 48.8566,
+                        longitude = 2.3522,
+                        timeZones = listOf("Europe/Paris"),
+                    ),
+                ),
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            freeIpApiService = freeIpApiService,
+            ipifyService = FakeIpifyService(ip = "198.51.100.12"),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
+        assertThat(travelContext.publicIp).isEqualTo("198.51.100.12")
+        assertThat(travelContext.city).isEqualTo("Paris")
+        assertThat(travelContext.country).isEqualTo("France")
+        assertThat(travelContext.timeZoneId).isEqualTo("Europe/Paris")
+    }
+
+    @Test
+    fun `free ip model decodes string timeZones`() {
+        val response = TestJson.decodeFromString<FreeIpApiResponse>(
+            """
+            {
+              "ipAddress": "203.0.113.42",
+              "countryName": "Spain",
+              "timeZones": "Europe/Madrid"
+            }
+            """.trimIndent(),
+        )
+
+        assertThat(response.ipAddress).isEqualTo("203.0.113.42")
+        assertThat(response.timeZones).containsExactly("Europe/Madrid")
     }
 
     @Test
@@ -834,6 +896,7 @@ class DefaultNomadDashboardRepositoryTest {
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
         freeIpApiService: FreeIpApiService = FakeFreeIpApiService(),
+        ipifyService: IpifyService = FakeIpifyService(),
         openMeteoService: OpenMeteoService = FakeOpenMeteoService(),
         openMeteoMarineService: OpenMeteoMarineService = FakeOpenMeteoMarineService(),
         emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
@@ -856,6 +919,7 @@ class DefaultNomadDashboardRepositoryTest {
             settingsDataSource = settingsDataSource,
             telemetryReader = telemetryReader,
             freeIpApiService = freeIpApiService,
+            ipifyService = ipifyService,
             openMeteoService = openMeteoService,
             openMeteoMarineService = openMeteoMarineService,
             fuelPriceProvider = fuelPriceProvider,
@@ -1070,10 +1134,14 @@ private class FakeFreeIpApiService : FreeIpApiService {
             longitude = 24.9384,
             timeZones = listOf("Europe/Helsinki"),
         )
+
+    override suspend fun lookup(ipAddress: String): FreeIpApiResponse =
+        lookupMe().copy(ipAddress = ipAddress)
 }
 
 private class SequenceFreeIpApiService(
     private val responses: List<Result<FreeIpApiResponse>>,
+    private val responsesByAddress: Map<String, Result<FreeIpApiResponse>> = emptyMap(),
 ) : FreeIpApiService {
     private var index = 0
 
@@ -1082,6 +1150,16 @@ private class SequenceFreeIpApiService(
         index += 1
         return response.getOrThrow()
     }
+
+    override suspend fun lookup(ipAddress: String): FreeIpApiResponse =
+        responsesByAddress[ipAddress]?.getOrThrow()
+            ?: error("No by-address response configured for $ipAddress")
+}
+
+private class FakeIpifyService(
+    private val ip: String? = "198.51.100.12",
+) : IpifyService {
+    override suspend fun lookupIp(): IpifyResponse = IpifyResponse(ip = ip)
 }
 
 private class FakeOpenMeteoService(
@@ -1193,18 +1271,30 @@ private class FakeTimeTrackingRepository(
 ) : TimeTrackingRepository {
     override val projects: Flow<List<TimeTrackingProject>> = MutableStateFlow(emptyList())
     override val recentEntries: Flow<List<TimeTrackingRecord>> = MutableStateFlow(emptyList())
+    override val pendingEntries: Flow<List<TimeTrackingRecord>> = MutableStateFlow(emptyList())
     override val activeEntry: Flow<TimeTrackingRecord?> = MutableStateFlow(active)
 
     override suspend fun currentActiveEntry(): TimeTrackingRecord? = activeEntry.first()
+
+    override suspend fun syncTracking(now: Instant) = Unit
 
     override suspend fun createProject(name: String): CreateProjectResult =
         CreateProjectResult.Created(
             TimeTrackingProject(id = UUID.randomUUID(), name = name.trim()),
         )
 
-    override suspend fun startTracking(projectId: UUID): StartTrackingResult = StartTrackingResult.Started
+    override suspend fun startTracking(): StartTrackingResult = StartTrackingResult.Started
 
     override suspend fun stopTracking(): StopTrackingResult = StopTrackingResult.NotTracking
+
+    override suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult =
+        AllocateTrackedTimeResult.NothingToAllocate
+
+    override suspend fun updateEntry(
+        entryId: UUID,
+        startAt: Instant,
+        endAt: Instant,
+    ): UpdateTimeTrackingEntryResult = UpdateTimeTrackingEntryResult.Updated
 }
 
 private val TestJson = Json {

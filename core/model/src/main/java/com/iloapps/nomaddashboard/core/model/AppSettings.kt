@@ -56,5 +56,7 @@ data class AppSettings(
     val emergencyCareEnabled: Boolean = false,
     val visitedPlacesEnabled: Boolean = true,
     val projectTimeTrackingEnabled: Boolean = false,
+    val projectTimeTrackingAutoStartMinutes: Int = 7 * 60,
+    val projectTimeTrackingAutoStopMinutes: Int = 19 * 60,
     val surfSpot: SurfSpotConfiguration = SurfSpotConfiguration(name = "Tarifa", latitude = 36.0132, longitude = -5.6069),
 )

@@ -37,6 +37,11 @@ Current behavior:
 - falls back to the first booted emulator when no physical device is attached
 - honors an explicit `ANDROID_SERIAL=<serial> make run` override
 - builds the debug APK before install and launch
+- prints timestamped install/launch progress updates every 3 seconds while
+  `adb install` or app launch is still waiting
+- uses `am start -W` so the launch step prints Android ActivityManager timing
+- supports `NOMAD_RUN_VERBOSE=1 make run` for extra command context while
+  debugging slow installs or launches
 
 Capture a timestamped screenshot from the currently selected adb target:
 
@@ -204,6 +209,18 @@ Current verified result:
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
+- on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin -Pksp.incremental=false`
+  passed after extending app settings for the new time-tracking auto window
+- on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:datastore:compileDebugKotlin :core:datastore:testDebugUnitTest -Pksp.incremental=false`
+  passed after updating the settings proto mapper and round-trip coverage for
+  the time-tracking auto window
+- on 2026-04-08, `make build` and a targeted
+  `run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:data:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:compileDebugKotlin -Pksp.incremental=false`
+  both stopped early in the existing unrelated
+  `:core:network:compileDebugKotlin` failure in
+  `core/network/src/main/java/com/iloapps/nomaddashboard/core/network/model/FreeIpApiResponse.kt`
+  (`JsonObjectBuilder.put` overload mismatch), so full verification of the new
+  time-tracking/dashboard slice is still blocked on that repo-wide issue
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed after the Travel Context device-vs-IP redesign and map-intent fix
 - on 2026-04-08, `make build` passed after the weather hourly + surf parity
@@ -335,6 +352,15 @@ make run
 If both a wireless-debugged phone and an emulator are attached, `make run`
 targets the phone by default. Use `ANDROID_SERIAL=<emulator-serial> make run`
 when you explicitly want the emulator.
+
+If the install or launch feels stuck, rerun with:
+
+```sh
+NOMAD_RUN_VERBOSE=1 make run
+```
+
+That keeps the same behavior but also prints the exact `adb` commands being
+run, along with the periodic elapsed-time progress lines.
 
 Current repo status:
 - verified working on a physical device after wireless ADB reconnect

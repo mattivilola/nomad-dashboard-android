@@ -20,6 +20,7 @@ import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TimeTrackingDashboardState
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
+import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
@@ -36,6 +37,7 @@ import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardUiState
+import com.iloapps.nomaddashboard.feature.dashboard.DashboardTimeTrackingUiState
 import com.iloapps.nomaddashboard.feature.settings.SettingsUiState
 import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingUiState
 import com.iloapps.nomaddashboard.feature.visited.VisitedUiState
@@ -313,9 +315,39 @@ object ScreenshotReviewFixtures {
                 ),
                 timeTracking = TimeTrackingDashboardState(
                     enabled = true,
-                    headline = "Tracking ready",
-                    detail = "2 completed sessions saved locally for Client Work and Nomad R&D.",
+                    headline = "Running",
+                    detail = "Auto capture has 01:45:00 ready for quick allocation.",
                 ),
+            ),
+            timeTracking = DashboardTimeTrackingUiState(
+                projects = listOf(clientWorkProject, nomadResearchProject),
+                pendingEntries = listOf(
+                    TimeTrackingRecord(
+                        entry = TimeTrackingEntry(
+                            id = UUID.fromString("77777777-7777-7777-7777-777777777777"),
+                            projectId = TimeTrackingOtherProjectId,
+                            startAt = Instant.parse("2026-04-07T06:30:00Z"),
+                            endAt = Instant.parse("2026-04-07T07:15:00Z"),
+                        ),
+                        project = TimeTrackingProject(
+                            id = TimeTrackingOtherProjectId,
+                            name = "Other",
+                        ),
+                    ),
+                ),
+                activeEntry = TimeTrackingRecord(
+                    entry = TimeTrackingEntry(
+                        id = UUID.fromString("88888888-8888-8888-8888-888888888888"),
+                        projectId = TimeTrackingOtherProjectId,
+                        startAt = Instant.parse("2026-04-07T08:00:00Z"),
+                        endAt = null,
+                    ),
+                    project = TimeTrackingProject(
+                        id = TimeTrackingOtherProjectId,
+                        name = "Other",
+                    ),
+                ),
+                message = "Tap a project chip to file the current buffer.",
             ),
         )
 
@@ -380,7 +412,28 @@ object ScreenshotReviewFixtures {
     fun timeTrackingState(): TimeTrackingUiState =
         TimeTrackingUiState(
             settings = fixtureSettings,
-            projects = listOf(clientWorkProject, nomadResearchProject),
+            projects = listOf(
+                clientWorkProject,
+                nomadResearchProject,
+                TimeTrackingProject(
+                    id = TimeTrackingOtherProjectId,
+                    name = "Other",
+                ),
+            ),
+            pendingEntries = listOf(
+                TimeTrackingRecord(
+                    entry = TimeTrackingEntry(
+                        id = UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                        projectId = TimeTrackingOtherProjectId,
+                        startAt = Instant.parse("2026-04-07T06:30:00Z"),
+                        endAt = Instant.parse("2026-04-07T07:15:00Z"),
+                    ),
+                    project = TimeTrackingProject(
+                        id = TimeTrackingOtherProjectId,
+                        name = "Other",
+                    ),
+                ),
+            ),
             recentEntries = listOf(
                 TimeTrackingRecord(
                     entry = TimeTrackingEntry(
@@ -404,14 +457,16 @@ object ScreenshotReviewFixtures {
             activeEntry = TimeTrackingRecord(
                 entry = TimeTrackingEntry(
                     id = UUID.fromString("55555555-5555-5555-5555-555555555555"),
-                    projectId = clientWorkProject.id,
+                    projectId = TimeTrackingOtherProjectId,
                     startAt = Instant.parse("2026-04-07T07:45:00Z"),
                     endAt = null,
                 ),
-                project = clientWorkProject,
+                project = TimeTrackingProject(
+                    id = TimeTrackingOtherProjectId,
+                    name = "Other",
+                ),
             ),
-            selectedProjectId = clientWorkProject.id,
             draftProjectName = "",
-            message = "Foreground tracking resumed after the last app launch.",
+            message = "Foreground capture resumed after the last app launch.",
         )
 }

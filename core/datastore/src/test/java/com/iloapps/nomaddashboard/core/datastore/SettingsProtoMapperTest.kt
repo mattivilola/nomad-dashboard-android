@@ -27,6 +27,8 @@ class SettingsProtoMapperTest {
             emergencyCareEnabled = true,
             visitedPlacesEnabled = false,
             projectTimeTrackingEnabled = true,
+            projectTimeTrackingAutoStartMinutes = 6 * 60 + 30,
+            projectTimeTrackingAutoStopMinutes = 20 * 60 + 15,
             surfSpot = SurfSpotConfiguration("Tarifa", 36.01, -5.60),
         )
 
@@ -41,6 +43,8 @@ class SettingsProtoMapperTest {
         assertThat(restored.publicIpGeolocationEnabled).isFalse()
         assertThat(restored.useCurrentLocationForWeather).isTrue()
         assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
+        assertThat(restored.projectTimeTrackingAutoStartMinutes).isEqualTo(6 * 60 + 30)
+        assertThat(restored.projectTimeTrackingAutoStopMinutes).isEqualTo(20 * 60 + 15)
         assertThat(restored.surfSpot.latitude).isEqualTo(36.01)
         assertThat(restored.surfSpot.longitude).isEqualTo(-5.60)
     }

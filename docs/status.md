@@ -54,6 +54,10 @@ Current repository state:
   provider's current timezone schema, the card compares device and public-IP
   location side by side, richer Wi-Fi telemetry is visible, and map actions
   now use Android-native intents instead of the previous dead URI path
+- Android public-IP reliability pass landed: the client now sends explicit JSON
+  accept plus app identity headers, accepts `timeZones` as either a string or
+  an array, and falls back through a plain-IP lookup plus by-address
+  geolocation when the current-IP endpoint fails
 - travel alerts reliability and UX pass landed: Smartraveller advisory now
   parses the live destinations page, coverage remains `current country +
   bordering countries` for cases like France plus 8 neighbors, and the card
@@ -62,6 +66,10 @@ Current repository state:
 - whole-app UX parity pass expanded across settings, about, and time tracking;
   shared badges, metric blocks, chart shells, and stronger section headers now
   give the app a more coherent product language
+- time-tracking model redesign landed: the app now captures into a persistent
+  unallocated buffer first, shows the live counter on both dashboard and
+  tracking screens, exposes quick-allocation project chips plus a built-in
+  `Other` lane, and adds a configurable same-day auto-capture window
 - about-screen refinement landed: the screen now acts as a clearer trust
   surface with direct website and GitHub actions, live version metadata, and a
   proper maintainer/distributor footer instead of generic filler copy
@@ -85,6 +93,9 @@ Current repository state:
   summaries in a denser travel-dashboard layout
 - screenshot review workflow now captures both light and dark theme exports for
   each review screen
+- `make run` now prints timestamped install/launch progress updates and waits
+  for `am start -W` launch timing so slow wireless-device deploys are less
+  opaque
 
 ## Completed
 
@@ -128,6 +139,8 @@ Current repository state:
 - visited map rendering implemented
 - country-day aggregation logic implemented
 - time-tracking route implemented with local project creation, start/stop flow, and recent-session history
+- time-tracking route redesigned around continuous unallocated capture,
+  dashboard quick allocation, and configurable daily auto-run hours
 - time-tracking Room persistence implemented for projects and entries
 - time-tracking foreground service and persistent notification implemented
 - time-tracking repository/storage/runtime tests implemented
@@ -156,7 +169,8 @@ Current repository state:
   map-first screen structure, and the map framing/highlight pass is now in, but
   screenshot verification and final polish are still pending
 - settings/about/time-tracking UX parity pass is underway; the new productized
-  layouts compile and test-compile, but still need screenshot review
+  layouts compile conceptually, but still need screenshot review and a clean
+  repo-wide build after the unrelated `core:network` compiler failure is fixed
 - physical-device notification smoke verification for the new time-tracking runtime
 - emulator-backed screenshot verification remains blocked intermittently by the
   local `Pixel_5_API_31` emulator exiting before it appears in `adb devices`
@@ -209,6 +223,9 @@ Verified:
 - `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the travel-context comparison redesign, IP model
   hardening, and Android-native map handoff fix
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh falls back to ipify plus freeip by-address lookup when current lookup fails' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.free ip model decodes string timeZones' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh keeps last known ip context when lookup fails' -Pksp.incremental=false`
+  passed on 2026-04-08 after the Android public-IP fallback and schema
+  tolerance hardening pass
 - `run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest --tests com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh\ resolves\ travel\ alerts\ and\ prefers\ device\ country\ coverage :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after the Smartraveller live-page parsing fix and the
   Travel Alerts dashboard card refinement
@@ -218,6 +235,9 @@ Verified:
   dashboard UX refinement slice
 - `make build` passed on 2026-04-08 after the weather hourly + surf parity
   slice
+- `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin -Pksp.incremental=false`
+  passed on 2026-04-08 after adding the new time-tracking auto-window settings
+  fields and model mapping
 - `make lint` passed on 2026-04-08 after the dashboard header and compact
   overview polish pass
 - `make lint` passed on 2026-04-08 after the weather hourly + surf parity

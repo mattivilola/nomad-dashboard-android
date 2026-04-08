@@ -105,12 +105,17 @@ class SystemTelemetryReader @Inject constructor(
         val health = batteryIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN)
             ?: BatteryManager.BATTERY_HEALTH_UNKNOWN
         val temperatureTenthsCelsius = batteryIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
-        val currentAverageMicroAmps = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE) ?: 0
-        val currentNowMicroAmps = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0
-        val currentEstimateMicroAmps = currentAverageMicroAmps.takeIf { it != 0 } ?: currentNowMicroAmps
+        val currentAverageMicroAmps = batteryManager
+            ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
+            .takeSupportedBatteryCurrent()
+        val currentNowMicroAmps = batteryManager
+            ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            .takeSupportedBatteryCurrent()
+        val currentEstimateMicroAmps = currentAverageMicroAmps ?: currentNowMicroAmps
         val voltageMillivolts = batteryIntent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
-        val dischargeWatts = if (currentEstimateMicroAmps != 0 && voltageMillivolts != 0) {
-            kotlin.math.abs(currentEstimateMicroAmps / 1_000_000.0 * voltageMillivolts / 1000.0)
+        val dischargeWatts = if (currentEstimateMicroAmps != null && voltageMillivolts > 0) {
+            val estimatedWatts = kotlin.math.abs(currentEstimateMicroAmps / 1_000_000.0 * voltageMillivolts / 1000.0)
+            estimatedWatts.takeIf { it in 0.01..100.0 }
         } else {
             null
         }
@@ -179,3 +184,6 @@ class SystemTelemetryReader @Inject constructor(
         attempt.await()
     }
 }
+
+private fun Int?.takeSupportedBatteryCurrent(): Int? =
+    this?.takeUnless { it == Int.MIN_VALUE }

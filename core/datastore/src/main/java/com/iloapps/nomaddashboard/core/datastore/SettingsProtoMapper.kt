@@ -20,6 +20,9 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
     }.toMap().ifEmpty {
         DashboardCardId.defaultOrder.associateWith { DashboardCardWidthMode.WIDE }
     }
+    val autoStartMinutes = projectTimeTrackingAutoStartMinutes
+    val autoStopMinutes = projectTimeTrackingAutoStopMinutes
+    val useDefaultTrackingWindow = autoStartMinutes == 0 && autoStopMinutes == 0
 
     return AppSettings(
         appearanceMode = AppearanceMode.entries.firstOrNull { it.name == appearanceMode } ?: AppearanceMode.SYSTEM,
@@ -34,6 +37,8 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
         emergencyCareEnabled = emergencyCareEnabled,
         visitedPlacesEnabled = visitedPlacesEnabled,
         projectTimeTrackingEnabled = projectTimeTrackingEnabled,
+        projectTimeTrackingAutoStartMinutes = if (useDefaultTrackingWindow) 7 * 60 else autoStartMinutes.coerceIn(0, 23 * 60 + 59),
+        projectTimeTrackingAutoStopMinutes = if (useDefaultTrackingWindow) 19 * 60 else autoStopMinutes.coerceIn(0, 23 * 60 + 59),
         surfSpot = SurfSpotConfiguration(
             name = surfSpotName,
             latitude = surfSpotLatitude.takeIf { hasSurfSpotLatitude },
@@ -56,6 +61,8 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setEmergencyCareEnabled(emergencyCareEnabled)
         .setVisitedPlacesEnabled(visitedPlacesEnabled)
         .setProjectTimeTrackingEnabled(projectTimeTrackingEnabled)
+        .setProjectTimeTrackingAutoStartMinutes(projectTimeTrackingAutoStartMinutes)
+        .setProjectTimeTrackingAutoStopMinutes(projectTimeTrackingAutoStopMinutes)
         .setSurfSpotName(surfSpot.name)
         .setHasSurfSpotLatitude(surfSpot.latitude != null)
         .setHasSurfSpotLongitude(surfSpot.longitude != null)

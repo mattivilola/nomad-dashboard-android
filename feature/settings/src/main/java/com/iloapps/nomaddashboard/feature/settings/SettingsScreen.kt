@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -166,6 +167,20 @@ fun SettingsScreen(
         }
 
         item {
+            TimeTrackingWindowCard(
+                settings = settings,
+                onSave = { startMinutes, stopMinutes ->
+                    onUpdate { current ->
+                        current.copy(
+                            projectTimeTrackingAutoStartMinutes = startMinutes,
+                            projectTimeTrackingAutoStopMinutes = stopMinutes,
+                        )
+                    }
+                },
+            )
+        }
+
+        item {
             SurfSpotSettingsCard(
                 surfSpot = settings.surfSpot,
                 isResolvingCurrentLocation = uiState.isResolvingSurfSpotLocation,
@@ -238,6 +253,72 @@ private fun SettingsGroupCard(
     NomadCard {
         NomadSectionClusterHeader(title = title, subtitle = subtitle)
         Column(verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+    }
+}
+
+@Composable
+private fun TimeTrackingWindowCard(
+    settings: AppSettings,
+    onSave: (startMinutes: Int, stopMinutes: Int) -> Unit,
+) {
+    var startText by rememberSaveable(settings.projectTimeTrackingAutoStartMinutes) {
+        mutableStateOf(settings.projectTimeTrackingAutoStartMinutes.formatTimeWindow())
+    }
+    var stopText by rememberSaveable(settings.projectTimeTrackingAutoStopMinutes) {
+        mutableStateOf(settings.projectTimeTrackingAutoStopMinutes.formatTimeWindow())
+    }
+    val startMinutes = parseTimeWindow(startText)
+    val stopMinutes = parseTimeWindow(stopText)
+    val isValid = startMinutes != null && stopMinutes != null && stopMinutes > startMinutes
+
+    NomadCard {
+        NomadSectionClusterHeader(
+            title = "Tracking Window",
+            subtitle = "Inside this local-time window the app auto-resumes continuous capture when the buffer is empty. Outside it, users can still run manual capture.",
+            badges = listOf(
+                "${settings.projectTimeTrackingAutoStartMinutes.formatTimeWindow()}-${settings.projectTimeTrackingAutoStopMinutes.formatTimeWindow()}" to NomadBadgeTone.Info,
+            ),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = startText,
+                onValueChange = { startText = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Start") },
+                supportingText = { Text("HH:MM") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = stopText,
+                onValueChange = { stopText = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("Stop") },
+                supportingText = { Text("HH:MM") },
+                singleLine = true,
+            )
+        }
+        Text(
+            text = if (isValid) {
+                "The buffer will stop counting after ${stopMinutes!!.formatTimeWindow()} unless the user manually resumes."
+            } else {
+                "Use a same-day range such as 07:00 to 19:00."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isValid) {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+            } else {
+                MaterialTheme.colorScheme.secondary
+            },
+        )
+        Button(
+            onClick = { onSave(startMinutes!!, stopMinutes!!) },
+            enabled = isValid,
+        ) {
+            Text("Save tracking window")
+        }
     }
 }
 
@@ -557,6 +638,17 @@ private fun AppSettings.moveCard(card: DashboardCardId, delta: Int): AppSettings
 }
 
 private fun formatCoordinate(value: Double): String = String.format(Locale.US, "%.5f", value)
+
+private fun Int.formatTimeWindow(): String = "%02d:%02d".format(this / 60, this % 60)
+
+private fun parseTimeWindow(raw: String): Int? {
+    val parts = raw.trim().split(":")
+    if (parts.size != 2) return null
+    val hour = parts[0].toIntOrNull() ?: return null
+    val minute = parts[1].toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return hour * 60 + minute
+}
 
 private const val TankerkoenigApiKeyFieldTag = "settings_tankerkoenig_api_key_field"
 private const val TankerkoenigApiKeySaveButtonTag = "settings_tankerkoenig_api_key_save_button"

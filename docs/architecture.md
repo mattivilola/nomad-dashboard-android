@@ -121,8 +121,10 @@ Current dashboard data flow:
      latency mini-charts
    - battery state, health/source/thermal diagnostics, and retained local
      battery percentage history for the power card chart
-   - FreeIPAPI public IP and geolocation, with tolerant timezone parsing plus
-     retained last-known IP context when a later lookup fails
+   - FreeIPAPI public IP and geolocation, with tolerant timezone parsing,
+     retained last-known IP context when a later lookup fails, and an
+     Android-only fallback path that resolves the raw IP first and then
+     geolocates that address when the current-IP endpoint fails
    - current device place whenever Android location permission is available so
      the dashboard can compare physical device location against public-IP
      location in the same Travel Context card
@@ -173,17 +175,25 @@ Visited history flow:
 
 Time tracking flow:
 
-1. `TimeTrackingViewModel` combines `AppSettings` with `TimeTrackingRepository`
-   flows for projects, the current active entry, and recent completed entries.
+1. `TimeTrackingViewModel` and `DashboardViewModel` combine `AppSettings` with
+   `TimeTrackingRepository` flows for projects, the active unallocated entry,
+   pending buffered segments, and recent allocated entries.
 2. `RoomTimeTrackingRepository` owns local project creation plus the
-   start/stop commands for entries stored in Room.
-3. A single active session is represented only by an entry with `endAt == null`;
-   repository transactions reject starting a second session while one is active.
-4. `MainActivity` and the tracking route start or stop the app-owned foreground
-   service from explicit user-visible tracking actions only.
-5. `TimeTrackingForegroundService` reloads the active entry from persistence and
-   rebuilds the persistent notification after app relaunch or service
-   recreation, but not after device reboot.
+   continuous-capture lifecycle for entries stored in Room.
+3. The repository keeps one open unallocated entry at most. Closed unallocated
+   entries act as the paused buffer waiting for allocation; allocated entries
+   are normal completed ledger rows.
+4. A built-in `Other` project is seeded locally and used both as the visible
+   fallback allocation lane and as the internal placeholder project for
+   unallocated capture rows.
+5. The repository watches the configured same-day auto-tracking window and
+   starts a new automatic unallocated row only when tracking is enabled, the
+   current time is inside the window, and no paused buffer is waiting.
+6. `MainActivity`, the dashboard route, and the tracking route start or stop
+   the app-owned foreground service from explicit user-visible capture actions.
+7. `TimeTrackingForegroundService` reloads the active unallocated entry from
+   persistence and rebuilds the persistent notification after app relaunch or
+   service recreation, but not after device reboot.
 
 Fuel prices flow:
 

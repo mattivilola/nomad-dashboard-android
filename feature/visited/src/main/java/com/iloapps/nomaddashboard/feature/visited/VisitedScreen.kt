@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +60,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
@@ -537,92 +537,80 @@ private fun VisitedWorldMap(
     highlightedStyle: VisitedMapCountryStyle,
     unvisitedStyle: VisitedMapCountryStyle,
 ) {
-    val initialCameraPosition = remember(mapPresentation.viewport) {
-        mapPresentation.viewport.bounds.toInitialCameraPosition()
-    }
-    val cameraPositionState = rememberCameraPositionState {
-        position = initialCameraPosition
-    }
-    var mapLoaded by remember { mutableStateOf(false) }
-    var appliedViewportKey by rememberSaveable { mutableStateOf<String?>(null) }
     val viewportKey = remember(mapPresentation.viewport) {
         mapPresentation.viewport.bounds.viewportKey(mapPresentation.viewport.source)
     }
-
-    LaunchedEffect(mapLoaded, viewportKey) {
-        if (mapLoaded.not()) {
-            cameraPositionState.position = initialCameraPosition
-            return@LaunchedEffect
+    key(viewportKey) {
+        val initialCameraPosition = remember(mapPresentation) {
+            mapPresentation.toCameraPosition()
         }
-
-        if (appliedViewportKey == viewportKey) {
-            return@LaunchedEffect
+        val cameraPositionState = rememberCameraPositionState {
+            position = initialCameraPosition
         }
+        var mapLoaded by remember { mutableStateOf(false) }
 
-        runCatching {
-            cameraPositionState.animate(
-                update = CameraUpdateFactory.newLatLngBounds(
-                    mapPresentation.viewport.bounds.toLatLngBounds(),
-                    96,
-                ),
-                durationMs = 800,
-            )
-        }
-        appliedViewportKey = viewportKey
-    }
-
-    GoogleMap(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(380.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(20.dp),
-            ),
-        cameraPositionState = cameraPositionState,
-        properties = MapProperties(
-            isBuildingEnabled = false,
-            isIndoorEnabled = false,
-            isMyLocationEnabled = false,
-        ),
-        uiSettings = MapUiSettings(
-            compassEnabled = false,
-            indoorLevelPickerEnabled = false,
-            mapToolbarEnabled = false,
-            myLocationButtonEnabled = false,
-            rotationGesturesEnabled = false,
-            tiltGesturesEnabled = false,
-            zoomControlsEnabled = true,
-        ),
-        onMapLoaded = { mapLoaded = true },
-    ) {
-        countryShapes.forEach { country ->
-            val style = if (mapPresentation.highlightedCountryCodes.contains(country.countryCode)) {
-                highlightedStyle
-            } else {
-                unvisitedStyle
+        LaunchedEffect(mapLoaded, initialCameraPosition) {
+            if (mapLoaded.not()) {
+                return@LaunchedEffect
             }
 
-            country.polygons.forEach { polygon ->
-                Polygon(
-                    points = polygon.outerRing.map(VisitedMapCoordinate::toLatLng),
-                    holes = polygon.holes.map { hole -> hole.map(VisitedMapCoordinate::toLatLng) },
-                    fillColor = style.fillColor,
-                    strokeColor = style.strokeColor,
-                    strokeWidth = style.strokeWidth,
-                    clickable = false,
+            cameraPositionState.move(
+                CameraUpdateFactory.newCameraPosition(initialCameraPosition),
+            )
+        }
+        GoogleMap(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(380.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(20.dp),
+                ),
+            cameraPositionState = cameraPositionState,
+            properties = MapProperties(
+                isBuildingEnabled = false,
+                isIndoorEnabled = false,
+                isMyLocationEnabled = false,
+            ),
+            uiSettings = MapUiSettings(
+                compassEnabled = false,
+                indoorLevelPickerEnabled = false,
+                mapToolbarEnabled = false,
+                myLocationButtonEnabled = false,
+                rotationGesturesEnabled = false,
+                tiltGesturesEnabled = false,
+                zoomControlsEnabled = true,
+            ),
+            onMapLoaded = { mapLoaded = true },
+        ) {
+            countryShapes.forEach { country ->
+                val style = if (mapPresentation.highlightedCountryCodes.contains(country.countryCode)) {
+                    highlightedStyle
+                } else {
+                    unvisitedStyle
+                }
+
+                country.polygons.forEach { polygon ->
+                    Polygon(
+                        points = polygon.outerRing.map(VisitedMapCoordinate::toLatLng),
+                        holes = polygon.holes.map { hole -> hole.map(VisitedMapCoordinate::toLatLng) },
+                        fillColor = style.fillColor,
+                        strokeColor = style.strokeColor,
+                        strokeWidth = style.strokeWidth,
+                        clickable = false,
+                    )
+                }
+            }
+
+            mapPresentation.markers.forEach { marker ->
+                Marker(
+                    state = MarkerState(position = marker.coordinate.toLatLng()),
+                    title = marker.title,
+                    snippet = marker.subtitle,
                 )
             }
-        }
-
-        mapPresentation.markers.forEach { marker ->
-            Marker(
-                state = MarkerState(position = marker.coordinate.toLatLng()),
-                title = marker.title,
-                snippet = marker.subtitle,
-            )
         }
     }
 }
@@ -866,24 +854,20 @@ private fun Context.hasConfiguredMapsApiKey(): Boolean {
     return keyValue.isNotBlank() && keyValue.startsWith("\${").not()
 }
 
-private fun VisitedMapBounds.toLatLngBounds(): LatLngBounds =
-    LatLngBounds(
-        southWest.toLatLng(),
-        northEast.toLatLng(),
-    )
-
 private fun VisitedMapCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
 
-private fun VisitedMapBounds.toInitialCameraPosition(): CameraPosition {
+private fun VisitedMapPresentation.toCameraPosition(): CameraPosition {
+    val target = focusCoordinate ?: viewport.bounds.center
+    val bounds = viewport.bounds
     val zoom = when {
-        latitudeSpan <= 4.0 && longitudeSpan <= 6.0 -> 6.5f
-        latitudeSpan <= 8.0 && longitudeSpan <= 12.0 -> 5.4f
-        latitudeSpan <= 14.0 && longitudeSpan <= 20.0 -> 4.5f
-        latitudeSpan <= 24.0 && longitudeSpan <= 34.0 -> 3.7f
-        latitudeSpan <= 40.0 && longitudeSpan <= 60.0 -> 2.9f
-        else -> 1.2f
+        bounds.latitudeSpan <= 4.0 && bounds.longitudeSpan <= 6.0 -> 6.4f
+        bounds.latitudeSpan <= 8.0 && bounds.longitudeSpan <= 12.0 -> 5.6f
+        bounds.latitudeSpan <= 14.0 && bounds.longitudeSpan <= 20.0 -> 4.8f
+        bounds.latitudeSpan <= 24.0 && bounds.longitudeSpan <= 34.0 -> 4.1f
+        bounds.latitudeSpan <= 40.0 && bounds.longitudeSpan <= 60.0 -> 3.3f
+        else -> 2.2f
     }
-    return CameraPosition.fromLatLngZoom(center.toLatLng(), zoom)
+    return CameraPosition.fromLatLngZoom(target.toLatLng(), zoom)
 }
 
 private fun VisitedMapBounds.viewportKey(source: VisitedMapViewportSource): String =

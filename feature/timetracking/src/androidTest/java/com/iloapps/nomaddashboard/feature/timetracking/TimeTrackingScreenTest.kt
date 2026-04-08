@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
+import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Instant
@@ -27,11 +28,14 @@ class TimeTrackingScreenTest {
         val activeEntry = TimeTrackingRecord(
             entry = TimeTrackingEntry(
                 id = UUID.fromString("22222222-2222-2222-2222-222222222222"),
-                projectId = project.id,
+                projectId = TimeTrackingOtherProjectId,
                 startAt = Instant.parse("2026-04-07T09:00:00Z"),
                 endAt = null,
             ),
-            project = project,
+            project = TimeTrackingProject(
+                id = TimeTrackingOtherProjectId,
+                name = "Other",
+            ),
         )
 
         composeRule.setContent {
@@ -41,20 +45,19 @@ class TimeTrackingScreenTest {
                         settings = AppSettings(projectTimeTrackingEnabled = true),
                         projects = listOf(project),
                         activeEntry = activeEntry,
-                        selectedProjectId = project.id,
                     ),
                     hasNotificationPermission = true,
-                    onProjectSelected = {},
                     onProjectNameChanged = {},
                     onCreateProject = {},
+                    onAllocateTrackedTime = {},
                     onStartTracking = {},
                     onStopTracking = {},
                 )
             }
         }
 
-        composeRule.onNodeWithTag("timetracking_active_state").assertIsDisplayed()
-        composeRule.onNodeWithText("Active Session").assertIsDisplayed()
-        composeRule.onNodeWithText("Client Work").assertIsDisplayed()
+        composeRule.onNodeWithTag("timetracking_capture_card").assertIsDisplayed()
+        composeRule.onNodeWithText("Capture Running").assertIsDisplayed()
+        composeRule.onNodeWithText("Quick Allocate").assertIsDisplayed()
     }
 }

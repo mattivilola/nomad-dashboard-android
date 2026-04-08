@@ -49,8 +49,10 @@ import com.iloapps.nomaddashboard.core.model.VisitedSummary
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
+import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
 import com.iloapps.nomaddashboard.core.model.visitedPlaceSummary
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.IpifyService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoDaily
@@ -82,6 +84,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val settingsDataSource: NomadSettingsDataSource,
     private val telemetryReader: TelemetryReader,
     private val freeIpApiService: FreeIpApiService,
+    private val ipifyService: IpifyService,
     private val openMeteoService: OpenMeteoService,
     private val openMeteoMarineService: OpenMeteoMarineService,
     private val fuelPriceProvider: FuelPriceProvider,
@@ -254,6 +257,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val visitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
         val visitedPlaceSummary = visitedPlaces.visitedPlaceSummary()
         val activeTimeTracking = timeTrackingRepository.currentActiveEntry()
+        val pendingTimeTracking = timeTrackingRepository.pendingEntries.first()
         val fuelPrices = if (currentSettings.fuelPricesEnabled) {
             buildFuelSearchRequest(
                 currentDevicePlace = currentDevicePlace,
@@ -315,17 +319,21 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 enabled = currentSettings.projectTimeTrackingEnabled,
                 headline = when {
                     currentSettings.projectTimeTrackingEnabled.not() -> "Disabled"
-                    activeTimeTracking != null -> "Tracking"
+                    activeTimeTracking != null -> "Running"
+                    pendingTimeTracking.isNotEmpty() -> "Paused"
                     else -> "Ready"
                 },
                 detail = when {
-                    currentSettings.projectTimeTrackingEnabled.not() -> "Turn this on to prepare local tracking."
+                    currentSettings.projectTimeTrackingEnabled.not() -> "Turn this on to enable the live unallocated buffer."
                     activeTimeTracking != null -> {
                         val localTime = DateTimeFormatter.ofPattern("HH:mm")
                             .format(activeTimeTracking.entry.startAt.atZone(ZoneId.systemDefault()))
-                        "Active: ${activeTimeTracking.project.name} since $localTime"
+                        val mode = if (activeTimeTracking.entry.isAutomaticallyTracked()) "Auto" else "Manual"
+                        "$mode capture since $localTime"
                     }
-                    else -> "Open Tracking to add a project and start local time logging."
+                    pendingTimeTracking.isNotEmpty() ->
+                        "${pendingTimeTracking.size} buffered segment(s) waiting for allocation."
+                    else -> "Dashboard quick-allocation is ready once your projects are set up."
                 },
             ),
             visited = VisitedSummary(
@@ -691,16 +699,32 @@ class DefaultNomadDashboardRepository @Inject constructor(
         currentDevicePlace: ResolvedVisitedPlace?,
     ): TravelContextSnapshot {
         val ipTravelContext = if (currentSettings.publicIpGeolocationEnabled) {
-            runCatching {
-                freeIpApiService.lookupMe().toTravelContextSnapshot(previous = previous)
-            }.getOrElse {
-                previous.takeIf { it.hasIpContext() } ?: TravelContextSnapshot()
-            }
+            fetchCurrentTravelContext(previous = previous)
+                ?: previous.takeIf { it.containsIpContext() }
+                ?: TravelContextSnapshot()
         } else {
             TravelContextSnapshot()
         }
 
         return ipTravelContext.withDeviceLocation(currentDevicePlace)
+    }
+
+    private suspend fun fetchCurrentTravelContext(
+        previous: TravelContextSnapshot,
+    ): TravelContextSnapshot? {
+        runCatching {
+            freeIpApiService.lookupMe().toTravelContextSnapshot(previous = previous)
+        }.getOrNull()?.takeIf { it.containsIpContext() }?.let { return it }
+
+        val fallbackIpAddress = runCatching { ipifyService.lookupIp().ip.normalizedOr(previous.publicIp) }
+            .getOrNull()
+            ?.normalizedOr(previous.publicIp)
+            ?: return null
+
+        return runCatching {
+            freeIpApiService.lookup(fallbackIpAddress).toTravelContextSnapshot(previous = previous)
+                .copy(publicIp = fallbackIpAddress)
+        }.getOrNull()?.takeIf { it.containsIpContext() }
     }
 
     private fun buildIpObservation(
@@ -1038,7 +1062,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             deviceLongitude = currentDevicePlace?.longitude,
         )
 
-    private fun TravelContextSnapshot.hasIpContext(): Boolean =
+    private fun TravelContextSnapshot.containsIpContext(): Boolean =
         publicIp != null ||
             city != null ||
             region != null ||

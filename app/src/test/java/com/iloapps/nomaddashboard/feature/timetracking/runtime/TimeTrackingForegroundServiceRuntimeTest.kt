@@ -1,11 +1,14 @@
 package com.iloapps.nomaddashboard.feature.timetracking.runtime
 
 import com.google.common.truth.Truth.assertThat
+import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.UpdateTimeTrackingEntryResult
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
+import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Instant
@@ -24,7 +27,7 @@ class TimeTrackingForegroundServiceRuntimeTest {
         try {
             val session = session(startAt = Instant.parse("2026-04-07T10:00:00Z"))
 
-            assertThat(TimeTrackingNotificationFormatter.title(session)).isEqualTo("Tracking Client Work")
+            assertThat(TimeTrackingNotificationFormatter.title(session)).isEqualTo("Unallocated timer running")
             assertThat(
                 TimeTrackingNotificationFormatter.body(
                     session = session,
@@ -51,12 +54,12 @@ class TimeTrackingForegroundServiceRuntimeTest {
         TimeTrackingRecord(
             entry = TimeTrackingEntry(
                 id = UUID.fromString("00000000-0000-0000-0000-000000000401"),
-                projectId = UUID.fromString("00000000-0000-0000-0000-000000000402"),
+                projectId = TimeTrackingOtherProjectId,
                 startAt = startAt,
             ),
             project = TimeTrackingProject(
-                id = UUID.fromString("00000000-0000-0000-0000-000000000402"),
-                name = "Client Work",
+                id = TimeTrackingOtherProjectId,
+                name = "Other",
             ),
         )
 }
@@ -66,16 +69,28 @@ private class FakeTimeTrackingRepository : TimeTrackingRepository {
 
     override val projects: Flow<List<TimeTrackingProject>> = emptyFlow()
     override val recentEntries: Flow<List<TimeTrackingRecord>> = emptyFlow()
+    override val pendingEntries: Flow<List<TimeTrackingRecord>> = emptyFlow()
     override val activeEntry: Flow<TimeTrackingRecord?> = emptyFlow()
 
     override suspend fun currentActiveEntry(): TimeTrackingRecord? = null
 
+    override suspend fun syncTracking(now: Instant) = Unit
+
     override suspend fun createProject(name: String): CreateProjectResult = CreateProjectResult.InvalidName
 
-    override suspend fun startTracking(projectId: UUID): StartTrackingResult = StartTrackingResult.MissingProject
+    override suspend fun startTracking(): StartTrackingResult = StartTrackingResult.Started
 
     override suspend fun stopTracking(): StopTrackingResult {
         stopCalls += 1
         return StopTrackingResult.Stopped
     }
+
+    override suspend fun allocateTrackedTime(projectId: UUID): AllocateTrackedTimeResult =
+        AllocateTrackedTimeResult.NothingToAllocate
+
+    override suspend fun updateEntry(
+        entryId: UUID,
+        startAt: Instant,
+        endAt: Instant,
+    ): UpdateTimeTrackingEntryResult = UpdateTimeTrackingEntryResult.Updated
 }

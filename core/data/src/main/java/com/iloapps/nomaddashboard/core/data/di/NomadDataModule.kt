@@ -36,6 +36,7 @@ import com.iloapps.nomaddashboard.core.datastore.AppSettingsSerializer
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.network.api.FranceFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
+import com.iloapps.nomaddashboard.core.network.api.IpifyService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
@@ -56,9 +57,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import retrofit2.Retrofit
 import javax.inject.Singleton
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -72,7 +75,25 @@ object NomadInfrastructureModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val original = chain.request()
+            val request: Request = original.newBuilder()
+                .apply {
+                    if (original.header("Accept").isNullOrBlank()) {
+                        header("Accept", "application/json")
+                    }
+                    if (original.header("User-Agent").isNullOrBlank()) {
+                        header("User-Agent", "NomadDashboard-Android/1")
+                    }
+                }
+                .build()
+            chain.proceed(request)
+        }
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     @Provides
     @Singleton
@@ -86,6 +107,19 @@ object NomadInfrastructureModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(FreeIpApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideIpifyService(
+        client: OkHttpClient,
+        json: Json,
+    ): IpifyService =
+        Retrofit.Builder()
+            .baseUrl("https://api.ipify.org/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(IpifyService::class.java)
 
     @Provides
     @Singleton

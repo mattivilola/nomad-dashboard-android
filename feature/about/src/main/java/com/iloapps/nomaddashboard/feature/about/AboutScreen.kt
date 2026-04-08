@@ -62,7 +62,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 NomadTopBar(
                     title = "About",
                     subtitle = "Nomad Dashboard for Android",
-                    supportingText = "A travel control room for nomads and frequent travelers who need connection, weather, movement, safety, and local tools in one calm surface.",
+                    supportingText = "One place to check the essentials for life on the road: connection, weather, travel context, visited places, safety tools, and time tracking.",
                     badgeText = "Built for life in motion",
                     badgeTone = NomadBadgeTone.Accent,
                     trailing = {
@@ -121,8 +121,8 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         item {
             NomadCard {
                 NomadSectionClusterHeader(
-                    title = "Why It Feels Different",
-                    subtitle = "The goal is not more chrome. The goal is faster orientation when you are changing cities, networks, or plans.",
+                    title = "What You Can Do",
+                    subtitle = "Designed to keep the most useful travel and work signals easy to see at a glance.",
                     badges = listOf(
                         "Fast scan" to NomadBadgeTone.Good,
                         "Nomad-first" to NomadBadgeTone.Info,
@@ -130,20 +130,20 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 )
                 AboutCallout(
                     icon = Icons.Rounded.TravelExplore,
-                    title = "See your current operating context immediately",
-                    description = "Weather, travel context, alerts, nearby essentials, movement history, and time tracking are meant to stay legible without tab hopping.",
+                    title = "Check your day in seconds",
+                    description = "See weather, travel context, alerts, nearby essentials, movement history, and time tracking without jumping between multiple apps.",
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                 AboutCallout(
                     icon = Icons.Rounded.Route,
-                    title = "Designed for movement instead of dashboard theater",
-                    description = "Hierarchy, density, and action placement matter more than decorative cards. The app should answer what changed and what needs action in seconds.",
+                    title = "Stay ready while moving",
+                    description = "Useful for transit days, new cities, hotel Wi-Fi, coworking stops, and any moment when you need the current situation quickly.",
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                 AboutCallout(
                     icon = Icons.Rounded.Shield,
-                    title = "Useful even when trust is limited",
-                    description = "Local-first behavior matters when you are on hotel Wi-Fi, crossing borders, or deciding whether a work tool belongs on a personal phone.",
+                    title = "Keep important tools together",
+                    description = "Follow connectivity, weather, safety context, visited places, fuel, emergency care, and project time in one compact workflow.",
                 )
             }
         }
@@ -151,8 +151,8 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         item {
             NomadCard {
                 NomadSectionClusterHeader(
-                    title = "Ownership, Privacy, And Source",
-                    subtitle = "The app should be easy to trust before you ever enter a credential.",
+                    title = "Privacy And Trust",
+                    subtitle = "Your settings and provider credentials stay under your control on this device.",
                     badges = listOf(
                         "Encrypted" to NomadBadgeTone.Good,
                         "Open source" to NomadBadgeTone.Accent,
@@ -160,18 +160,18 @@ fun AboutScreen(modifier: Modifier = Modifier) {
                 )
                 AboutFactRow(
                     icon = Icons.Rounded.Lock,
-                    title = "Credentials are entered after install",
-                    description = "User-managed provider keys are stored only in encrypted device storage backed by Android Keystore.",
+                    title = "Your provider keys stay on your phone",
+                    description = "Optional provider credentials are entered after install and stored only in encrypted device storage backed by Android Keystore.",
                 )
                 AboutFactRow(
                     icon = Icons.Rounded.Shield,
-                    title = "No bundled provider secrets",
-                    description = "The app does not ship user credentials in resources, BuildConfig, or manifest placeholders.",
+                    title = "No hidden bundled credentials",
+                    description = "The app does not include your provider secrets in resources, BuildConfig, or manifest placeholders.",
                 )
                 AboutFactRow(
                     icon = Icons.AutoMirrored.Rounded.OpenInNew,
-                    title = "Clear source and destination",
-                    description = "The public website and GitHub project are linked here so the About screen can act like a real trust surface, not filler text.",
+                    title = "Clear links to the product and source",
+                    description = "Open the website for product information or the GitHub project to follow development and releases.",
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

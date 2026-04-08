@@ -118,6 +118,7 @@ internal data class VisitedMapPresentation(
     val highlightedCountryCodes: Set<String>,
     val markers: List<VisitedMapMarker>,
     val focusLabel: String?,
+    val focusCoordinate: VisitedMapCoordinate?,
     val viewport: VisitedMapViewport,
 )
 
@@ -180,6 +181,7 @@ internal fun buildVisitedMapPresentation(
         highlightedCountryCodes = highlightedCountryCodes,
         markers = markers,
         focusLabel = focusMarker?.title,
+        focusCoordinate = focusMarker?.coordinate,
         viewport = viewport,
     )
 }

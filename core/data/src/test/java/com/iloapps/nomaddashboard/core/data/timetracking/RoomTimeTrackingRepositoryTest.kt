@@ -1,10 +1,15 @@
 package com.iloapps.nomaddashboard.core.data.timetracking
 
+import androidx.datastore.core.DataStore
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
+import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
+import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
+import com.iloapps.nomaddashboard.core.model.TimeTrackingBucket
+import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,94 +24,94 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomTimeTrackingRepositoryTest {
     @Test
-    fun `create project persists and emits alphabetical project list`() = runTest {
-        val projectDao = FakeTimeTrackingProjectDao()
-        val repository = repository(
-            applicationScope = backgroundScope,
-            projectDao = projectDao,
-        )
+    fun `create project persists and emits project list with built-in other`() = runTest {
+        val repository = repository(applicationScope = backgroundScope)
 
         repository.createProject("Zulu")
         repository.createProject("Alpha")
         advanceUntilIdle()
 
-        assertThat(repository.projects.first { it.size == 2 }.map { it.name }).containsExactly("Alpha", "Zulu").inOrder()
+        assertThat(repository.projects.first { it.size == 3 }.map { it.name })
+            .containsExactly("Alpha", "Zulu", "Other")
+            .inOrder()
     }
 
     @Test
-    fun `start tracking writes one open entry for the selected project`() = runTest {
-        val projectDao = FakeTimeTrackingProjectDao()
+    fun `start tracking writes one open unallocated entry`() = runTest {
         val entryDao = FakeTimeTrackingEntryDao()
         val repository = repository(
             applicationScope = backgroundScope,
-            projectDao = projectDao,
             entryDao = entryDao,
         )
-        val project = (repository.createProject("Client") as CreateProjectResult.Created).project
 
-        val result = repository.startTracking(project.id)
+        val result = repository.startTracking()
         advanceUntilIdle()
 
         assertThat(result).isEqualTo(StartTrackingResult.Started)
         val active = repository.activeEntry.first { it != null }
-        assertThat(active?.project?.name).isEqualTo("Client")
         assertThat(active?.entry?.endAt).isNull()
-        assertThat(entryDao.getActive()?.projectId).isEqualTo(project.id.toString())
+        assertThat(active?.entry?.bucket).isEqualTo(TimeTrackingBucket.UNALLOCATED_MANUAL.name)
+        assertThat(entryDao.getActive()?.projectId).isEqualTo(TimeTrackingOtherProjectId.toString())
     }
 
     @Test
-    fun `stop tracking closes the active entry`() = runTest {
-        val projectDao = FakeTimeTrackingProjectDao()
-        val entryDao = FakeTimeTrackingEntryDao()
-        val repository = repository(
-            applicationScope = backgroundScope,
-            projectDao = projectDao,
-            entryDao = entryDao,
-        )
-        val project = (repository.createProject("Client") as CreateProjectResult.Created).project
-        repository.startTracking(project.id)
+    fun `stop tracking moves active time into pending buffer`() = runTest {
+        val repository = repository(applicationScope = backgroundScope)
+        repository.startTracking()
 
         val result = repository.stopTracking()
         advanceUntilIdle()
 
         assertThat(result).isEqualTo(StopTrackingResult.Stopped)
         assertThat(repository.activeEntry.first()).isNull()
-        val recentEntries = repository.recentEntries.first { it.isNotEmpty() }
-        assertThat(recentEntries).hasSize(1)
-        assertThat(recentEntries.first().entry.endAt).isNotNull()
+        assertThat(repository.pendingEntries.first { it.isNotEmpty() }).hasSize(1)
+        assertThat(repository.recentEntries.first()).isEmpty()
+    }
+
+    @Test
+    fun `allocate tracked time files pending segments into the chosen project`() = runTest {
+        val repository = repository(applicationScope = backgroundScope)
+        val project = (repository.createProject("Client") as CreateProjectResult.Created).project
+        repository.startTracking()
+        repository.stopTracking()
+
+        val result = repository.allocateTrackedTime(project.id)
+        advanceUntilIdle()
+
+        assertThat(result).isEqualTo(AllocateTrackedTimeResult.Allocated(entryCount = 1))
+        assertThat(repository.pendingEntries.first()).isEmpty()
+        assertThat(repository.recentEntries.first { it.isNotEmpty() }.first().project.name).isEqualTo("Client")
     }
 
     @Test
     fun `second start is rejected while an active entry exists`() = runTest {
         val repository = repository(applicationScope = backgroundScope)
-        val first = (repository.createProject("Client A") as CreateProjectResult.Created).project
-        val second = (repository.createProject("Client B") as CreateProjectResult.Created).project
-        repository.startTracking(first.id)
+        repository.startTracking()
 
-        val result = repository.startTracking(second.id)
+        val result = repository.startTracking()
         advanceUntilIdle()
 
         assertThat(result).isEqualTo(StartTrackingResult.AlreadyTracking)
-        assertThat(repository.activeEntry.first { it != null }?.project?.name).isEqualTo("Client A")
     }
 
     @Test
     fun `repository restores active entry from existing persistence state`() = runTest {
         val projectDao = FakeTimeTrackingProjectDao()
         val entryDao = FakeTimeTrackingEntryDao()
-        val project = TimeTrackingProjectEntity(
-            id = "00000000-0000-0000-0000-000000000101",
-            name = "Recovered",
-            isArchived = false,
+        projectDao.upsert(
+            TimeTrackingProjectEntity(
+                id = TimeTrackingOtherProjectId.toString(),
+                name = "Other",
+                isArchived = false,
+            ),
         )
-        projectDao.upsert(project)
         entryDao.upsert(
             TimeTrackingEntryEntity(
                 id = "00000000-0000-0000-0000-000000000201",
-                projectId = project.id,
+                projectId = TimeTrackingOtherProjectId.toString(),
                 startAtEpochMillis = Instant.parse("2026-04-07T10:00:00Z").toEpochMilli(),
                 endAtEpochMillis = null,
-                bucket = "UNALLOCATED",
+                bucket = TimeTrackingBucket.UNALLOCATED_MANUAL.name,
             ),
         )
 
@@ -117,17 +122,19 @@ class RoomTimeTrackingRepositoryTest {
         )
 
         advanceUntilIdle()
-        assertThat(repository.currentActiveEntry()?.project?.name).isEqualTo("Recovered")
+        assertThat(repository.currentActiveEntry()?.project?.name).isEqualTo("Other")
     }
 
     private fun repository(
         applicationScope: CoroutineScope,
         projectDao: FakeTimeTrackingProjectDao = FakeTimeTrackingProjectDao(),
         entryDao: FakeTimeTrackingEntryDao = FakeTimeTrackingEntryDao(),
+        settingsDataSource: NomadSettingsDataSource = fakeSettingsDataSource(),
     ): RoomTimeTrackingRepository = RoomTimeTrackingRepository(
         projectDao = projectDao,
         entryDao = entryDao,
         transactionRunner = ImmediateTimeTrackingTransactionRunner,
+        settingsDataSource = settingsDataSource,
         applicationScope = applicationScope,
     )
 }
@@ -173,6 +180,11 @@ private class FakeTimeTrackingEntryDao : TimeTrackingEntryDao {
     override suspend fun getActive(): TimeTrackingEntryEntity? =
         state.value.firstOrNull { it.endAtEpochMillis == null }
 
+    override suspend fun getAll(): List<TimeTrackingEntryEntity> = state.value
+
+    override suspend fun getById(id: String): TimeTrackingEntryEntity? =
+        state.value.firstOrNull { it.id == id }
+
     override suspend fun upsert(entry: TimeTrackingEntryEntity) {
         val next = state.value.toMutableList()
         val index = next.indexOfFirst { it.id == entry.id }
@@ -182,5 +194,24 @@ private class FakeTimeTrackingEntryDao : TimeTrackingEntryDao {
             next += entry
         }
         state.value = next.sortedByDescending { it.startAtEpochMillis }
+    }
+
+    override suspend fun upsertAll(entries: List<TimeTrackingEntryEntity>) {
+        entries.forEach { upsert(it) }
+    }
+}
+
+private fun fakeSettingsDataSource(): NomadSettingsDataSource =
+    NomadSettingsDataSource(FakeAppSettingsDataStore())
+
+private class FakeAppSettingsDataStore : DataStore<AppSettingsProto> {
+    private val state = MutableStateFlow(AppSettingsProto.getDefaultInstance())
+
+    override val data: Flow<AppSettingsProto> = state
+
+    override suspend fun updateData(transform: suspend (t: AppSettingsProto) -> AppSettingsProto): AppSettingsProto {
+        val updated = transform(state.value)
+        state.value = updated
+        return updated
     }
 }

@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import com.iloapps.nomaddashboard.MainActivity
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
+import com.iloapps.nomaddashboard.core.model.isUnallocated
 import dagger.hilt.android.AndroidEntryPoint
 import java.time.Duration
 import java.time.Instant
@@ -223,8 +224,8 @@ internal object TimeTrackingNotificationFormatter {
     fun placeholder(context: Context): android.app.Notification =
         NotificationCompat.Builder(context, TimeTrackingForegroundService.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Resuming time tracking")
-            .setContentText("Loading the active project session.")
+            .setContentTitle("Resuming capture")
+            .setContentText("Loading the active unallocated timer.")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(TimeTrackingForegroundService.contentIntent(context))
@@ -249,7 +250,8 @@ internal object TimeTrackingNotificationFormatter {
             )
             .build()
 
-    internal fun title(session: TimeTrackingRecord): String = "Tracking ${session.project.name}"
+    internal fun title(session: TimeTrackingRecord): String =
+        if (session.entry.isUnallocated()) "Unallocated timer running" else "Tracking ${session.project.name}"
 
     internal fun body(
         session: TimeTrackingRecord,

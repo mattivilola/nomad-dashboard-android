@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,11 +39,16 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Thunderstorm
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -100,6 +108,7 @@ import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
+import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
 import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalState
@@ -109,20 +118,27 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
+import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun DashboardRoute(
+    onStartForegroundTracking: () -> Unit,
+    onStopForegroundTracking: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasLocationPermission by remember { mutableStateOf(context.hasDashboardLocationPermission()) }
+    var hasNotificationPermission by remember { mutableStateOf(context.hasDashboardNotificationPermission()) }
     val currentRefresh by rememberUpdatedState(viewModel::refresh)
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -132,11 +148,20 @@ fun DashboardRoute(
             currentRefresh()
         }
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasNotificationPermission = context.hasDashboardNotificationPermission()
+        if (granted) {
+            viewModel.startTracking()
+        }
+    }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasLocationPermission = context.hasDashboardLocationPermission()
+                hasNotificationPermission = context.hasDashboardNotificationPermission()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -145,10 +170,20 @@ fun DashboardRoute(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                DashboardEffect.StartTrackingService -> onStartForegroundTracking()
+                DashboardEffect.StopTrackingService -> onStopForegroundTracking()
+            }
+        }
+    }
+
     DashboardScreen(
         state = uiState,
         onRefresh = viewModel::refresh,
         hasLocationPermission = hasLocationPermission,
+        hasNotificationPermission = hasNotificationPermission,
         onRequestLocationPermission = {
             permissionLauncher.launch(
                 arrayOf(
@@ -157,6 +192,15 @@ fun DashboardRoute(
                 ),
             )
         },
+        onStartTracking = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && hasNotificationPermission.not()) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                viewModel.startTracking()
+            }
+        },
+        onStopTracking = viewModel::stopTracking,
+        onAllocateTrackedTime = viewModel::allocateTrackedTime,
     )
 }
 
@@ -166,7 +210,11 @@ fun DashboardScreen(
     state: DashboardUiState,
     onRefresh: () -> Unit,
     hasLocationPermission: Boolean = false,
+    hasNotificationPermission: Boolean = false,
     onRequestLocationPermission: () -> Unit = {},
+    onStartTracking: () -> Unit = {},
+    onStopTracking: () -> Unit = {},
+    onAllocateTrackedTime: (java.util.UUID) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -178,8 +226,11 @@ fun DashboardScreen(
     ) {
         item {
             Column(
-                modifier = Modifier.testTag("dashboard_top_bar"),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .testTag("dashboard_top_bar")
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 NomadTopBar(
                     title = "Nomad Dashboard",
@@ -189,7 +240,7 @@ fun DashboardScreen(
                         Image(
                             painter = painterResource(id = R.drawable.nomad_symbol_mark),
                             contentDescription = null,
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(38.dp),
                         )
                     },
                     trailing = {
@@ -276,8 +327,13 @@ fun DashboardScreen(
                 )
 
                 DashboardCardId.TIME_TRACKING -> TimeTrackingSectionCard(
-                    headline = state.snapshot.timeTracking.headline,
+                    trackingState = state.timeTracking,
                     detail = state.snapshot.timeTracking.detail,
+                    hasNotificationPermission = hasNotificationPermission,
+                    autoWindowLabel = "${state.settings.projectTimeTrackingAutoStartMinutes.formatClockMinutes()}-${state.settings.projectTimeTrackingAutoStopMinutes.formatClockMinutes()}",
+                    onStartTracking = onStartTracking,
+                    onStopTracking = onStopTracking,
+                    onAllocateTrackedTime = onAllocateTrackedTime,
                 )
 
                 DashboardCardId.EMERGENCY_CARE -> EmergencyCareSectionCard(
@@ -1500,19 +1556,159 @@ private fun PowerHistoryChart(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TimeTrackingSectionCard(
-    headline: String,
+    trackingState: DashboardTimeTrackingUiState,
     detail: String,
+    hasNotificationPermission: Boolean,
+    autoWindowLabel: String,
+    onStartTracking: () -> Unit,
+    onStopTracking: () -> Unit,
+    onAllocateTrackedTime: (java.util.UUID) -> Unit,
 ) {
-    NomadCard {
+    val now = rememberDashboardTickerInstant(enabled = trackingState.activeEntry != null)
+    val bufferedDuration = dashboardBufferedDuration(trackingState, now)
+    val isRunning = trackingState.activeEntry != null
+
+    NomadCard(modifier = Modifier.testTag("dashboard_time_tracking_card")) {
         NomadSectionClusterHeader(
             title = "Time Tracking",
             subtitle = detail,
-            badges = listOf(headline to NomadBadgeTone.Accent),
+            badges = listOf(
+                dashboardTrackingStatus(trackingState) to if (isRunning) NomadBadgeTone.Accent else NomadBadgeTone.Info,
+                autoWindowLabel to NomadBadgeTone.Info,
+            ),
         )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = formatElapsedDuration(bufferedDuration),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = when {
+                        isRunning && trackingState.activeEntry?.entry?.isAutomaticallyTracked() == true ->
+                            "Auto capture running"
+                        isRunning -> "Manual capture running"
+                        trackingState.pendingEntries.isNotEmpty() ->
+                            "${trackingState.pendingEntries.size} segment${trackingState.pendingEntries.size.pluralSuffix()} waiting for allocation"
+                        else -> "Ready for the next allocation"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                )
+            }
+        }
+        Button(
+            onClick = if (isRunning) onStopTracking else onStartTracking,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = null,
+            )
+            Text(
+                if (isRunning) "Pause capture" else "Resume capture",
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        if (hasNotificationPermission.not()) {
+            Text(
+                text = "Android 13+ notification permission is needed for the foreground capture notification.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+        if (trackingState.projects.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                trackingState.projects.forEach { project ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { onAllocateTrackedTime(project.id) },
+                        enabled = bufferedDuration.seconds > 0,
+                        label = {
+                            Text(
+                                text = compactDashboardProjectLabel(project.name),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+        trackingState.message?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
+
+@Composable
+private fun rememberDashboardTickerInstant(enabled: Boolean): Instant {
+    var now by remember(enabled) { mutableStateOf(Instant.now()) }
+
+    LaunchedEffect(enabled) {
+        now = Instant.now()
+        while (enabled) {
+            delay(1_000)
+            now = Instant.now()
+        }
+    }
+
+    return now
+}
+
+private fun dashboardBufferedDuration(
+    trackingState: DashboardTimeTrackingUiState,
+    now: Instant,
+): Duration {
+    val closedDuration = trackingState.pendingEntries.fold(Duration.ZERO) { total, record ->
+        val endAt = record.entry.endAt ?: return@fold total
+        total + Duration.between(record.entry.startAt, endAt)
+    }
+    val activeDuration = trackingState.activeEntry?.let { active ->
+        Duration.between(active.entry.startAt, now)
+    } ?: Duration.ZERO
+    return closedDuration + activeDuration
+}
+
+private fun dashboardTrackingStatus(
+    trackingState: DashboardTimeTrackingUiState,
+): String = when {
+    trackingState.activeEntry != null -> "Running"
+    trackingState.pendingEntries.isNotEmpty() -> "Paused"
+    else -> "Ready"
+}
+
+private fun formatElapsedDuration(duration: Duration): String {
+    val totalSeconds = duration.seconds.coerceAtLeast(0)
+    val hours = totalSeconds / 3_600
+    val minutes = (totalSeconds % 3_600) / 60
+    val seconds = totalSeconds % 60
+    return "%02d:%02d:%02d".format(hours, minutes, seconds)
+}
+
+private fun compactDashboardProjectLabel(name: String): String =
+    if (name.length <= 8) name else "${name.take(8)}..."
+
+private fun Int.pluralSuffix(): String = if (this == 1) "" else "s"
+
+private fun Int.formatClockMinutes(): String = "%02d:%02d".format(this / 60, this % 60)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -2454,6 +2650,10 @@ private fun Context.openMapLocation(
 private fun Context.hasDashboardLocationPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+private fun Context.hasDashboardNotificationPermission(): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
 private fun Instant.formatDashboardTimestamp(): String =
     DateTimeFormatter.ofPattern("HH.mm")

@@ -35,8 +35,8 @@ This document tracks Android parity against the macOS app at the feature level.
 | Passive throughput estimate | Implemented | Based on `TrafficStats` delta with retained local download/upload history for the dashboard chart |
 | Wi-Fi SSID / RSSI | Implemented | Uses `WifiManager`; the dashboard now also shows link speed and Wi-Fi band when Android exposes them |
 | VPN detection | Implemented | Uses network transport check |
-| Public IP lookup | Implemented | FreeIPAPI with copyable dashboard presentation and last-known retention during transient lookup failures |
-| IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema |
+| Public IP lookup | Implemented | FreeIPAPI remains primary, with a plain-IP fallback path plus copyable dashboard presentation and last-known retention during transient lookup failures |
+| IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema and by-address fallback geolocation when the current-IP endpoint fails |
 | Device vs IP location comparison | Implemented | Travel Context now shows the current device place and the public-IP-derived place side by side when available |
 | Travel context card | Implemented | Card now compares device and public-IP location, exposes Android-native map actions, and shows denser Wi-Fi travel telemetry instead of only basic region/country fields |
 
@@ -103,11 +103,12 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Time tracking screen route | Implemented | Route now opens with an overview card, stronger active/ready state treatment, and denser project/session hierarchy |
-| Project list and settings | Implemented | Add-only local project list with inline creation and project selection before start |
+| Time tracking screen route | Implemented | Route now leads with a live unallocated buffer, clear running/paused state, quick-allocation chips, and compact project management instead of project-first session start |
+| Project list and settings | Implemented | Add-only local project list with inline creation; the built-in `Other` lane is always available for quick allocation |
 | Ledger persistence | Implemented | Room-backed projects and entries with a single active session invariant |
-| Foreground-service runtime | Implemented | Persistent special-use notification runs while tracking and resumes after app relaunch or service recreation |
-| Allocation workflow | Implemented | Start/stop tracking per selected project with recent completed sessions shown in-app |
+| Foreground-service runtime | Implemented | Persistent special-use notification runs while the unallocated buffer is actively capturing and resumes after app relaunch or service recreation |
+| Allocation workflow | Implemented | Time is captured into a persistent unallocated buffer first, then assigned from dashboard or tracking-screen quick actions into a chosen project or `Other` |
+| Automatic daily tracking window | Implemented | Settings now define a same-day auto-capture window, defaulting to `07:00-19:00`; outside it, manual play/pause still works |
 | Reporting/export | Planned | Not implemented yet |
 
 ## Build, Release, And Distribution

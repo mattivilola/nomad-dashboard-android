@@ -21,6 +21,15 @@ interface TimeTrackingEntryDao {
     @Query("SELECT * FROM time_tracking_entries WHERE endAtEpochMillis IS NULL ORDER BY startAtEpochMillis DESC LIMIT 1")
     suspend fun getActive(): TimeTrackingEntryEntity?
 
+    @Query("SELECT * FROM time_tracking_entries ORDER BY startAtEpochMillis DESC")
+    suspend fun getAll(): List<TimeTrackingEntryEntity>
+
+    @Query("SELECT * FROM time_tracking_entries WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): TimeTrackingEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: TimeTrackingEntryEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entries: List<TimeTrackingEntryEntity>)
 }

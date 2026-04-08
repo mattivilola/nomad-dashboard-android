@@ -3,6 +3,7 @@ package com.iloapps.nomaddashboard.feature.timetracking
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.AllocateTrackedTimeResult
 import com.iloapps.nomaddashboard.core.data.timetracking.CreateProjectResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
@@ -10,6 +11,7 @@ import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
+import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
@@ -25,9 +27,9 @@ import kotlinx.coroutines.launch
 data class TimeTrackingUiState(
     val settings: AppSettings = AppSettings(),
     val projects: List<TimeTrackingProject> = emptyList(),
+    val pendingEntries: List<TimeTrackingRecord> = emptyList(),
     val recentEntries: List<TimeTrackingRecord> = emptyList(),
     val activeEntry: TimeTrackingRecord? = null,
-    val selectedProjectId: UUID? = null,
     val draftProjectName: String = "",
     val message: String? = null,
 )
@@ -39,7 +41,6 @@ sealed interface TimeTrackingEffect {
 }
 
 private data class TrackingInputs(
-    val selectedProjectId: String?,
     val draftProjectName: String,
     val message: String?,
 )
@@ -49,7 +50,6 @@ class TimeTrackingViewModel @Inject constructor(
     private val dashboardRepository: NomadDashboardRepository,
     private val timeTrackingRepository: TimeTrackingRepository,
 ) : ViewModel() {
-    private val selectedProjectId = MutableStateFlow<String?>(null)
     private val draftProjectName = MutableStateFlow("")
     private val message = MutableStateFlow<String?>(null)
     private val _effects = MutableSharedFlow<TimeTrackingEffect>()
@@ -57,7 +57,6 @@ class TimeTrackingViewModel @Inject constructor(
     val effects = _effects.asSharedFlow()
 
     private val inputs = combine(
-        selectedProjectId,
         draftProjectName,
         message,
         ::TrackingInputs,
@@ -66,19 +65,17 @@ class TimeTrackingViewModel @Inject constructor(
     val uiState: StateFlow<TimeTrackingUiState> = combine(
         dashboardRepository.settings,
         timeTrackingRepository.projects,
+        timeTrackingRepository.pendingEntries,
         timeTrackingRepository.recentEntries,
         timeTrackingRepository.activeEntry,
         inputs,
-    ) { settings, projects, recentEntries, activeEntry, inputs ->
-        val selected = activeEntry?.project?.id
-            ?: projects.firstOrNull { it.id.toString() == inputs.selectedProjectId }?.id
-            ?: projects.firstOrNull()?.id
+    ) { settings, projects, pendingEntries, recentEntries, activeEntry, inputs ->
         TimeTrackingUiState(
             settings = settings,
             projects = projects,
+            pendingEntries = pendingEntries,
             recentEntries = recentEntries,
             activeEntry = activeEntry,
-            selectedProjectId = selected,
             draftProjectName = inputs.draftProjectName,
             message = inputs.message,
         )
@@ -88,9 +85,10 @@ class TimeTrackingViewModel @Inject constructor(
         TimeTrackingUiState(),
     )
 
-    fun selectProject(projectId: UUID) {
-        selectedProjectId.value = projectId.toString()
-        message.value = null
+    init {
+        viewModelScope.launch {
+            timeTrackingRepository.syncTracking()
+        }
     }
 
     fun updateDraftProjectName(value: String) {
@@ -102,15 +100,13 @@ class TimeTrackingViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = timeTrackingRepository.createProject(draftProjectName.value)) {
                 is CreateProjectResult.Created -> {
-                    selectedProjectId.value = result.project.id.toString()
                     draftProjectName.value = ""
-                    message.value = null
+                    message.value = "${result.project.name} is ready for quick allocation."
                 }
 
                 is CreateProjectResult.Existing -> {
-                    selectedProjectId.value = result.project.id.toString()
                     draftProjectName.value = ""
-                    message.value = "Project already exists. Selected ${result.project.name}."
+                    message.value = "${result.project.name} already exists."
                 }
 
                 CreateProjectResult.InvalidName -> {
@@ -121,26 +117,16 @@ class TimeTrackingViewModel @Inject constructor(
     }
 
     fun startTracking() {
-        val projectId = uiState.value.selectedProjectId
-        if (projectId == null) {
-            message.value = "Create or select a project before starting tracking."
-            return
-        }
-
         viewModelScope.launch {
-            when (timeTrackingRepository.startTracking(projectId)) {
+            when (timeTrackingRepository.startTracking()) {
                 StartTrackingResult.Started -> {
-                    message.value = null
+                    message.value = "Unallocated capture resumed."
                     _effects.emit(TimeTrackingEffect.StartService)
                 }
 
                 StartTrackingResult.AlreadyTracking -> {
-                    message.value = "An active time-tracking session is already running."
+                    message.value = "Capture is already running."
                     _effects.emit(TimeTrackingEffect.StartService)
-                }
-
-                StartTrackingResult.MissingProject -> {
-                    message.value = "The selected project is no longer available."
                 }
             }
             dashboardRepository.refresh()
@@ -151,7 +137,7 @@ class TimeTrackingViewModel @Inject constructor(
         viewModelScope.launch {
             when (timeTrackingRepository.stopTracking()) {
                 StopTrackingResult.Stopped -> {
-                    message.value = null
+                    message.value = "Capture paused. Allocate the buffer when you're ready."
                     _effects.emit(TimeTrackingEffect.StopService)
                 }
 
@@ -162,4 +148,38 @@ class TimeTrackingViewModel @Inject constructor(
             dashboardRepository.refresh()
         }
     }
+
+    fun allocateTrackedTime(projectId: UUID) {
+        viewModelScope.launch {
+            when (val result = timeTrackingRepository.allocateTrackedTime(projectId)) {
+                is AllocateTrackedTimeResult.Allocated -> {
+                    val restarted = timeTrackingRepository.currentActiveEntry() != null
+                    message.value = if (restarted) {
+                        "Allocated ${result.entryCount} segment${result.entryCount.pluralSuffix()} and restarted capture."
+                    } else {
+                        "Allocated ${result.entryCount} segment${result.entryCount.pluralSuffix()}."
+                    }
+                    _effects.emit(if (restarted) TimeTrackingEffect.StartService else TimeTrackingEffect.StopService)
+                }
+
+                AllocateTrackedTimeResult.NothingToAllocate -> {
+                    message.value = "No tracked time is waiting for allocation."
+                }
+
+                AllocateTrackedTimeResult.MissingProject -> {
+                    message.value = "That project is no longer available."
+                }
+            }
+            dashboardRepository.refresh()
+        }
+    }
+
+    fun statusLabel(state: TimeTrackingUiState): String = when {
+        state.activeEntry != null && state.activeEntry.entry.isAutomaticallyTracked() -> "Auto"
+        state.activeEntry != null -> "Manual"
+        state.pendingEntries.isNotEmpty() -> "Paused"
+        else -> "Ready"
+    }
 }
+
+private fun Int.pluralSuffix(): String = if (this == 1) "" else "s"
