@@ -1,1 +1,1 @@
-This update adds time tracking interruption logging and focus reports and time tracking UI, optimize data observation, and stabilize tests.
+This update adds first-run location onboarding to dashboard and smartraveller detailed advice summary and source link.

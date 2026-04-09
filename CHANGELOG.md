@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-04-09
+
+### Added
+- Added first-run location onboarding to dashboard.
+- Added Smartraveller detailed advice summary and source link.
+
 ## [0.5.0] - 2026-04-08
 
 ### Added
