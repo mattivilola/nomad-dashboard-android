@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Overall
 
@@ -105,6 +105,10 @@ Current repository state:
 - `make run` now prints timestamped install/launch progress updates and waits
   for `am start -W` launch timing so slow wireless-device deploys are less
   opaque
+- dashboard first-run location onboarding landed: when Android location access
+  is still missing, the dashboard now shows a prominent top-of-screen grant
+  card ahead of the main cards so release installs do not hide the permission
+  path below the fold
 
 ## Completed
 

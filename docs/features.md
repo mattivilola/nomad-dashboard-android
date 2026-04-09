@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -17,6 +17,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header with the Nomad symbol mark, visible refresh progress, a weather-first three-up overview strip, and metric-led detail cards without duplicate top navigation |
+| First-run location onboarding | Implemented | When Android location permission is still missing, the dashboard now shows a top-of-screen grant card before the main cards so device-aware features are discoverable on fresh installs |
 | Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
 | About screen | Implemented | About now acts as a real trust and brand surface with stronger product framing, local-first privacy explanation, live app version metadata, and direct links to the website and GitHub project |
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |

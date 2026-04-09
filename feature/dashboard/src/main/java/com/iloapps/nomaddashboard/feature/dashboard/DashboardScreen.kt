@@ -291,6 +291,16 @@ fun DashboardScreen(
             DashboardSummaryStrip(snapshot = state.snapshot)
         }
 
+        if (hasLocationPermission.not()) {
+            item {
+                DashboardLocationAccessCard(
+                    settings = state.settings,
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    onOpenSettings = onOpenSettings,
+                )
+            }
+        }
+
         items(state.settings.dashboardCardOrder, key = { it.name }) { cardId ->
             when (cardId) {
                 DashboardCardId.WEATHER -> WeatherSectionCard(
@@ -338,6 +348,7 @@ fun DashboardScreen(
                 DashboardCardId.FUEL_PRICES -> FuelPricesSectionCard(
                     enabled = state.settings.fuelPricesEnabled,
                     snapshot = state.snapshot.fuelPrices,
+                    onOpenSettings = onOpenSettings,
                     onOpenMap = { station ->
                         context.openMapLocation(
                             latitude = station.latitude,
@@ -377,6 +388,58 @@ fun DashboardScreen(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DashboardLocationAccessCard(
+    settings: com.iloapps.nomaddashboard.core.model.AppSettings,
+    onRequestLocationPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    val unlockedFeatures = buildList {
+        add("device-aware travel context")
+        add("nearby weather")
+        if (settings.visitedPlacesEnabled) add("visited place capture")
+        if (settings.fuelPricesEnabled) add("nearby fuel prices")
+        if (settings.emergencyCareEnabled) add("nearby hospitals")
+    }
+
+    NomadCard(modifier = Modifier.testTag("dashboard_location_access_card")) {
+        NomadSectionClusterHeader(
+            title = "Grant Location Access",
+            subtitle = "Location unlocks the most useful on-the-road signals before you scroll into individual cards.",
+            badges = listOf(
+                "Recommended" to NomadBadgeTone.Accent,
+                "First-run setup" to NomadBadgeTone.Info,
+            ),
+        )
+        Text(
+            text = "Enable Android location so Nomad can resolve ${unlockedFeatures.joinToString()} from your actual device position. The dashboard still falls back to public IP context when location stays off.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(
+                onClick = onRequestLocationPermission,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Rounded.MyLocation, contentDescription = null)
+                Text(
+                    text = "Grant location",
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+            NomadActionChip(
+                label = "Settings",
+                icon = Icons.Rounded.Settings,
+                onClick = onOpenSettings,
+            )
         }
     }
 }
@@ -1890,14 +1953,27 @@ private fun dashboardInterruptionButtonColor(
 private fun FuelPricesSectionCard(
     enabled: Boolean,
     snapshot: FuelPriceSnapshot,
+    onOpenSettings: () -> Unit,
     onOpenMap: (FuelStationPrice) -> Unit,
 ) {
     if (enabled.not()) {
-        DashboardNarrativeCard(
-            title = "Fuel Prices",
-            subtitle = "Off",
-            lines = listOf("Enable fuel prices in Settings to compare nearby diesel and gasoline options on the dashboard."),
-        )
+        NomadCard {
+            NomadSectionClusterHeader(
+                title = "Fuel Prices",
+                subtitle = "Off",
+                actions = {
+                    NomadActionChip(
+                        label = "Open Settings",
+                        icon = Icons.Rounded.Settings,
+                        onClick = onOpenSettings,
+                    )
+                },
+            )
+            Text(
+                text = "Enable fuel prices in Settings to compare nearby diesel and gasoline options on the dashboard.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
         return
     }
 
