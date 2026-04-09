@@ -1,11 +1,18 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
@@ -112,6 +119,160 @@ class LocalInfoSectionCardTest {
 
         composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
         composeRule.onNodeWithText("School holidays appear only when the app can match your region confidently.").assertIsDisplayed()
+    }
+
+    @Test
+    fun publicHolidayActiveTodayRendersBusyWarningChip() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = dashboardUiState(
+                        enabled = true,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            locality = "Seville",
+                            region = "Andalusia",
+                            countryCode = "ES",
+                            countryName = "Spain",
+                            publicHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.TODAY,
+                                period = HolidayPeriod(
+                                    name = "National Day",
+                                    startDate = LocalDate.parse("2026-10-12"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(LocalInfoPublicHolidayWarningChipTag).assertIsDisplayed()
+        composeRule.onNodeWithText("Busy Today").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Today").assertCountEquals(0)
+    }
+
+    @Test
+    fun schoolBreakActiveNowRendersBusyWarningChip() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = dashboardUiState(
+                        enabled = true,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            locality = "Lyon",
+                            region = "Auvergne-Rhone-Alpes",
+                            countryCode = "FR",
+                            countryName = "France",
+                            schoolHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.ON_BREAK,
+                                period = HolidayPeriod(
+                                    name = "Winter Break",
+                                    startDate = LocalDate.parse("2026-02-14"),
+                                    endDate = LocalDate.parse("2026-02-28"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).assertIsDisplayed()
+        composeRule.onNodeWithText("Busy Period").assertIsDisplayed()
+        composeRule.onAllNodesWithText("On break").assertCountEquals(0)
+    }
+
+    @Test
+    fun upcomingOrTomorrowHolidaysDoNotRenderWarningChips() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = dashboardUiState(
+                        enabled = true,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            locality = "Paris",
+                            region = "Ile-de-France",
+                            countryCode = "FR",
+                            countryName = "France",
+                            publicHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.TOMORROW,
+                                period = HolidayPeriod(
+                                    name = "Ascension Day",
+                                    startDate = LocalDate.parse("2026-05-14"),
+                                ),
+                            ),
+                            schoolHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.NEXT,
+                                period = HolidayPeriod(
+                                    name = "Summer Break",
+                                    startDate = LocalDate.parse("2026-07-04"),
+                                    endDate = LocalDate.parse("2026-08-30"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithTag(LocalInfoPublicHolidayWarningChipTag).assertCountEquals(0)
+        composeRule.onAllNodesWithTag(LocalInfoSchoolBreakWarningChipTag).assertCountEquals(0)
+        composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
+        composeRule.onNodeWithText("Next break: Summer Break").assertIsDisplayed()
+    }
+
+    @Test
+    fun bothActiveWarningsRenderAndFitNarrowWidth() {
+        composeRule.setContent {
+            NomadTheme {
+                Box(modifier = Modifier.width(320.dp)) {
+                    DashboardScreen(
+                        state = dashboardUiState(
+                            enabled = true,
+                            snapshot = LocalInfoSnapshot(
+                                status = LocalInfoStatus.READY,
+                                locality = "Barcelona",
+                                region = "Catalonia",
+                                countryCode = "ES",
+                                countryName = "Spain",
+                                publicHoliday = LocalHolidayStatus(
+                                    phase = LocalHolidayPhase.TODAY,
+                                    period = HolidayPeriod(
+                                        name = "National Day",
+                                        startDate = LocalDate.parse("2026-09-11"),
+                                    ),
+                                ),
+                                schoolHoliday = LocalHolidayStatus(
+                                    phase = LocalHolidayPhase.ON_BREAK,
+                                    period = HolidayPeriod(
+                                        name = "Spring Break",
+                                        startDate = LocalDate.parse("2026-04-01"),
+                                        endDate = LocalDate.parse("2026-04-10"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                        hasLocationPermission = true,
+                        onRefresh = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag(LocalInfoCardTag).assertIsDisplayed()
+        composeRule.onNodeWithTag(LocalInfoPublicHolidayWarningChipTag).assertIsDisplayed()
+        composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).assertIsDisplayed()
+        composeRule.onNodeWithText("Busy Today").assertIsDisplayed()
+        composeRule.onNodeWithText("Busy Period").assertIsDisplayed()
     }
 
     @Test

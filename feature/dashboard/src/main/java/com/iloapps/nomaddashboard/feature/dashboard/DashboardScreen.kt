@@ -2121,13 +2121,15 @@ private fun LocalInfoSectionCard(
                     title = "Public Holiday",
                     value = localHolidayHeadline(holiday, isSchoolHoliday = false),
                     detail = localHolidayDetail(holiday, isSchoolHoliday = false),
+                    warningChip = localHolidayTravelerWarningChip(holiday, isSchoolHoliday = false),
                 )
             }
             snapshot.schoolHoliday?.let { holiday ->
                 LocalInfoStatusRow(
-                    title = "School Holiday",
+                    title = "School Break",
                     value = localHolidayHeadline(holiday, isSchoolHoliday = true),
                     detail = localHolidayDetail(holiday, isSchoolHoliday = true),
+                    warningChip = localHolidayTravelerWarningChip(holiday, isSchoolHoliday = true),
                 )
             }
             snapshot.localPriceLevel.rows.take(3).forEach { row ->
@@ -2171,6 +2173,7 @@ private fun LocalInfoStatusRow(
     title: String,
     value: String,
     detail: String?,
+    warningChip: LocalInfoTravelerWarningChip? = null,
 ) {
     Box(
         modifier = Modifier
@@ -2201,14 +2204,26 @@ private fun LocalInfoStatusRow(
                     )
                 }
             }
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.tertiary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(
+                modifier = Modifier.padding(start = 12.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                warningChip?.let { chip ->
+                    NomadStatusBadge(
+                        text = chip.label,
+                        tone = NomadBadgeTone.Warning,
+                        modifier = Modifier.testTag(chip.testTag),
+                    )
+                } ?: Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -3390,6 +3405,24 @@ private fun localHolidayDetail(
         LocalHolidayPhase.ON_BREAK -> "${holiday.period.name} · ${holiday.period.formatRange()}"
     }
 
+private fun localHolidayTravelerWarningChip(
+    holiday: LocalHolidayStatus,
+    isSchoolHoliday: Boolean,
+): LocalInfoTravelerWarningChip? =
+    when {
+        isSchoolHoliday && holiday.phase == LocalHolidayPhase.ON_BREAK ->
+            LocalInfoTravelerWarningChip(
+                label = "Busy Period",
+                testTag = LocalInfoSchoolBreakWarningChipTag,
+            )
+        isSchoolHoliday.not() && holiday.phase == LocalHolidayPhase.TODAY ->
+            LocalInfoTravelerWarningChip(
+                label = "Busy Today",
+                testTag = LocalInfoPublicHolidayWarningChipTag,
+            )
+        else -> null
+    }
+
 private fun com.iloapps.nomaddashboard.core.model.HolidayPeriod.formatRange(): String =
     if (startDate == endDate) {
         startDate.formatCompactDate()
@@ -3402,6 +3435,13 @@ private fun java.time.LocalDate.formatCompactDate(): String =
 
 private val LocalInfoCapabilitySources = listOf("Nager.Date", "OpenHolidays", "Eurostat", "HUD USER", "US Census Geocoder")
 
+private data class LocalInfoTravelerWarningChip(
+    val label: String,
+    val testTag: String,
+)
+
 internal const val TravelAlertsCardTag = "travel-alerts-card"
 internal const val EmergencyCareCardTag = "emergency-care-card"
 internal const val LocalInfoCardTag = "local-info-card"
+internal const val LocalInfoPublicHolidayWarningChipTag = "local-info-public-holiday-warning-chip"
+internal const val LocalInfoSchoolBreakWarningChipTag = "local-info-school-break-warning-chip"
