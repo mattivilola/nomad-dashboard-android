@@ -57,7 +57,9 @@ class TravelAlertsSectionCardTest {
                                 severity = TravelAlertSeverity.CAUTION,
                                 title = "Travel advisory",
                                 summary = "France is at Level 2 nearby.",
+                                detailSummary = "Exercise a high degree of caution in France due to the threat of terrorism.",
                                 sourceName = "Smartraveller",
+                                sourceUrl = "https://www.smartraveller.gov.au/destinations/europe/france",
                                 updatedAt = Instant.parse("2026-04-07T10:00:00Z"),
                             ),
                             sourceName = "Smartraveller",
@@ -78,6 +80,8 @@ class TravelAlertsSectionCardTest {
         }
 
         composeRule.onNodeWithText("France is at Level 2 nearby.").assertIsDisplayed()
+        composeRule.onNodeWithText("Exercise a high degree of caution in France due to the threat of terrorism.").assertIsDisplayed()
+        composeRule.onNodeWithText("More details").assertIsDisplayed()
         composeRule.onNodeWithText("ReliefWeb app name approval required.").assertIsDisplayed()
         composeRule.onNodeWithText("Limited").assertIsDisplayed()
     }

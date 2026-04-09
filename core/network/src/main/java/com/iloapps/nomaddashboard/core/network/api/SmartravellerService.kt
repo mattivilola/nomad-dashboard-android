@@ -4,6 +4,7 @@ import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Headers
+import retrofit2.http.Url
 
 interface SmartravellerService {
     @Headers(
@@ -21,4 +22,12 @@ interface SmartravellerService {
     )
     @GET("destinations-export")
     suspend fun destinationsExport(): Response<ResponseBody>
+
+    @Headers(
+        "Accept: text/html,application/xhtml+xml",
+        "Accept-Language: en-AU,en;q=0.9",
+        "User-Agent: Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
+    )
+    @GET
+    suspend fun destinationPage(@Url url: String): Response<ResponseBody>
 }

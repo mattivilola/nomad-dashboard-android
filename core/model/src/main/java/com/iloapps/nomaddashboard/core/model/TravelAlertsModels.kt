@@ -44,6 +44,7 @@ data class TravelAlertSignalSnapshot(
     val severity: TravelAlertSeverity,
     val title: String,
     val summary: String,
+    val detailSummary: String? = null,
     val sourceName: String,
     val sourceUrl: String? = null,
     val updatedAt: Instant,

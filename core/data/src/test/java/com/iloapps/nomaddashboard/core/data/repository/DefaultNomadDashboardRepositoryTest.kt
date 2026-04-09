@@ -1173,6 +1173,17 @@ class DefaultNomadDashboardRepositoryTest {
 
                 override suspend fun destinationsExport(): Response<ResponseBody> =
                     Response.error(404, "{}".toResponseBody("application/json".toMediaType()))
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        <html>
+                          <body>
+                            <p>Exercise a high degree of caution in France due to the threat of terrorism.</p>
+                          </body>
+                        </html>
+                        """.trimIndent().toResponseBody("text/html".toMediaType()),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = TestJson,

@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.BlurOn
@@ -80,6 +81,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -2277,6 +2279,7 @@ private fun TravelAlertRow(
     state: TravelAlertSignalState,
     modifier: Modifier = Modifier,
 ) {
+    val uriHandler = LocalUriHandler.current
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -2311,6 +2314,20 @@ private fun TravelAlertRow(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
             )
+            travelAlertDetail(state)?.let { detail ->
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
+                )
+            }
+            travelAlertDetailsUrl(state)?.let { url ->
+                NomadActionChip(
+                    label = "More details",
+                    icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                    onClick = { uriHandler.openUri(url) },
+                )
+            }
             Text(
                 text = travelAlertFreshnessLine(state),
                 style = MaterialTheme.typography.bodySmall,
@@ -2780,6 +2797,31 @@ private fun travelAlertSummary(state: TravelAlertSignalState): String =
         TravelAlertSignalStatus.UNAVAILABLE -> state.diagnosticSummary
             ?: state.reason?.summary()
             ?: "Source unavailable"
+    }
+
+private fun travelAlertDetail(state: TravelAlertSignalState): String? =
+    when (state.status) {
+        TravelAlertSignalStatus.READY,
+        TravelAlertSignalStatus.STALE,
+        -> state.signal?.detailSummary
+            ?.takeIf(String::isNotBlank)
+            ?.takeUnless { detail ->
+                val summary = state.signal?.summary.orEmpty()
+                detail.equals(summary, ignoreCase = true)
+            }
+        TravelAlertSignalStatus.CHECKING,
+        TravelAlertSignalStatus.UNAVAILABLE,
+        -> null
+    }
+
+private fun travelAlertDetailsUrl(state: TravelAlertSignalState): String? =
+    when (state.status) {
+        TravelAlertSignalStatus.READY,
+        TravelAlertSignalStatus.STALE,
+        -> state.signal?.sourceUrl?.takeIf(String::isNotBlank)
+        TravelAlertSignalStatus.CHECKING,
+        TravelAlertSignalStatus.UNAVAILABLE,
+        -> null
     }
 
 private fun travelAlertFreshnessLine(state: TravelAlertSignalState): String {

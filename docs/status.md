@@ -68,6 +68,10 @@ Current repository state:
   `current country + bordering countries` for cases like France plus 8
   neighbors, and the card now keeps its overall status chip in the top row
   with denser per-signal panels
+- travel alerts detail pass landed: the Smartraveller row now keeps the
+  existing severity/coverage logic but also shows the concise advice-reason
+  sentence when the destination page exposes one, plus a direct `More details`
+  action to open the source page from the dashboard
 - whole-app UX parity pass expanded across settings, about, and time tracking;
   shared badges, metric blocks, chart shells, and stronger section headers now
   give the app a more coherent product language
@@ -217,6 +221,9 @@ Verified:
   `:core:data:testDebugUnitTest`
 - dashboard emergency-care card Android test added and passing via
   `:feature:dashboard:connectedDebugAndroidTest`
+- Smartraveller detail-summary coverage plus dashboard Android-test compile
+  passed on 2026-04-09 via
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
 - time-tracking repository/storage/runtime coverage added and passing
 - `make build` passed again on 2026-04-07 after the encrypted credential
   storage and settings hardening slice

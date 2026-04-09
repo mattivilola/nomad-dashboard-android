@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Local Setup
 
@@ -233,6 +233,10 @@ Latest verification attempt:
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed after wiring the dashboard-to-settings navigation path and updating
   the debug screenshot fixtures for Local Price Level
+- on 2026-04-09,
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed after adding the Smartraveller detail-summary extraction and the
+  dashboard `More details` action
 - on 2026-04-08, `make build` and a targeted
   `run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:data:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:timetracking:compileDebugKotlin :app:compileDebugKotlin -Pksp.incremental=false`
   both stopped early in the existing unrelated

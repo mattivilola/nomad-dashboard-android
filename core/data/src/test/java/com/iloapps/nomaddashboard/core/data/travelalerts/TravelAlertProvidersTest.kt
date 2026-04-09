@@ -64,6 +64,17 @@ class TravelAlertProvidersTest {
 
                 override suspend fun destinationsExport(): Response<ResponseBody> =
                     Response.error(404, "{}".toResponseBody(JsonMediaType))
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        <html>
+                          <body>
+                            <p>Reconsider your need to travel to France due to the threat of terrorism.</p>
+                          </body>
+                        </html>
+                        """.trimIndent().toResponseBody(HtmlMediaType),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
@@ -79,6 +90,7 @@ class TravelAlertProvidersTest {
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.WARNING)
         assertThat(signal.summary).isEqualTo("France nearby: reconsider your need to travel.")
+        assertThat(signal.detailSummary).isEqualTo("Reconsider your need to travel to France due to the threat of terrorism.")
         assertThat(signal.sourceUrl).isEqualTo("https://www.smartraveller.gov.au/destinations/france")
         assertThat(signal.affectedCountryCodes).containsExactly("FR")
     }
@@ -103,6 +115,17 @@ class TravelAlertProvidersTest {
 
                 override suspend fun destinationsExport(): Response<ResponseBody> =
                     Response.error(404, "{}".toResponseBody(JsonMediaType))
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> =
+                    Response.success(
+                        """
+                        <html>
+                          <body>
+                            <p>Exercise a high degree of caution in Turkiye due to the risk of civil unrest.</p>
+                          </body>
+                        </html>
+                        """.trimIndent().toResponseBody(HtmlMediaType),
+                    )
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
@@ -117,7 +140,8 @@ class TravelAlertProvidersTest {
         )
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)
-        assertThat(signal.summary).contains("exercise a high degree of caution")
+        assertThat(signal.summary).isEqualTo("Exercise a high degree of caution in Turkiye due to the risk of civil unrest.")
+        assertThat(signal.detailSummary).isEqualTo("Exercise a high degree of caution in Turkiye due to the risk of civil unrest.")
     }
 
     @Test
@@ -133,6 +157,9 @@ class TravelAlertProvidersTest {
                     504,
                     "{}".toResponseBody(JsonMediaType),
                 )
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> =
+                    Response.error(504, "{}".toResponseBody(JsonMediaType))
             },
             countryNameResolver = CountryNameResolver(),
             json = json,
@@ -168,6 +195,47 @@ class TravelAlertProvidersTest {
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)
         assertThat(signal.summary).contains("exercise a high degree of caution")
+    }
+
+    @Test
+    fun `smartraveller detail parser extracts concise advice sentence`() {
+        val provider = SmartravellerAdvisoryProvider(
+            service = object : SmartravellerService {
+                override suspend fun destinations(): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+            },
+            countryNameResolver = CountryNameResolver(),
+            json = json,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String = error("browser fallback should not be used")
+            },
+        )
+
+        val detail = provider.parseDestinationDetailSummary(
+            """
+            <html>
+              <body>
+                <h3>Advice Level summary</h3>
+                <p>We advise:</p>
+                <p>Exercise a high degree of caution in France due to the threat of terrorism.</p>
+              </body>
+            </html>
+            """.trimIndent(),
+        )
+
+        assertThat(detail).isEqualTo("Exercise a high degree of caution in France due to the threat of terrorism.")
     }
 
     @Test

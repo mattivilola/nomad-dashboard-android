@@ -55,9 +55,14 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             message = "Smartraveller returned no destinations matching the monitored countries.",
         )
 
+        val detailSummary = worst.destination.url?.let { url ->
+            loadDestinationDetailSummary(url)
+        }
         val summary = when {
             worst.severity == TravelAlertSeverity.CLEAR ->
                 "No elevated travel advisories across ${matches.size} monitored countries."
+            worst.countryCode.equals(primaryCountryCode, ignoreCase = true) && detailSummary.isNullOrBlank().not() ->
+                detailSummary.orEmpty()
             worst.countryCode.equals(primaryCountryCode, ignoreCase = true) ->
                 "${worst.countryName}: ${worst.destination.adviceLabel}."
             else ->
@@ -69,6 +74,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             severity = worst.severity,
             title = "Travel advisory",
             summary = summary,
+            detailSummary = detailSummary,
             sourceName = SOURCE_NAME,
             sourceUrl = worst.destination.url ?: SOURCE_URL,
             updatedAt = worst.destination.updatedAt ?: Instant.now(),
@@ -197,6 +203,32 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             ).atStartOfDay().toInstant(ZoneOffset.UTC)
         }.getOrNull()
 
+    internal fun parseDestinationDetailSummary(rawBody: String): String? {
+        val document = Jsoup.parse(rawBody, SOURCE_URL)
+        document.select("p, li").asSequence()
+            .map { element -> element.text().normalizedWhitespace() }
+            .mapNotNull { text -> AdviceSummaryRegex.find(text)?.value?.normalizedWhitespace() }
+            .firstOrNull()
+            ?.let { return it }
+
+        return document.body()
+            ?.text()
+            ?.normalizedWhitespace()
+            ?.let { text -> AdviceSummaryRegex.find(text)?.value?.normalizedWhitespace() }
+    }
+
+    private suspend fun loadDestinationDetailSummary(url: String): String? =
+        runCatching {
+            val response = service.destinationPage(url)
+            if (response.isSuccessful.not()) {
+                return@runCatching null
+            }
+            parseDestinationDetailSummary(response.body()?.string().orEmpty())
+        }.getOrElse { error ->
+            logWarn(LOG_TAG, "Smartraveller detail fetch failed for $url", error)
+            null
+        }
+
     private suspend fun loadDestinations(): List<SmartravellerDestination> {
         val directResult = runCatching {
             fetchDirect(
@@ -290,6 +322,9 @@ class SmartravellerAdvisoryProvider @Inject constructor(
         const val SOURCE_NAME = "Smartraveller"
         const val SOURCE_URL = "https://www.smartraveller.gov.au"
         const val LOG_TAG = "NomadTravelAlerts"
+        val AdviceSummaryRegex = Regex(
+            pattern = """(?i)(Exercise normal safety precautions|Exercise a high degree of caution|Reconsider your need to travel|Do not travel)[^.]{0,220}\.""",
+        )
     }
 }
 
@@ -337,6 +372,9 @@ private fun JsonObject.firstInt(vararg keys: String): Int? =
         val primitive = this[key] as? JsonPrimitive ?: return@firstNotNullOfOrNull null
         primitive.content.toIntOrNull()
     }
+
+private fun String.normalizedWhitespace(): String =
+    trim().replace(Regex("""\s+"""), " ")
 
 private fun JsonObject.firstInstant(vararg keys: String): Instant? =
     keys.firstNotNullOfOrNull { key ->
