@@ -3,11 +3,14 @@ package com.iloapps.nomaddashboard.feature.dashboard
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.SignalLevel
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapPhase
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapState
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
@@ -79,5 +82,34 @@ class DashboardScreenTest {
         }
 
         composeRule.onNodeWithTag("dashboard_refresh_progress").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsStartupLocationCheckingCopyInsteadOfUnavailable() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        settings = AppSettings(
+                            publicIpGeolocationEnabled = true,
+                            useCurrentLocationForWeather = true,
+                        ),
+                        snapshot = DashboardSnapshot(
+                            isRefreshing = true,
+                            startupLocation = StartupLocationBootstrapState(
+                                phase = StartupLocationBootstrapPhase.CHECKING_DEVICE_LOCATION,
+                                isChecking = true,
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Checking device location...").assertIsDisplayed()
+        composeRule.onNodeWithText("Checking device location before loading location-based cards...").assertIsDisplayed()
+        composeRule.onNodeWithText("Checking device location before loading location-based weather.").assertIsDisplayed()
     }
 }

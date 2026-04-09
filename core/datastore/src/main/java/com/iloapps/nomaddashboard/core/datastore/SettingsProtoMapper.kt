@@ -7,18 +7,21 @@ import com.iloapps.nomaddashboard.core.model.DashboardCardWidthMode
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 
 fun AppSettingsProto.toExternalModel(): AppSettings {
-    val order = dashboardCardOrderList.mapNotNull { raw ->
+    val persistedOrder = dashboardCardOrderList.mapNotNull { raw ->
         dashboardCardIdFor(raw)
-    }.ifEmpty {
-        DashboardCardId.defaultOrder
     }
+    val order = persistedOrder.ifEmpty {
+        DashboardCardId.defaultOrder
+    }.withMissingDashboardCards()
 
-    val widths = dashboardCardWidthModesMap.mapNotNull { (key, value) ->
+    val persistedWidths = dashboardCardWidthModesMap.mapNotNull { (key, value) ->
         val card = dashboardCardIdFor(key) ?: return@mapNotNull null
         val width = DashboardCardWidthMode.entries.firstOrNull { it.name == value } ?: return@mapNotNull null
         card to width
-    }.toMap().ifEmpty {
-        DashboardCardId.defaultOrder.associateWith { DashboardCardWidthMode.WIDE }
+    }.toMap()
+
+    val widths = order.associateWith { card ->
+        persistedWidths[card] ?: DashboardCardWidthMode.WIDE
     }
     val autoStartMinutes = projectTimeTrackingAutoStartMinutes
     val autoStopMinutes = projectTimeTrackingAutoStopMinutes
@@ -77,3 +80,13 @@ private fun dashboardCardIdFor(raw: String): DashboardCardId? =
         "LOCAL_PRICE_LEVEL" -> DashboardCardId.LOCAL_INFO
         else -> DashboardCardId.entries.firstOrNull { it.name == raw }
     }
+
+private fun List<DashboardCardId>.withMissingDashboardCards(): List<DashboardCardId> {
+    val current = toMutableList()
+    DashboardCardId.defaultOrder.forEach { card ->
+        if (current.contains(card).not()) {
+            current += card
+        }
+    }
+    return current
+}

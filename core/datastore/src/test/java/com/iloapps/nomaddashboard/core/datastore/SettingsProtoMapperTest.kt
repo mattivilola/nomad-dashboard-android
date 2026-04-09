@@ -36,11 +36,12 @@ class SettingsProtoMapperTest {
         val restored = settings.toProto().toExternalModel()
 
         assertThat(restored.appearanceMode).isEqualTo(AppearanceMode.DARK)
-        assertThat(restored.dashboardCardOrder).containsExactly(
+        assertThat(restored.dashboardCardOrder.take(2)).containsExactly(
             DashboardCardId.WEATHER,
             DashboardCardId.CONNECTIVITY,
         ).inOrder()
         assertThat(restored.dashboardCardWidthModes[DashboardCardId.WEATHER]).isEqualTo(DashboardCardWidthMode.NARROW)
+        assertThat(restored.dashboardCardOrder).contains(DashboardCardId.LOCAL_INFO)
         assertThat(restored.publicIpGeolocationEnabled).isFalse()
         assertThat(restored.useCurrentLocationForWeather).isTrue()
         assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
@@ -62,8 +63,21 @@ class SettingsProtoMapperTest {
         val restored = proto.toExternalModel()
 
         assertThat(restored.localInfoEnabled).isTrue()
-        assertThat(restored.dashboardCardOrder).containsExactly(DashboardCardId.LOCAL_INFO)
+        assertThat(restored.dashboardCardOrder.first()).isEqualTo(DashboardCardId.LOCAL_INFO)
         assertThat(restored.dashboardCardWidthModes[DashboardCardId.LOCAL_INFO]).isEqualTo(DashboardCardWidthMode.NARROW)
+    }
+
+    @Test
+    fun `mapper appends missing dashboard cards for older settings`() {
+        val proto = AppSettingsProto.newBuilder()
+            .addDashboardCardOrder(DashboardCardId.WEATHER.name)
+            .build()
+
+        val restored = proto.toExternalModel()
+
+        assertThat(restored.dashboardCardOrder.first()).isEqualTo(DashboardCardId.WEATHER)
+        assertThat(restored.dashboardCardOrder).contains(DashboardCardId.LOCAL_INFO)
+        assertThat(restored.dashboardCardWidthModes[DashboardCardId.LOCAL_INFO]).isEqualTo(DashboardCardWidthMode.WIDE)
     }
 
     @Test
