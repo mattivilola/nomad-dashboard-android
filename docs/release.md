@@ -41,6 +41,10 @@ Optional Play publishing override:
     app is still in draft state
   - set to `completed` after the app is no longer draft and you want uploads to
     auto-complete the internal release
+- `NOMAD_PLAY_CLOSED_TRACK`
+  - optional closed-testing track name for `make publish-closed`
+  - defaults to `closed`; set it if your Play Console closed track uses a
+    different custom name
 
 From `Config/AppConfig.env` as needed:
 - no provider credentials; keep this file for non-secret helper config only
@@ -111,6 +115,18 @@ Upload to internal testing:
 make publish-internal
 ```
 
+Upload to closed testing:
+
+```sh
+make publish-closed
+```
+
+Upload to production:
+
+```sh
+make publish-production
+```
+
 Run end-to-end release flow:
 
 ```sh
@@ -140,6 +156,21 @@ Current behavior:
 - Play publishing defaults the release status to `draft` for first-time
   internal testing on a draft Play app; override with
   `NOMAD_PLAY_RELEASE_STATUS=completed` after the app leaves draft state
+- Play publishing now has explicit helper targets for `internal`, `closed`,
+  and `production` tracks so releases do not require manual env edits before
+  each upload
+
+Recommended next steps before production:
+- keep using `make publish-closed` until the app survives real tester usage and
+  the onboarding, permissions, provider configuration, and Play declarations
+  are stable
+- verify the Play-installed release with a fresh tester install, especially
+  location permission onboarding, Maps/Places behavior, and any encrypted local
+  provider credential flows
+- complete the remaining Play Console setup items for production such as Data
+  safety, content rating, privacy policy, and foreground-service declarations
+- use `make publish-production` only when the Play release status should be
+  `completed` or when you intentionally override it for a staged rollout
 
 If `v0.1.0` or another historic release was already shipped outside this repo,
 backfill the corresponding git tag before relying on future changelog diffs.
@@ -160,6 +191,8 @@ Implemented:
 - Play publishing now defaults to `draft` release status so first internal
   uploads can succeed on a draft Play app, with an env override for later
   `completed` uploads
+- Play publishing helper targets now exist for internal, closed, and
+  production tracks
 
 Not yet verified with real credentials:
 - signed release artifact generation

@@ -1,7 +1,7 @@
 APP_NAME := NomadDashboard
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device screenshot screenshot-device screenshots lint probe-sources bundle-release apk-release release-dry-run publish-internal release release-patch release-minor release-major clean
+.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device screenshot screenshot-device screenshots lint probe-sources bundle-release apk-release release-dry-run publish-internal publish-closed publish-production release release-patch release-minor release-major clean
 
 help: ## Print available make targets
 	@printf "\nAvailable commands:\n\n"
@@ -64,6 +64,12 @@ release-dry-run: ## Print resolved release configuration without publishing
 
 publish-internal: ## Upload the release bundle to Google Play internal testing
 	./scripts/publish-internal.sh
+
+publish-closed: ## Upload the release bundle to the configured Google Play closed testing track
+	./scripts/publish-closed.sh
+
+publish-production: ## Upload the release bundle to Google Play production
+	./scripts/publish-production.sh
 
 release: ## Run preflight, build a signed bundle, and publish to internal testing
 	./scripts/release.sh
