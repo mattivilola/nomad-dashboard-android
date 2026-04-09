@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-04-09
+
+### Added
+- Replace Local Price Level with Local Info, adding public and school holidays.
+- Added traveler warning chips for active public and school holidays.
+
+### Fixed
+- Ensure all default dashboard cards are present in user settings with correct default widths.
+- Harden startup location bootstrap and single-flight dashboard refresh.
+
+### Build & Release
+- Added dedicated Play publishing targets for closed and production tracks.
+
 ## [0.5.1] - 2026-04-09
 
 ### Added
