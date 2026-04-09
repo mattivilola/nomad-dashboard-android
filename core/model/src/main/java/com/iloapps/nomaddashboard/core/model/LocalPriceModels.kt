@@ -49,7 +49,6 @@ data class LocalPriceLevelSnapshot(
     val rows: List<LocalPriceIndicatorRow> = emptyList(),
     val sources: List<String> = emptyList(),
     val fetchedAt: Instant? = null,
-    val detail: String? = "Enable local price level in Settings",
+    val detail: String? = "Local price signals unavailable.",
     val note: String? = null,
 )
-

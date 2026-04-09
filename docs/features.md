@@ -84,7 +84,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Feature | Android status | Notes |
 | --- | --- | --- |
 | Fuel card | Implemented | Dashboard card now highlights the cheapest nearby diesel and gasoline stations in a more scan-friendly row layout while keeping the same ready/configuration/unavailable/no-stations states |
-| Local price level card | Implemented | Optional dashboard card now shows official traveler-facing cost signals using Eurostat country-level PPP indices in Europe and HUD USER plus US Census Geocoder for US 1-bedroom rent; Europe never implies city precision and US v1 stays rent-only with a `Limited` badge |
+| Local Info card | Implemented | Optional dashboard card now combines resolved location context, Nager.Date public holidays, best-effort OpenHolidays school holidays when a confident subdivision match exists, and the existing Eurostat/HUD USER price rows; partial upstream failures stay visible instead of blanking the card |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
 | Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
 | Emergency care card | Implemented | Dashboard card now renders loading, ready, permission-required, configuration-required, unavailable, and error states with a direct Maps handoff when a nearby hospital is resolved |

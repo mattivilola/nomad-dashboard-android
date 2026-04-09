@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-04-08
+Last updated: 2026-04-09
 
 ## Overview
 
@@ -87,8 +87,9 @@ Responsibilities:
 - encrypted provider credential storage backed by Android Keystore
 - Google Places-backed emergency-care lookup using the app-level Android
   Maps/Places key from manifest metadata
-- local price-level orchestration with Room-backed response cache, Eurostat
-  Europe fallback rows, and HUD USER plus US Census county resolution in the US
+- Local Info orchestration with Room-backed holiday-response caching,
+  Nager.Date public holidays, OpenHolidays subdivision and school-holiday
+  matching, and reused Eurostat/HUD USER local price signals
 - travel-alert provider orchestration and country-coverage resolution
 - orchestration of local and remote data
 
@@ -130,6 +131,9 @@ Current dashboard data flow:
    - current device place whenever Android location permission is available so
      the dashboard can compare physical device location against public-IP
      location in the same Travel Context card
+   - device-first, IP-fallback Local Info context with timezone-normalised
+     public holidays, confident-only school-holiday subdivision matching, and
+     embedded local price rows
    - device-first, IP-fallback fuel lookup context when fuel prices are enabled
    - country-specific fuel provider selection for Spain, France, Italy, and Germany
    - device-place-first, IP-country-fallback travel-alert context
@@ -207,6 +211,22 @@ Time tracking flow:
 9. `TimeTrackingForegroundService` reloads the active unallocated entry from
    persistence and rebuilds the persistent notification after app relaunch or
    service recreation, but not after device reboot.
+
+Local Info flow:
+
+1. `DashboardViewModel` triggers repository refresh.
+2. `DefaultNomadDashboardRepository` resolves Local Info context in this order:
+   - current device location plus reverse geocoding when Android permission is available
+   - current public-IP geolocation fallback
+3. The repository publishes a synchronized `checking` Local Info snapshot, then
+   calls `LocalInfoProvider` with the resolved location, timezone, and HUD USER token.
+4. `LocalInfoProvider` composes:
+   - Nager.Date public holidays for the resolved country, plus the next year when needed near year end
+   - OpenHolidays subdivision matching only when the region/locality match is unique and confident
+   - OpenHolidays school holidays only for the confidently matched subdivision
+   - the existing `LocalPriceLevelProvider` for compact price rows
+   - Room-backed response caching for subdivision and holiday payloads with TTLs longer than the normal dashboard refresh cadence
+5. Partial upstream failures stay local to their row/note and do not blank the full card.
 
 Fuel prices flow:
 

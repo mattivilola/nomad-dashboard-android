@@ -11,12 +11,16 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.HolidayPeriod
+import com.iloapps.nomaddashboard.core.model.HolidaySourceAttribution
+import com.iloapps.nomaddashboard.core.model.LocalHolidayPhase
+import com.iloapps.nomaddashboard.core.model.LocalHolidayStatus
+import com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorRow
 import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
-import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
 import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
 import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
@@ -57,7 +61,7 @@ object ScreenshotReviewFixtures {
         useCurrentLocationForWeather = true,
         useCurrentLocationForVisitedPlaces = true,
         weatherForecastExpanded = true,
-        localPriceLevelEnabled = true,
+        localInfoEnabled = true,
         fuelPricesEnabled = true,
         emergencyCareEnabled = true,
         visitedPlacesEnabled = true,
@@ -272,37 +276,56 @@ object ScreenshotReviewFixtures {
                     ),
                     fetchedAt = fixtureNow,
                 ),
-                localPriceLevel = LocalPriceLevelSnapshot(
-                    status = LocalPriceLevelStatus.READY,
-                    summaryBand = LocalPriceSummaryBand.MEDIUM,
+                localInfo = LocalInfoSnapshot(
+                    status = LocalInfoStatus.READY,
+                    locality = "Tarifa",
+                    region = "Andalusia",
                     countryCode = "ES",
                     countryName = "Spain",
-                    rows = listOf(
-                        LocalPriceIndicatorRow(
-                            kind = LocalPriceIndicatorKind.MEAL_OUT,
-                            value = "Below Avg",
-                            detail = "16% below EU average · Country fallback · 2024",
-                            precision = LocalPricePrecision.COUNTRY_FALLBACK,
-                            source = "Eurostat",
-                        ),
-                        LocalPriceIndicatorRow(
-                            kind = LocalPriceIndicatorKind.GROCERIES,
-                            value = "Moderate",
-                            detail = "4% below EU average · Country fallback · 2024",
-                            precision = LocalPricePrecision.COUNTRY_FALLBACK,
-                            source = "Eurostat",
-                        ),
-                        LocalPriceIndicatorRow(
-                            kind = LocalPriceIndicatorKind.OVERALL,
-                            value = "Moderate",
-                            detail = "1% above EU average · Country fallback · 2024",
-                            precision = LocalPricePrecision.COUNTRY_FALLBACK,
-                            source = "Eurostat",
+                    timezone = "Europe/Madrid",
+                    publicHoliday = LocalHolidayStatus(
+                        phase = LocalHolidayPhase.NEXT,
+                        period = HolidayPeriod(
+                            name = "Labour Day",
+                            startDate = LocalDate.parse("2026-05-01"),
                         ),
                     ),
-                    sources = listOf("Eurostat"),
+                    localPriceLevel = LocalPriceLevelSnapshot(
+                        countryCode = "ES",
+                        countryName = "Spain",
+                        rows = listOf(
+                            LocalPriceIndicatorRow(
+                                kind = LocalPriceIndicatorKind.MEAL_OUT,
+                                value = "Below Avg",
+                                detail = "16% below EU average · Country fallback · 2024",
+                                precision = LocalPricePrecision.COUNTRY_FALLBACK,
+                                source = "Eurostat",
+                            ),
+                            LocalPriceIndicatorRow(
+                                kind = LocalPriceIndicatorKind.GROCERIES,
+                                value = "Moderate",
+                                detail = "4% below EU average · Country fallback · 2024",
+                                precision = LocalPricePrecision.COUNTRY_FALLBACK,
+                                source = "Eurostat",
+                            ),
+                            LocalPriceIndicatorRow(
+                                kind = LocalPriceIndicatorKind.OVERALL,
+                                value = "Moderate",
+                                detail = "1% above EU average · Country fallback · 2024",
+                                precision = LocalPricePrecision.COUNTRY_FALLBACK,
+                                source = "Eurostat",
+                            ),
+                        ),
+                        sources = listOf("Eurostat"),
+                        fetchedAt = fixtureNow,
+                        detail = "Meal out and groceries use country-level Eurostat price indices. 1BR rent is replaced with an overall local cost signal when no official free rent dataset is available.",
+                    ),
+                    sources = listOf(
+                        HolidaySourceAttribution("Nager.Date"),
+                        HolidaySourceAttribution("Eurostat"),
+                    ),
                     fetchedAt = fixtureNow,
-                    detail = "Meal out and groceries use country-level Eurostat price indices. 1BR rent is replaced with an overall local cost signal when no official free rent dataset is available.",
+                    detail = "Public holiday ready · Local price signals ready",
                 ),
                 fuelPrices = FuelPriceSnapshot(
                     status = FuelPriceStatus.READY,

@@ -223,13 +223,24 @@ Latest verification attempt:
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:database:compileDebugKotlin :core:network:compileDebugKotlin :core:data:compileDebugKotlin :feature:settings:compileDebugKotlin :feature:dashboard:compileDebugKotlin -Pksp.incremental=false`
   passed after adding the Local Price Level models, Room cache, provider flow,
   settings UI, and dashboard card
+- on 2026-04-09, `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin :core:database:compileDebugKotlin :core:network:compileDebugKotlin :core:data:compileDebugKotlin :feature:dashboard:compileDebugKotlin :feature:settings:compileDebugKotlin -Pksp.incremental=false`
+  passed after replacing Local Price Level with Local Info, holiday caching,
+  subdivision matching, settings migration, and dashboard rendering updates
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.localprice.DefaultLocalPriceLevelProviderTest' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh resolves local price level from ip country context in europe' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price configuration required in us without token' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh returns us local price row when token and current location exist' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price location required with no country context' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price unsupported for unsupported country' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.update provider credentials clears us local price cache when hud token changes' -Pksp.incremental=false`
   passed after adding Eurostat, HUD, Census, repository-state, and HUD-token
   cache-invalidation coverage for Local Price Level
+- on 2026-04-09, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.localinfo.DefaultLocalInfoProviderTest' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh resolves local price level from ip country context in europe' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price configuration required in us without token' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh returns us local price row when token and current location exist' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price location required with no country context' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh marks local price unsupported for unsupported country' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.update provider credentials clears us local price cache when hud token changes' -Pksp.incremental=false`
+  passed after adding Local Info coverage for device-region subdivision
+  matching, IP-only fallback, holiday-only partial states, timezone-aware
+  `today` logic, year rollover, and cache reuse
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed after adding Local Price Level dashboard card Android tests; the
   connected test itself was not run because `adb devices` reported no attached
   emulator or physical device
+- on 2026-04-09, `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugAndroidTestKotlin :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed after updating the Local Info dashboard card Android tests and debug
+  screenshot fixtures; the connected test itself was not run because the
+  command only compiled the Android-test targets
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed after wiring the dashboard-to-settings navigation path and updating
   the debug screenshot fixtures for Local Price Level

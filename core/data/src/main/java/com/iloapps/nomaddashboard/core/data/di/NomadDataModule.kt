@@ -15,6 +15,8 @@ import com.iloapps.nomaddashboard.core.data.location.AndroidVisitedDeviceLocatio
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.localprice.DefaultLocalPriceLevelProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
+import com.iloapps.nomaddashboard.core.data.localinfo.DefaultLocalInfoProvider
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.fuel.DefaultFuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
@@ -33,6 +35,7 @@ import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
+import com.iloapps.nomaddashboard.core.database.dao.LocalInfoCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
@@ -46,9 +49,11 @@ import com.iloapps.nomaddashboard.core.network.api.EurostatService
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.HudUserFmrService
 import com.iloapps.nomaddashboard.core.network.api.IpifyService
+import com.iloapps.nomaddashboard.core.network.api.NagerDateService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
+import com.iloapps.nomaddashboard.core.network.api.OpenHolidaysService
 import com.iloapps.nomaddashboard.core.network.api.ReliefWebReportsService
 import com.iloapps.nomaddashboard.core.network.api.SmartravellerService
 import com.iloapps.nomaddashboard.core.network.api.SpainFuelPriceService
@@ -71,6 +76,7 @@ import okhttp3.Request
 import retrofit2.Retrofit
 import javax.inject.Singleton
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.time.Clock
 import java.util.concurrent.TimeUnit
 
 @Module
@@ -82,6 +88,10 @@ object NomadInfrastructureModule {
         ignoreUnknownKeys = true
         explicitNulls = false
     }
+
+    @Provides
+    @Singleton
+    fun provideClock(): Clock = Clock.systemUTC()
 
     @Provides
     @Singleton
@@ -156,6 +166,32 @@ object NomadInfrastructureModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(HudUserFmrService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideNagerDateService(
+        client: OkHttpClient,
+        json: Json,
+    ): NagerDateService =
+        Retrofit.Builder()
+            .baseUrl("https://date.nager.at/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(NagerDateService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideOpenHolidaysService(
+        client: OkHttpClient,
+        json: Json,
+    ): OpenHolidaysService =
+        Retrofit.Builder()
+            .baseUrl("https://openholidaysapi.org/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(OpenHolidaysService::class.java)
 
     @Provides
     @Singleton
@@ -286,6 +322,7 @@ object NomadInfrastructureModule {
             .addMigrations(NomadDatabase.MIGRATION_2_3)
             .addMigrations(NomadDatabase.MIGRATION_3_4)
             .addMigrations(NomadDatabase.MIGRATION_4_5)
+            .addMigrations(NomadDatabase.MIGRATION_5_6)
             .build()
 
     @Provides
@@ -293,6 +330,9 @@ object NomadInfrastructureModule {
 
     @Provides
     fun provideLocalPriceCacheDao(database: NomadDatabase): LocalPriceCacheDao = database.localPriceCacheDao()
+
+    @Provides
+    fun provideLocalInfoCacheDao(database: NomadDatabase): LocalInfoCacheDao = database.localInfoCacheDao()
 
     @Provides
     fun provideVisitedPlaceDao(database: NomadDatabase): VisitedPlaceDao = database.visitedPlaceDao()
@@ -372,6 +412,12 @@ abstract class NomadRepositoryModule {
     abstract fun bindLocalPriceLevelProvider(
         impl: DefaultLocalPriceLevelProvider,
     ): LocalPriceLevelProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalInfoProvider(
+        impl: DefaultLocalInfoProvider,
+    ): LocalInfoProvider
 
     @Binds
     @Singleton

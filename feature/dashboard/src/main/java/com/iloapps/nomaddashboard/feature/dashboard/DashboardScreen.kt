@@ -110,14 +110,15 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
+import com.iloapps.nomaddashboard.core.model.LocalHolidayPhase
+import com.iloapps.nomaddashboard.core.model.LocalHolidayStatus
+import com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
 import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
-import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
@@ -341,9 +342,9 @@ fun DashboardScreen(
                     },
                 )
 
-                DashboardCardId.LOCAL_PRICE_LEVEL -> LocalPriceLevelSectionCard(
-                    enabled = state.settings.localPriceLevelEnabled,
-                    snapshot = state.snapshot.localPriceLevel,
+                DashboardCardId.LOCAL_INFO -> LocalInfoSectionCard(
+                    enabled = state.settings.localInfoEnabled,
+                    snapshot = state.snapshot.localInfo,
                     onOpenSettings = onOpenSettings,
                 )
 
@@ -2009,26 +2010,26 @@ private fun FuelPricesSectionCard(
 }
 
 @Composable
-private fun LocalPriceLevelSectionCard(
+private fun LocalInfoSectionCard(
     enabled: Boolean,
-    snapshot: LocalPriceLevelSnapshot,
+    snapshot: LocalInfoSnapshot,
     onOpenSettings: () -> Unit,
 ) {
-    val badge = localPriceBadge(snapshot)
+    val badge = localInfoBadge(snapshot)
     val sourceLine = "Sources: " + (
-        if (enabled) snapshot.sources.ifEmpty { LocalPriceCapabilitySources }
-        else LocalPriceCapabilitySources
+        if (enabled) snapshot.sources.map { it.name }.ifEmpty { LocalInfoCapabilitySources }
+        else LocalInfoCapabilitySources
     ).joinToString(" · ")
 
-    NomadCard(modifier = Modifier.testTag(LocalPriceLevelCardTag)) {
+    NomadCard(modifier = Modifier.testTag(LocalInfoCardTag)) {
         NomadSectionClusterHeader(
-            title = "Local Price Level",
-            subtitle = localPriceSubtitle(enabled = enabled, snapshot = snapshot),
+            title = "Local Info",
+            subtitle = localInfoSubtitle(enabled = enabled, snapshot = snapshot),
             actions = {
                 badge?.let {
                     NomadStatusBadge(text = it.first, tone = it.second)
                 }
-                if (localPriceNeedsSettingsAction(enabled = enabled, status = snapshot.status)) {
+                if (localInfoNeedsSettingsAction(enabled = enabled, snapshot = snapshot)) {
                     NomadActionChip(
                         label = "Open Settings",
                         icon = Icons.Rounded.Settings,
@@ -2040,7 +2041,7 @@ private fun LocalPriceLevelSectionCard(
 
         if (enabled.not()) {
             Text(
-                text = "Enable local price level in Settings.",
+                text = "Local Info is disabled. Enable it in Settings.",
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
@@ -2051,21 +2052,48 @@ private fun LocalPriceLevelSectionCard(
             return@NomadCard
         }
 
-        if (snapshot.rows.isNotEmpty() && snapshot.status in setOf(LocalPriceLevelStatus.READY, LocalPriceLevelStatus.PARTIAL)) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                snapshot.rows.take(3).forEach { row ->
-                    LocalPriceIndicatorRowView(snapshot = row)
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            localInfoLocationValue(snapshot)?.let { locationValue ->
+                LocalInfoStatusRow(
+                    title = "Location",
+                    value = locationValue,
+                    detail = localInfoLocationDetail(snapshot),
+                )
             }
-        } else {
+            snapshot.publicHoliday?.let { holiday ->
+                LocalInfoStatusRow(
+                    title = "Public Holiday",
+                    value = localHolidayHeadline(holiday, isSchoolHoliday = false),
+                    detail = localHolidayDetail(holiday, isSchoolHoliday = false),
+                )
+            }
+            snapshot.schoolHoliday?.let { holiday ->
+                LocalInfoStatusRow(
+                    title = "School Holiday",
+                    value = localHolidayHeadline(holiday, isSchoolHoliday = true),
+                    detail = localHolidayDetail(holiday, isSchoolHoliday = true),
+                )
+            }
+            snapshot.localPriceLevel.rows.take(3).forEach { row ->
+                LocalPriceIndicatorRowView(snapshot = row)
+            }
+        }
+
+        if (
+            snapshot.publicHoliday == null &&
+            snapshot.schoolHoliday == null &&
+            snapshot.localPriceLevel.rows.isEmpty()
+        ) {
             Text(
-                text = snapshot.detail ?: "Local price level is unavailable right now.",
+                text = snapshot.detail ?: "Local Info is unavailable right now.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         }
 
         listOfNotNull(
-            snapshot.detail?.takeIf { snapshot.rows.isNotEmpty() },
+            snapshot.detail?.takeIf {
+                snapshot.publicHoliday != null || snapshot.schoolHoliday != null || snapshot.localPriceLevel.rows.isNotEmpty()
+            },
             snapshot.note,
         ).forEach { line ->
             Text(
@@ -2079,6 +2107,53 @@ private fun LocalPriceLevelSectionCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
         )
+    }
+}
+
+@Composable
+private fun LocalInfoStatusRow(
+    title: String,
+    value: String,
+    detail: String?,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                detail?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -3082,59 +3157,45 @@ private fun Instant.formatTravelAlertDate(): String =
         .withZone(ZoneId.systemDefault())
         .format(this)
 
-private fun localPriceSubtitle(
+private fun localInfoSubtitle(
     enabled: Boolean,
-    snapshot: LocalPriceLevelSnapshot,
+    snapshot: LocalInfoSnapshot,
 ): String {
     if (enabled.not()) {
-        return "Traveller price levels are disabled"
+        return "Location context, holidays, and price signals"
     }
 
-    val countryName = snapshot.countryName ?: "Current country"
+    val location = listOfNotNull(snapshot.locality, snapshot.region, snapshot.countryName).joinToString(" · ")
     return when (snapshot.status) {
-        LocalPriceLevelStatus.READY,
-        LocalPriceLevelStatus.PARTIAL,
-        -> {
-            val precisionSummary = snapshot.rows.map { it.precision.displayName() }.distinct().joinToString(" · ")
-            listOf(countryName, precisionSummary.takeIf(String::isNotBlank))
-                .filterNotNull()
-                .joinToString(" · ")
-        }
-
-        LocalPriceLevelStatus.LOCATION_REQUIRED -> "Country context is required"
-        LocalPriceLevelStatus.CONFIGURATION_REQUIRED,
-        LocalPriceLevelStatus.UNSUPPORTED,
-        LocalPriceLevelStatus.UNAVAILABLE,
-        -> countryName
+        LocalInfoStatus.OFF -> "Off"
+        LocalInfoStatus.CHECKING -> "Looking up local context and holiday calendar"
+        LocalInfoStatus.LOCATION_REQUIRED -> "Location required"
+        LocalInfoStatus.UNSUPPORTED,
+        LocalInfoStatus.UNAVAILABLE,
+        LocalInfoStatus.PARTIAL,
+        LocalInfoStatus.READY,
+        -> location.ifBlank { snapshot.countryName ?: "Current place" }
     }
 }
 
-private fun localPriceNeedsSettingsAction(
+private fun localInfoNeedsSettingsAction(
     enabled: Boolean,
-    status: LocalPriceLevelStatus,
+    snapshot: LocalInfoSnapshot,
 ): Boolean =
     enabled.not() ||
-        status == LocalPriceLevelStatus.CONFIGURATION_REQUIRED ||
-        status == LocalPriceLevelStatus.LOCATION_REQUIRED
+        snapshot.status == LocalInfoStatus.LOCATION_REQUIRED ||
+        snapshot.localPriceLevel.status == com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus.CONFIGURATION_REQUIRED
 
-private fun localPriceBadge(
-    snapshot: LocalPriceLevelSnapshot,
+private fun localInfoBadge(
+    snapshot: LocalInfoSnapshot,
 ): Pair<String, NomadBadgeTone>? = when (snapshot.status) {
-    LocalPriceLevelStatus.READY,
-    LocalPriceLevelStatus.PARTIAL,
-    -> when (snapshot.summaryBand) {
-        LocalPriceSummaryBand.LOW -> "Low" to NomadBadgeTone.Good
-        LocalPriceSummaryBand.HIGH -> "High" to NomadBadgeTone.Warning
-        LocalPriceSummaryBand.LIMITED -> "Limited" to NomadBadgeTone.Info
-        LocalPriceSummaryBand.MEDIUM,
-        null,
-        -> "Medium" to NomadBadgeTone.Info
-    }
-
-    LocalPriceLevelStatus.CONFIGURATION_REQUIRED -> "Setup" to NomadBadgeTone.Warning
-    LocalPriceLevelStatus.UNSUPPORTED -> "Unsupported" to NomadBadgeTone.Info
-    LocalPriceLevelStatus.UNAVAILABLE -> "Unavailable" to NomadBadgeTone.Warning
-    LocalPriceLevelStatus.LOCATION_REQUIRED -> "Location Needed" to NomadBadgeTone.Warning
+    LocalInfoStatus.OFF -> "Off" to NomadBadgeTone.Info
+    LocalInfoStatus.CHECKING -> "Checking" to NomadBadgeTone.Info
+    LocalInfoStatus.READY -> "Ready" to NomadBadgeTone.Good
+    LocalInfoStatus.PARTIAL -> "Partial" to NomadBadgeTone.Info
+    LocalInfoStatus.LOCATION_REQUIRED -> "Location Needed" to NomadBadgeTone.Warning
+    LocalInfoStatus.UNSUPPORTED -> "Unsupported" to NomadBadgeTone.Info
+    LocalInfoStatus.UNAVAILABLE -> "Unavailable" to NomadBadgeTone.Warning
 }
 
 private fun LocalPriceIndicatorKind.displayName(): String = when (this) {
@@ -3150,8 +3211,62 @@ private fun LocalPricePrecision.displayName(): String = when (this) {
     LocalPricePrecision.METRO_BENCHMARK -> "Metro benchmark"
 }
 
-private val LocalPriceCapabilitySources = listOf("Eurostat", "HUD USER", "US Census Geocoder")
+private fun localInfoLocationValue(snapshot: LocalInfoSnapshot): String? =
+    listOfNotNull(snapshot.locality, snapshot.region, snapshot.countryName)
+        .joinToString(" / ")
+        .takeIf(String::isNotBlank)
+
+private fun localInfoLocationDetail(snapshot: LocalInfoSnapshot): String? =
+    listOfNotNull(
+        snapshot.matchedSubdivisionName?.let { "School region $it" },
+        snapshot.timezone?.let { "TZ $it" },
+    ).joinToString(" · ").takeIf(String::isNotBlank)
+
+private fun localHolidayHeadline(
+    holiday: LocalHolidayStatus,
+    isSchoolHoliday: Boolean,
+): String = when (holiday.phase) {
+    LocalHolidayPhase.TODAY -> "Today"
+    LocalHolidayPhase.TOMORROW -> "Tomorrow"
+    LocalHolidayPhase.NEXT -> if (isSchoolHoliday) {
+        "Next break: ${holiday.period.name}"
+    } else {
+        "Next: ${holiday.period.name}"
+    }
+    LocalHolidayPhase.ON_BREAK -> "On break"
+}
+
+private fun localHolidayDetail(
+    holiday: LocalHolidayStatus,
+    isSchoolHoliday: Boolean,
+): String =
+    when (holiday.phase) {
+        LocalHolidayPhase.TODAY,
+        LocalHolidayPhase.TOMORROW,
+        -> listOfNotNull(
+            holiday.period.name,
+            if (isSchoolHoliday) holiday.period.formatRange() else holiday.period.startDate.formatCompactDate(),
+        ).joinToString(" · ")
+        LocalHolidayPhase.NEXT -> if (isSchoolHoliday) {
+            holiday.period.formatRange()
+        } else {
+            holiday.period.startDate.formatCompactDate()
+        }
+        LocalHolidayPhase.ON_BREAK -> "${holiday.period.name} · ${holiday.period.formatRange()}"
+    }
+
+private fun com.iloapps.nomaddashboard.core.model.HolidayPeriod.formatRange(): String =
+    if (startDate == endDate) {
+        startDate.formatCompactDate()
+    } else {
+        "${startDate.formatCompactDate()}-${endDate.formatCompactDate()}"
+    }
+
+private fun java.time.LocalDate.formatCompactDate(): String =
+    DateTimeFormatter.ofPattern("dd MMM").format(this)
+
+private val LocalInfoCapabilitySources = listOf("Nager.Date", "OpenHolidays", "Eurostat", "HUD USER", "US Census Geocoder")
 
 internal const val TravelAlertsCardTag = "travel-alerts-card"
 internal const val EmergencyCareCardTag = "emergency-care-card"
-internal const val LocalPriceLevelCardTag = "local-price-level-card"
+internal const val LocalInfoCardTag = "local-info-card"

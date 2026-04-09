@@ -8,13 +8,13 @@ import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 
 fun AppSettingsProto.toExternalModel(): AppSettings {
     val order = dashboardCardOrderList.mapNotNull { raw ->
-        DashboardCardId.entries.firstOrNull { it.name == raw }
+        dashboardCardIdFor(raw)
     }.ifEmpty {
         DashboardCardId.defaultOrder
     }
 
     val widths = dashboardCardWidthModesMap.mapNotNull { (key, value) ->
-        val card = DashboardCardId.entries.firstOrNull { it.name == key } ?: return@mapNotNull null
+        val card = dashboardCardIdFor(key) ?: return@mapNotNull null
         val width = DashboardCardWidthMode.entries.firstOrNull { it.name == value } ?: return@mapNotNull null
         card to width
     }.toMap().ifEmpty {
@@ -33,7 +33,7 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
         useCurrentLocationForWeather = useCurrentLocationForWeather,
         useCurrentLocationForVisitedPlaces = useCurrentLocationForVisitedPlaces,
         weatherForecastExpanded = weatherForecastExpanded,
-        localPriceLevelEnabled = localPriceLevelEnabled,
+        localInfoEnabled = localInfoEnabled,
         fuelPricesEnabled = fuelPricesEnabled,
         emergencyCareEnabled = emergencyCareEnabled,
         visitedPlacesEnabled = visitedPlacesEnabled,
@@ -58,7 +58,7 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setUseCurrentLocationForWeather(useCurrentLocationForWeather)
         .setUseCurrentLocationForVisitedPlaces(useCurrentLocationForVisitedPlaces)
         .setWeatherForecastExpanded(weatherForecastExpanded)
-        .setLocalPriceLevelEnabled(localPriceLevelEnabled)
+        .setLocalInfoEnabled(localInfoEnabled)
         .setFuelPricesEnabled(fuelPricesEnabled)
         .setEmergencyCareEnabled(emergencyCareEnabled)
         .setVisitedPlacesEnabled(visitedPlacesEnabled)
@@ -71,3 +71,9 @@ fun AppSettings.toProto(): AppSettingsProto =
         .setSurfSpotLatitude(surfSpot.latitude ?: 0.0)
         .setSurfSpotLongitude(surfSpot.longitude ?: 0.0)
         .build()
+
+private fun dashboardCardIdFor(raw: String): DashboardCardId? =
+    when (raw) {
+        "LOCAL_PRICE_LEVEL" -> DashboardCardId.LOCAL_INFO
+        else -> DashboardCardId.entries.firstOrNull { it.name == raw }
+    }

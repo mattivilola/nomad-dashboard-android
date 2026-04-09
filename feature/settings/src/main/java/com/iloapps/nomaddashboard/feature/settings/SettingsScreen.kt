@@ -142,11 +142,11 @@ fun SettingsScreen(
                     onUpdate { current -> current.copy(weatherForecastExpanded = it) }
                 }
                 SettingsToggleRow(
-                    title = "Show local price level",
-                    description = "Show compact traveler-facing cost signals from official public sources.",
-                    checked = settings.localPriceLevelEnabled,
+                    title = "Show local info",
+                    description = "Show local place context, public holidays, best-effort school holidays, and local price signals.",
+                    checked = settings.localInfoEnabled,
                 ) {
-                    onUpdate { current -> current.copy(localPriceLevelEnabled = it) }
+                    onUpdate { current -> current.copy(localInfoEnabled = it) }
                 }
                 SettingsToggleRow(
                     title = "Enable fuel prices",
@@ -497,7 +497,7 @@ private fun ProviderCredentialCard(
                 .testTag(HudUserApiTokenFieldTag),
             label = { Text("HUD USER API token (US 1BR rent)") },
             supportingText = {
-                Text("Europe works without it. Only needed for US 1-bedroom rent benchmarks.")
+                Text("Optional for Local Info. Only needed for the US 1-bedroom rent benchmark.")
             },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
@@ -596,7 +596,7 @@ private fun ProviderCredentialCard(
         }
 
         Text(
-            text = "Map SDK keys remain app-level local configuration, not per-user secrets in this screen. Local price level uses Eurostat in Europe and HUD USER plus US Census Geocoder in the US.",
+            text = "Map SDK keys remain app-level local configuration, not per-user secrets in this screen. Local Info uses Nager.Date for public holidays, OpenHolidays for best-effort school holidays, Eurostat in Europe, and HUD USER plus US Census Geocoder in the US.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
         )
@@ -671,7 +671,7 @@ private fun enabledSourceCount(settings: AppSettings): Int =
         settings.useCurrentLocationForWeather,
         settings.useCurrentLocationForVisitedPlaces,
         settings.publicIpGeolocationEnabled,
-        settings.localPriceLevelEnabled,
+        settings.localInfoEnabled,
         settings.fuelPricesEnabled,
         settings.emergencyCareEnabled,
         settings.projectTimeTrackingEnabled,

@@ -8,10 +8,12 @@ import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareSearchRequest
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoLocationSource
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoRequest
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
-import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelRequest
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryResolver
@@ -34,8 +36,8 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.MarineForecastSlot
 import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
+import com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.SummaryTile
@@ -93,6 +95,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val openMeteoService: OpenMeteoService,
     private val openMeteoMarineService: OpenMeteoMarineService,
     private val localPriceLevelProvider: LocalPriceLevelProvider,
+    private val localInfoProvider: LocalInfoProvider,
     private val fuelPriceProvider: FuelPriceProvider,
     private val emergencyCareProvider: EmergencyCareProvider,
     private val timeTrackingRepository: TimeTrackingRepository,
@@ -235,6 +238,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
             current.copy(
                 isRefreshing = true,
                 travelAlerts = checkingTravelAlerts,
+                localInfo = checkingLocalInfoSnapshot(
+                    enabled = currentSettings.localInfoEnabled,
+                    previous = current.localInfo,
+                ),
                 emergencyCare = loadingEmergencyCareSnapshot(
                     enabled = currentSettings.emergencyCareEnabled,
                     previous = current.emergencyCare,
@@ -253,7 +260,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             currentDevicePlace = currentDevicePlace,
             travelContext = travelContext,
         )
-        val localPriceLevel = refreshLocalPriceLevel(
+        val localInfo = refreshLocalInfo(
             currentSettings = currentSettings,
             currentProviderCredentials = currentProviderCredentials,
             currentDevicePlace = currentDevicePlace,
@@ -326,7 +333,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             weather = weather,
             marine = marine,
             travelAlerts = travelAlerts,
-            localPriceLevel = localPriceLevel,
+            localInfo = localInfo,
             fuelPrices = fuelPrices,
             emergencyCare = emergencyCare,
             timeTracking = TimeTrackingDashboardState(
@@ -748,35 +755,38 @@ class DefaultNomadDashboardRepository @Inject constructor(
         return ipTravelContext.withDeviceLocation(currentDevicePlace)
     }
 
-    private suspend fun refreshLocalPriceLevel(
+    private suspend fun refreshLocalInfo(
         currentSettings: AppSettings,
         currentProviderCredentials: ProviderCredentialSettings,
         currentDevicePlace: ResolvedVisitedPlace?,
         travelContext: TravelContextSnapshot,
-    ): LocalPriceLevelSnapshot {
-        if (currentSettings.localPriceLevelEnabled.not()) {
-            return LocalPriceLevelSnapshot(
-                detail = "Enable local price level in Settings",
+    ): LocalInfoSnapshot {
+        if (currentSettings.localInfoEnabled.not()) {
+            return LocalInfoSnapshot(
+                status = LocalInfoStatus.OFF,
+                detail = "Local Info is disabled. Enable it in Settings.",
             )
         }
 
-        val request = buildLocalPriceLevelRequest(
+        val request = buildLocalInfoRequest(
             currentDevicePlace = currentDevicePlace,
             travelContext = travelContext,
         )
         return runCatching {
-            localPriceLevelProvider.prices(
+            localInfoProvider.localInfo(
                 request = request,
                 hudUserApiToken = currentProviderCredentials.hudUserApiToken,
             )
         }.getOrElse {
-            LocalPriceLevelSnapshot(
-                status = LocalPriceLevelStatus.UNAVAILABLE,
+            LocalInfoSnapshot(
+                status = LocalInfoStatus.UNAVAILABLE,
+                locality = request.locality,
+                region = request.region,
                 countryCode = request.countryCode,
                 countryName = request.countryName,
-                sources = listOf("Eurostat", "HUD USER", "US Census Geocoder"),
+                timezone = request.timeZoneId,
                 fetchedAt = Instant.now(),
-                detail = "Local price level is unavailable right now.",
+                detail = "Local Info is unavailable right now.",
             )
         }
     }
@@ -872,20 +882,58 @@ class DefaultNomadDashboardRepository @Inject constructor(
         return null
     }
 
-    private fun buildLocalPriceLevelRequest(
+    private fun buildLocalInfoRequest(
         currentDevicePlace: ResolvedVisitedPlace?,
         travelContext: TravelContextSnapshot,
-    ): LocalPriceLevelRequest =
-        LocalPriceLevelRequest(
-            latitude = currentDevicePlace?.latitude,
-            longitude = currentDevicePlace?.longitude,
-            countryCode = currentDevicePlace?.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
-                ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
-            countryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
-                ?: travelContext.country?.trim()?.takeIf(String::isNotBlank),
+    ): LocalInfoRequest {
+        val usingDeviceLocation = currentDevicePlace != null
+        val countryCode = currentDevicePlace?.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+            ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+        val countryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
+            ?: travelContext.country?.trim()?.takeIf(String::isNotBlank)
+        val timezoneId = when {
+            travelContext.timeZoneId.isNullOrBlank().not() &&
+                (usingDeviceLocation.not() || currentDevicePlace?.countryCode.equals(travelContext.countryCode, ignoreCase = true)) ->
+                travelContext.timeZoneId
+            else -> ZoneId.systemDefault().id
+        }
+
+        return LocalInfoRequest(
+            latitude = currentDevicePlace?.latitude ?: travelContext.latitude,
+            longitude = currentDevicePlace?.longitude ?: travelContext.longitude,
             locality = currentDevicePlace?.city?.trim()?.takeIf(String::isNotBlank)
                 ?: travelContext.city?.trim()?.takeIf(String::isNotBlank),
+            region = currentDevicePlace?.region?.trim()?.takeIf(String::isNotBlank)
+                ?: travelContext.region?.trim()?.takeIf(String::isNotBlank),
+            countryCode = countryCode,
+            countryName = countryName,
+            timeZoneId = timezoneId,
+            locationSource = if (usingDeviceLocation) {
+                LocalInfoLocationSource.DEVICE
+            } else {
+                LocalInfoLocationSource.IP_GEOLOCATION
+            },
         )
+    }
+
+    private fun checkingLocalInfoSnapshot(
+        enabled: Boolean,
+        previous: LocalInfoSnapshot,
+    ): LocalInfoSnapshot =
+        if (enabled.not()) {
+            LocalInfoSnapshot(
+                status = LocalInfoStatus.OFF,
+                detail = "Local Info is disabled. Enable it in Settings.",
+            )
+        } else {
+            previous.copy(
+                status = LocalInfoStatus.CHECKING,
+                detail = "Looking up local context and holiday calendar.",
+                note = previous.note.takeIf {
+                    previous.publicHoliday != null || previous.schoolHoliday != null || previous.localPriceLevel.rows.isNotEmpty()
+                },
+            )
+        }
 
     private fun buildWeatherLocation(
         currentSettings: AppSettings,

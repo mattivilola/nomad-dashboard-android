@@ -9,74 +9,59 @@ import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
+import com.iloapps.nomaddashboard.core.model.HolidayPeriod
+import com.iloapps.nomaddashboard.core.model.HolidaySourceAttribution
+import com.iloapps.nomaddashboard.core.model.LocalHolidayPhase
+import com.iloapps.nomaddashboard.core.model.LocalHolidayStatus
+import com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot
+import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorRow
 import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
-import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
-import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
+import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 
-class LocalPriceLevelSectionCardTest {
+class LocalInfoSectionCardTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun europeSnapshotShowsThreeRowsAndBand() {
+    fun readyStateShowsLocationHolidayAndPriceRows() {
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
                     state = dashboardUiState(
                         enabled = true,
-                        snapshot = LocalPriceLevelSnapshot(
-                            status = LocalPriceLevelStatus.READY,
-                            summaryBand = LocalPriceSummaryBand.LOW,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            locality = "Tarifa",
+                            region = "Andalusia",
                             countryCode = "ES",
                             countryName = "Spain",
-                            rows = listOf(
-                                row(LocalPriceIndicatorKind.MEAL_OUT, "Below Avg", "16% below EU average · Country fallback · 2024"),
-                                row(LocalPriceIndicatorKind.GROCERIES, "Moderate", "4% below EU average · Country fallback · 2024"),
-                                row(LocalPriceIndicatorKind.OVERALL, "Moderate", "1% above EU average · Country fallback · 2024"),
-                            ),
-                            sources = listOf("Eurostat"),
-                        ),
-                    ),
-                    onRefresh = {},
-                )
-            }
-        }
-
-        composeRule.onNodeWithTag(LocalPriceLevelCardTag).assertIsDisplayed()
-        composeRule.onNodeWithText("Low").assertIsDisplayed()
-        composeRule.onNodeWithText("Meal Out").assertIsDisplayed()
-        composeRule.onNodeWithText("Groceries").assertIsDisplayed()
-        composeRule.onNodeWithText("Overall").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: Eurostat").assertIsDisplayed()
-    }
-
-    @Test
-    fun usSnapshotShowsLimitedRentOnly() {
-        composeRule.setContent {
-            NomadTheme {
-                DashboardScreen(
-                    state = dashboardUiState(
-                        enabled = true,
-                        snapshot = LocalPriceLevelSnapshot(
-                            status = LocalPriceLevelStatus.PARTIAL,
-                            summaryBand = LocalPriceSummaryBand.LIMITED,
-                            countryCode = "US",
-                            countryName = "United States",
-                            rows = listOf(
-                                LocalPriceIndicatorRow(
-                                    kind = LocalPriceIndicatorKind.RENT_ONE_BEDROOM,
-                                    value = "${'$'}1,900/mo",
-                                    detail = "Metro benchmark · Seattle metro · 2024",
-                                    precision = LocalPricePrecision.METRO_BENCHMARK,
-                                    source = "HUD USER",
+                            timezone = "Europe/Madrid",
+                            publicHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.NEXT,
+                                period = HolidayPeriod(
+                                    name = "Labour Day",
+                                    startDate = LocalDate.parse("2026-05-01"),
                                 ),
                             ),
-                            sources = listOf("HUD USER", "US Census Geocoder"),
+                            schoolHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.ON_BREAK,
+                                period = HolidayPeriod(
+                                    name = "Spring Holidays",
+                                    startDate = LocalDate.parse("2026-04-01"),
+                                    endDate = LocalDate.parse("2026-04-10"),
+                                ),
+                            ),
+                            localPriceLevel = priceSnapshot(),
+                            sources = listOf(
+                                HolidaySourceAttribution("Nager.Date"),
+                                HolidaySourceAttribution("OpenHolidays"),
+                                HolidaySourceAttribution("Eurostat"),
+                            ),
                         ),
                     ),
                     onRefresh = {},
@@ -84,24 +69,37 @@ class LocalPriceLevelSectionCardTest {
             }
         }
 
-        composeRule.onNodeWithText("Limited").assertIsDisplayed()
-        composeRule.onNodeWithText("1BR Rent").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: HUD USER · US Census Geocoder").assertIsDisplayed()
+        composeRule.onNodeWithTag(LocalInfoCardTag).assertIsDisplayed()
+        composeRule.onNodeWithText("Tarifa / Andalusia / Spain").assertIsDisplayed()
+        composeRule.onNodeWithText("Next: Labour Day").assertIsDisplayed()
+        composeRule.onNodeWithText("On break").assertIsDisplayed()
+        composeRule.onNodeWithText("Meal Out").assertIsDisplayed()
+        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat").assertIsDisplayed()
     }
 
     @Test
-    fun setupRequiredStateShowsSettingsCta() {
+    fun partialStateShowsNoSchoolHolidayRow() {
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
                     state = dashboardUiState(
                         enabled = true,
-                        snapshot = LocalPriceLevelSnapshot(
-                            status = LocalPriceLevelStatus.CONFIGURATION_REQUIRED,
-                            countryCode = "US",
-                            countryName = "United States",
-                            sources = listOf("HUD USER", "US Census Geocoder"),
-                            detail = "Add a HUD USER API token in Settings to show the US 1-bedroom rent benchmark.",
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.PARTIAL,
+                            locality = "Paris",
+                            region = "Ile-de-France",
+                            countryCode = "FR",
+                            countryName = "France",
+                            timezone = "Europe/Paris",
+                            publicHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.TOMORROW,
+                                period = HolidayPeriod(
+                                    name = "Ascension Day",
+                                    startDate = LocalDate.parse("2026-05-14"),
+                                ),
+                            ),
+                            note = "School holidays appear only when the app can match your region confidently.",
+                            sources = listOf(HolidaySourceAttribution("Nager.Date")),
                         ),
                     ),
                     onRefresh = {},
@@ -109,8 +107,8 @@ class LocalPriceLevelSectionCardTest {
             }
         }
 
-        composeRule.onNodeWithText("Setup").assertIsDisplayed()
-        composeRule.onNodeWithText("Open Settings").assertIsDisplayed()
+        composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
+        composeRule.onNodeWithText("School holidays appear only when the app can match your region confidently.").assertIsDisplayed()
     }
 
     @Test
@@ -120,10 +118,9 @@ class LocalPriceLevelSectionCardTest {
                 DashboardScreen(
                     state = dashboardUiState(
                         enabled = true,
-                        snapshot = LocalPriceLevelSnapshot(
-                            status = LocalPriceLevelStatus.LOCATION_REQUIRED,
-                            sources = listOf("Eurostat", "HUD USER", "US Census Geocoder"),
-                            detail = "Allow current location or external IP location to estimate the local price level.",
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.LOCATION_REQUIRED,
+                            detail = "Allow location or enable IP-based location to show Local Info.",
                         ),
                     ),
                     onRefresh = {},
@@ -136,18 +133,20 @@ class LocalPriceLevelSectionCardTest {
     }
 
     @Test
-    fun unsupportedStateShowsUnsupportedBadge() {
+    fun unsupportedAndUnavailableStatesRenderMessages() {
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
                     state = dashboardUiState(
                         enabled = true,
-                        snapshot = LocalPriceLevelSnapshot(
-                            status = LocalPriceLevelStatus.UNSUPPORTED,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.UNSUPPORTED,
+                            locality = "Tokyo",
+                            region = "Tokyo",
                             countryCode = "JP",
                             countryName = "Japan",
-                            sources = listOf("Eurostat", "HUD USER", "US Census Geocoder"),
-                            detail = "Local price level is only supported in Europe and the United States right now.",
+                            detail = "Local context is available, but some Local Info sources do not cover this location yet.",
+                            sources = listOf(HolidaySourceAttribution("Nager.Date")),
                         ),
                     ),
                     onRefresh = {},
@@ -156,7 +155,7 @@ class LocalPriceLevelSectionCardTest {
         }
 
         composeRule.onNodeWithText("Unsupported").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: Eurostat · HUD USER · US Census Geocoder").assertIsDisplayed()
+        composeRule.onNodeWithText("Local context is available, but some Local Info sources do not cover this location yet.").assertIsDisplayed()
     }
 
     @Test
@@ -166,40 +165,50 @@ class LocalPriceLevelSectionCardTest {
                 DashboardScreen(
                     state = dashboardUiState(
                         enabled = false,
-                        snapshot = LocalPriceLevelSnapshot(),
+                        snapshot = LocalInfoSnapshot(),
                     ),
                     onRefresh = {},
                 )
             }
         }
 
-        composeRule.onNodeWithText("Enable local price level in Settings.").assertIsDisplayed()
+        composeRule.onNodeWithText("Local Info is disabled. Enable it in Settings.").assertIsDisplayed()
         composeRule.onNodeWithText("Open Settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: Eurostat · HUD USER · US Census Geocoder").assertIsDisplayed()
+        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat · HUD USER · US Census Geocoder").assertIsDisplayed()
     }
 
     private fun dashboardUiState(
         enabled: Boolean,
-        snapshot: LocalPriceLevelSnapshot,
+        snapshot: LocalInfoSnapshot,
     ): DashboardUiState =
         DashboardUiState(
             settings = AppSettings(
-                localPriceLevelEnabled = enabled,
-                dashboardCardOrder = listOf(DashboardCardId.LOCAL_PRICE_LEVEL),
+                localInfoEnabled = enabled,
+                dashboardCardOrder = listOf(DashboardCardId.LOCAL_INFO),
             ),
-            snapshot = DashboardSnapshot(localPriceLevel = snapshot),
+            snapshot = DashboardSnapshot(localInfo = snapshot),
         )
 
-    private fun row(
-        kind: LocalPriceIndicatorKind,
-        value: String,
-        detail: String,
-    ): LocalPriceIndicatorRow =
-        LocalPriceIndicatorRow(
-            kind = kind,
-            value = value,
-            detail = detail,
-            precision = LocalPricePrecision.COUNTRY_FALLBACK,
-            source = "Eurostat",
+    private fun priceSnapshot(): LocalPriceLevelSnapshot =
+        LocalPriceLevelSnapshot(
+            countryCode = "ES",
+            countryName = "Spain",
+            rows = listOf(
+                LocalPriceIndicatorRow(
+                    kind = LocalPriceIndicatorKind.MEAL_OUT,
+                    value = "Below Avg",
+                    detail = "16% below EU average · Country fallback · 2024",
+                    precision = LocalPricePrecision.COUNTRY_FALLBACK,
+                    source = "Eurostat",
+                ),
+                LocalPriceIndicatorRow(
+                    kind = LocalPriceIndicatorKind.GROCERIES,
+                    value = "Moderate",
+                    detail = "4% below EU average · Country fallback · 2024",
+                    precision = LocalPricePrecision.COUNTRY_FALLBACK,
+                    source = "Eurostat",
+                ),
+            ),
+            sources = listOf("Eurostat"),
         )
 }

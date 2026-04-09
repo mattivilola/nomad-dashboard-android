@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Added first-run location onboarding to dashboard.
 - Added Smartraveller detailed advice summary and source link.
+- Replaced Local Price Level with Local Info, combining location context,
+  public holidays, best-effort school holidays, and existing price signals.
 
 ## [0.5.0] - 2026-04-08
 

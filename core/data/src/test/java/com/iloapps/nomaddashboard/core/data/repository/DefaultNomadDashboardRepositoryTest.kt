@@ -17,6 +17,8 @@ import com.iloapps.nomaddashboard.core.data.timetracking.UpdateTimeTrackingEntry
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
+import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoRequest
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelRequest
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
@@ -48,6 +50,7 @@ import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
 import com.iloapps.nomaddashboard.core.model.LocalPriceLevelStatus
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
 import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
+import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
@@ -265,15 +268,15 @@ class DefaultNomadDashboardRepositoryTest {
 
     @Test
     fun `refresh resolves local price level from ip country context in europe`() = runTest {
-        val localPriceProvider = FakeLocalPriceLevelProvider()
+        val localInfoProvider = FakeLocalInfoProvider()
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true).toProto(),
+                    AppSettings(localInfoEnabled = true).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
-            localPriceLevelProvider = localPriceProvider,
+            localInfoProvider = localInfoProvider,
             visitedHistoryStore = FakeVisitedHistoryStore(),
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
             applicationScope = backgroundScope,
@@ -282,24 +285,24 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val localPriceLevel = repository.snapshot.first { it.lastRefresh != null }.localPriceLevel
-        assertThat(localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.READY)
-        assertThat(localPriceLevel.summaryBand).isEqualTo(LocalPriceSummaryBand.MEDIUM)
-        assertThat(localPriceProvider.requests.single().countryCode).isEqualTo("FI")
-        assertThat(localPriceProvider.requests.single().latitude).isNull()
+        val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
+        assertThat(localInfo.status).isEqualTo(LocalInfoStatus.READY)
+        assertThat(localInfo.localPriceLevel.summaryBand).isEqualTo(LocalPriceSummaryBand.MEDIUM)
+        assertThat(localInfoProvider.requests.single().countryCode).isEqualTo("FI")
+        assertThat(localInfoProvider.requests.single().latitude).isEqualTo(60.1699)
     }
 
     @Test
     fun `refresh marks local price configuration required in us without token`() = runTest {
-        val localPriceProvider = FakeLocalPriceLevelProvider()
+        val localInfoProvider = FakeLocalInfoProvider()
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true, publicIpGeolocationEnabled = false).toProto(),
+                    AppSettings(localInfoEnabled = true, publicIpGeolocationEnabled = false).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
-            localPriceLevelProvider = localPriceProvider,
+            localInfoProvider = localInfoProvider,
             visitedHistoryStore = FakeVisitedHistoryStore(),
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
                 ResolvedVisitedPlace(
@@ -317,21 +320,22 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val localPriceLevel = repository.snapshot.first { it.lastRefresh != null }.localPriceLevel
-        assertThat(localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.CONFIGURATION_REQUIRED)
+        val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
+        assertThat(localInfo.status).isEqualTo(LocalInfoStatus.PARTIAL)
+        assertThat(localInfo.localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.CONFIGURATION_REQUIRED)
     }
 
     @Test
     fun `refresh returns us local price row when token and current location exist`() = runTest {
-        val localPriceProvider = FakeLocalPriceLevelProvider()
+        val localInfoProvider = FakeLocalInfoProvider()
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true, publicIpGeolocationEnabled = false).toProto(),
+                    AppSettings(localInfoEnabled = true, publicIpGeolocationEnabled = false).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
-            localPriceLevelProvider = localPriceProvider,
+            localInfoProvider = localInfoProvider,
             providerCredentialStore = FakeProviderCredentialStore(
                 ProviderCredentialSettings(hudUserApiToken = "hud-token-123", reliefWebAppName = "NomadDashboardTests"),
             ),
@@ -352,23 +356,23 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val localPriceLevel = repository.snapshot.first { it.lastRefresh != null }.localPriceLevel
-        assertThat(localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.PARTIAL)
-        assertThat(localPriceLevel.summaryBand).isEqualTo(LocalPriceSummaryBand.LIMITED)
-        assertThat(localPriceLevel.rows.single().kind).isEqualTo(LocalPriceIndicatorKind.RENT_ONE_BEDROOM)
+        val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
+        assertThat(localInfo.status).isEqualTo(LocalInfoStatus.PARTIAL)
+        assertThat(localInfo.localPriceLevel.summaryBand).isEqualTo(LocalPriceSummaryBand.LIMITED)
+        assertThat(localInfo.localPriceLevel.rows.single().kind).isEqualTo(LocalPriceIndicatorKind.RENT_ONE_BEDROOM)
     }
 
     @Test
     fun `refresh marks local price location required with no country context`() = runTest {
-        val localPriceProvider = FakeLocalPriceLevelProvider()
+        val localInfoProvider = FakeLocalInfoProvider()
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true, publicIpGeolocationEnabled = false).toProto(),
+                    AppSettings(localInfoEnabled = true, publicIpGeolocationEnabled = false).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
-            localPriceLevelProvider = localPriceProvider,
+            localInfoProvider = localInfoProvider,
             visitedHistoryStore = FakeVisitedHistoryStore(),
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null, hasLocationPermission = false),
             applicationScope = backgroundScope,
@@ -377,21 +381,21 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val localPriceLevel = repository.snapshot.first { it.lastRefresh != null }.localPriceLevel
-        assertThat(localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.LOCATION_REQUIRED)
+        val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
+        assertThat(localInfo.status).isEqualTo(LocalInfoStatus.LOCATION_REQUIRED)
     }
 
     @Test
     fun `refresh marks local price unsupported for unsupported country`() = runTest {
-        val localPriceProvider = FakeLocalPriceLevelProvider()
+        val localInfoProvider = FakeLocalInfoProvider()
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true, publicIpGeolocationEnabled = false).toProto(),
+                    AppSettings(localInfoEnabled = true, publicIpGeolocationEnabled = false).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
-            localPriceLevelProvider = localPriceProvider,
+            localInfoProvider = localInfoProvider,
             visitedHistoryStore = FakeVisitedHistoryStore(),
             visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
                 ResolvedVisitedPlace(
@@ -409,8 +413,8 @@ class DefaultNomadDashboardRepositoryTest {
         repository.refresh()
         advanceUntilIdle()
 
-        val localPriceLevel = repository.snapshot.first { it.lastRefresh != null }.localPriceLevel
-        assertThat(localPriceLevel.status).isEqualTo(LocalPriceLevelStatus.UNSUPPORTED)
+        val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
+        assertThat(localInfo.status).isEqualTo(LocalInfoStatus.UNSUPPORTED)
     }
 
     @Test
@@ -419,7 +423,7 @@ class DefaultNomadDashboardRepositoryTest {
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(
                 FakeAppSettingsDataStore(
-                    AppSettings(localPriceLevelEnabled = true).toProto(),
+                    AppSettings(localInfoEnabled = true).toProto(),
                 ),
             ),
             fuelPriceProvider = FakeFuelPriceProvider(),
@@ -1088,6 +1092,7 @@ class DefaultNomadDashboardRepositoryTest {
         openMeteoService: OpenMeteoService = FakeOpenMeteoService(),
         openMeteoMarineService: OpenMeteoMarineService = FakeOpenMeteoMarineService(),
         localPriceLevelProvider: LocalPriceLevelProvider = FakeLocalPriceLevelProvider(),
+        localInfoProvider: LocalInfoProvider = FakeLocalInfoProvider(),
         emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
         providerCredentialStore: ProviderCredentialStore = FakeProviderCredentialStore(
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
@@ -1112,6 +1117,7 @@ class DefaultNomadDashboardRepositoryTest {
             openMeteoService = openMeteoService,
             openMeteoMarineService = openMeteoMarineService,
             localPriceLevelProvider = localPriceLevelProvider,
+            localInfoProvider = localInfoProvider,
             fuelPriceProvider = fuelPriceProvider,
             emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
@@ -1542,6 +1548,90 @@ private class FakeLocalPriceLevelProvider : LocalPriceLevelProvider {
 
     override suspend fun clearUsCache() {
         clearUsCacheCount += 1
+    }
+}
+
+private class FakeLocalInfoProvider : LocalInfoProvider {
+    val requests = mutableListOf<LocalInfoRequest>()
+    val tokens = mutableListOf<String?>()
+
+    override suspend fun localInfo(
+        request: LocalInfoRequest,
+        hudUserApiToken: String?,
+    ): com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot {
+        requests += request
+        tokens += hudUserApiToken
+
+        val countryCode = request.countryCode
+        return when {
+            countryCode == null -> com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot(
+                status = LocalInfoStatus.LOCATION_REQUIRED,
+                detail = "Allow location or enable IP-based location to show Local Info.",
+            )
+
+            countryCode == "US" && hudUserApiToken.isNullOrBlank() -> com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot(
+                status = LocalInfoStatus.PARTIAL,
+                locality = request.locality,
+                region = request.region,
+                countryCode = "US",
+                countryName = request.countryName ?: "United States",
+                localPriceLevel = FakeLocalPriceLevelProvider().prices(
+                    request = LocalPriceLevelRequest(
+                        latitude = request.latitude,
+                        longitude = request.longitude,
+                        countryCode = "US",
+                        countryName = request.countryName ?: "United States",
+                        locality = request.locality,
+                    ),
+                    hudUserApiToken = null,
+                ),
+            )
+
+            countryCode == "US" -> com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot(
+                status = LocalInfoStatus.PARTIAL,
+                locality = request.locality,
+                region = request.region,
+                countryCode = "US",
+                countryName = request.countryName ?: "United States",
+                localPriceLevel = FakeLocalPriceLevelProvider().prices(
+                    request = LocalPriceLevelRequest(
+                        latitude = request.latitude,
+                        longitude = request.longitude,
+                        countryCode = "US",
+                        countryName = request.countryName ?: "United States",
+                        locality = request.locality,
+                    ),
+                    hudUserApiToken = hudUserApiToken,
+                ),
+            )
+
+            countryCode in setOf("FI", "EL", "ES", "FR", "DE") -> com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot(
+                status = LocalInfoStatus.READY,
+                locality = request.locality,
+                region = request.region,
+                countryCode = countryCode,
+                countryName = request.countryName,
+                localPriceLevel = FakeLocalPriceLevelProvider().prices(
+                    request = LocalPriceLevelRequest(
+                        latitude = request.latitude,
+                        longitude = request.longitude,
+                        countryCode = countryCode,
+                        countryName = request.countryName,
+                        locality = request.locality,
+                    ),
+                    hudUserApiToken = hudUserApiToken,
+                ),
+            )
+
+            else -> com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot(
+                status = LocalInfoStatus.UNSUPPORTED,
+                locality = request.locality,
+                region = request.region,
+                countryCode = countryCode,
+                countryName = request.countryName,
+                detail = "Local context is available, but some Local Info sources do not cover this location yet.",
+            )
+        }
     }
 }
 

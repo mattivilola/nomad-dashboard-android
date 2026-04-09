@@ -56,7 +56,7 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
             return LocalPriceLevelSnapshot(
                 status = LocalPriceLevelStatus.LOCATION_REQUIRED,
                 sources = CapabilitySources,
-                detail = "Allow current location or external IP location to estimate the local price level.",
+                detail = "Allow current location or external IP location to estimate local price signals.",
             )
         }
 
@@ -77,7 +77,7 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
                 countryName = request.countryName,
                 sources = CapabilitySources,
                 fetchedAt = Instant.now(),
-                detail = "Local price level is only supported in Europe and the United States right now.",
+                detail = "Local price signals are only supported in Europe and the United States right now.",
             )
         }
     }
@@ -109,7 +109,7 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
                 rows = emptyList(),
                 sources = EurostatSources,
                 fetchedAt = fetchedAt,
-                detail = "Local price level is unavailable right now.",
+                detail = "Local price signals are unavailable right now.",
             )
             cacheSnapshot(cacheKey, snapshot)
             return snapshot
@@ -225,7 +225,7 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
                     countryName = request.countryName ?: "United States",
                     sources = HudSources,
                     fetchedAt = Instant.now(),
-                    detail = "Local price level is unavailable right now.",
+                    detail = "Local price signals are unavailable right now.",
                 ).also { cacheSnapshot(cacheKey, it) }
             }
         } catch (_: Throwable) {
@@ -235,7 +235,7 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
                 countryName = request.countryName ?: "United States",
                 sources = HudSources,
                 fetchedAt = Instant.now(),
-                detail = "Local price level is unavailable right now.",
+                detail = "Local price signals are unavailable right now.",
             ).also { cacheSnapshot(cacheKey, it) }
         }
     }

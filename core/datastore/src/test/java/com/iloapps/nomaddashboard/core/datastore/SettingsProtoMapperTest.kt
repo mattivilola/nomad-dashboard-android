@@ -23,7 +23,7 @@ class SettingsProtoMapperTest {
             useCurrentLocationForWeather = true,
             useCurrentLocationForVisitedPlaces = true,
             weatherForecastExpanded = false,
-            localPriceLevelEnabled = true,
+            localInfoEnabled = true,
             fuelPricesEnabled = true,
             emergencyCareEnabled = true,
             visitedPlacesEnabled = false,
@@ -44,11 +44,26 @@ class SettingsProtoMapperTest {
         assertThat(restored.publicIpGeolocationEnabled).isFalse()
         assertThat(restored.useCurrentLocationForWeather).isTrue()
         assertThat(restored.useCurrentLocationForVisitedPlaces).isTrue()
-        assertThat(restored.localPriceLevelEnabled).isTrue()
+        assertThat(restored.localInfoEnabled).isTrue()
         assertThat(restored.projectTimeTrackingAutoStartMinutes).isEqualTo(6 * 60 + 30)
         assertThat(restored.projectTimeTrackingAutoStopMinutes).isEqualTo(20 * 60 + 15)
         assertThat(restored.surfSpot.latitude).isEqualTo(36.01)
         assertThat(restored.surfSpot.longitude).isEqualTo(-5.60)
+    }
+
+    @Test
+    fun `legacy local price settings migrate to local info`() {
+        val proto = AppSettingsProto.newBuilder()
+            .setLocalInfoEnabled(true)
+            .addDashboardCardOrder("LOCAL_PRICE_LEVEL")
+            .putDashboardCardWidthModes("LOCAL_PRICE_LEVEL", DashboardCardWidthMode.NARROW.name)
+            .build()
+
+        val restored = proto.toExternalModel()
+
+        assertThat(restored.localInfoEnabled).isTrue()
+        assertThat(restored.dashboardCardOrder).containsExactly(DashboardCardId.LOCAL_INFO)
+        assertThat(restored.dashboardCardWidthModes[DashboardCardId.LOCAL_INFO]).isEqualTo(DashboardCardWidthMode.NARROW)
     }
 
     @Test
