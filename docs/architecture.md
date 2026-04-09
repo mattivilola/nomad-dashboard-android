@@ -128,13 +128,19 @@ Current dashboard data flow:
      retained last-known IP context when a later lookup fails, and an
      Android-only fallback path that resolves the raw IP first and then
      geolocates that address when the current-IP endpoint fails
-   - current device place whenever Android location permission is available so
-     the dashboard can compare physical device location against public-IP
-     location in the same Travel Context card
-   - device-first, IP-fallback Local Info context with timezone-normalised
+   - single-flight refresh orchestration so overlapping startup/manual/
+     permission-triggered refresh calls reuse the same in-flight bootstrap
+     work instead of computing against different partial location state
+   - current device coordinates whenever Android location permission is
+     available, even when reverse geocoding has not resolved a place name yet
+   - current device place whenever reverse geocoding succeeds so the dashboard
+     can compare physical device location against public-IP location in the
+     same Travel Context card
+   - device-place-first, IP-fallback Local Info context with timezone-normalised
      public holidays, confident-only school-holiday subdivision matching, and
      embedded local price rows
-   - device-first, IP-fallback fuel lookup context when fuel prices are enabled
+   - device-coordinates-first fuel lookup context when fuel prices are enabled,
+     with IP country fallback after the startup device-location phase settles
    - country-specific fuel provider selection for Spain, France, Italy, and Germany
    - device-place-first, IP-country-fallback travel-alert context
    - Smartraveller advisory lookup from the live destinations page for the
@@ -216,7 +222,7 @@ Local Info flow:
 
 1. `DashboardViewModel` triggers repository refresh.
 2. `DefaultNomadDashboardRepository` resolves Local Info context in this order:
-   - current device location plus reverse geocoding when Android permission is available
+   - current device place plus reverse geocoding when Android permission is available
    - current public-IP geolocation fallback
 3. The repository publishes a synchronized `checking` Local Info snapshot, then
    calls `LocalInfoProvider` with the resolved location, timezone, and HUD USER token.
@@ -232,7 +238,7 @@ Fuel prices flow:
 
 1. `DashboardViewModel` triggers repository refresh.
 2. `DefaultNomadDashboardRepository` resolves location context in this order:
-   - current device location when Android permission is already granted
+   - current device coordinates when Android permission is already granted
    - current public-IP geolocation fallback
 3. The repository creates a `FuelSearchRequest` with the resolved coordinate,
    ISO country code, and a fixed `50 km` radius.
@@ -249,7 +255,7 @@ Travel alerts flow:
 1. `DashboardViewModel` triggers repository refresh.
 2. `DefaultNomadDashboardRepository` resolves the travel-alert country context
    in this order:
-   - current device place already available from the same refresh cycle
+   - current device place already available from the same startup-location cycle
    - current public-IP geolocation country fallback
 3. The repository expands the resolved primary country into a coverage set of
    `primary + bordering countries` using a bundled border dataset.
@@ -268,7 +274,7 @@ Emergency care flow:
 1. `DashboardViewModel` triggers repository refresh.
 2. `DefaultNomadDashboardRepository` resolves emergency-care search context in
    this order:
-   - current device place when Android location permission is already granted
+   - current device coordinates when Android location permission is already granted
    - current public-IP geolocation fallback
 3. The repository publishes a synchronized `loading` emergency-care snapshot,
    then asks `GooglePlacesEmergencyCareProvider` for the nearest nearby

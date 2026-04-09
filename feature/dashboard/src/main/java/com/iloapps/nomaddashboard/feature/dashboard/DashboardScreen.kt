@@ -120,6 +120,8 @@ import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
 import com.iloapps.nomaddashboard.core.model.SignalLevel
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapPhase
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapState
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
@@ -308,6 +310,7 @@ fun DashboardScreen(
             when (cardId) {
                 DashboardCardId.WEATHER -> WeatherSectionCard(
                     snapshot = state.snapshot.weather,
+                    startupLocation = state.snapshot.startupLocation,
                     surfSpot = state.settings.surfSpot,
                     marine = state.snapshot.marine,
                     forecastExpanded = state.settings.weatherForecastExpanded,
@@ -316,6 +319,7 @@ fun DashboardScreen(
 
                 DashboardCardId.TRAVEL_ALERTS -> TravelAlertsSectionCard(
                     snapshot = state.snapshot.travelAlerts,
+                    startupLocation = state.snapshot.startupLocation,
                 )
 
                 DashboardCardId.CONNECTIVITY -> ConnectivitySectionCard(
@@ -345,12 +349,14 @@ fun DashboardScreen(
                 DashboardCardId.LOCAL_INFO -> LocalInfoSectionCard(
                     enabled = state.settings.localInfoEnabled,
                     snapshot = state.snapshot.localInfo,
+                    startupLocation = state.snapshot.startupLocation,
                     onOpenSettings = onOpenSettings,
                 )
 
                 DashboardCardId.FUEL_PRICES -> FuelPricesSectionCard(
                     enabled = state.settings.fuelPricesEnabled,
                     snapshot = state.snapshot.fuelPrices,
+                    startupLocation = state.snapshot.startupLocation,
                     onOpenSettings = onOpenSettings,
                     onOpenMap = { station ->
                         context.openMapLocation(
@@ -380,6 +386,7 @@ fun DashboardScreen(
                 DashboardCardId.EMERGENCY_CARE -> EmergencyCareSectionCard(
                     enabled = state.settings.emergencyCareEnabled,
                     snapshot = state.snapshot.emergencyCare,
+                    startupLocation = state.snapshot.startupLocation,
                     onOpenMap = {
                         state.snapshot.emergencyCare.facility?.let { facility ->
                             context.openMapLocation(
@@ -527,11 +534,14 @@ private fun CompactSummaryTile(
 @Composable
 private fun WeatherSectionCard(
     snapshot: WeatherSnapshot,
+    startupLocation: StartupLocationBootstrapState,
     surfSpot: SurfSpotConfiguration,
     marine: MarineSnapshot?,
     forecastExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val waitingForStartupLocation = startupLocation.isChecking && snapshot.currentTemperatureCelsius == null
+    val statusBadge = statusBadgeForWeather(snapshot, startupLocation)
     NomadCard(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -544,8 +554,8 @@ private fun WeatherSectionCard(
                 fontWeight = FontWeight.SemiBold,
             )
             NomadStatusBadge(
-                text = statusBadgeForWeather(snapshot).first,
-                tone = statusBadgeForWeather(snapshot).second,
+                text = statusBadge.first,
+                tone = statusBadge.second,
             )
         }
 
@@ -555,7 +565,11 @@ private fun WeatherSectionCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = snapshot.summary,
+                text = if (waitingForStartupLocation) {
+                    "Checking device location before loading location-based weather."
+                } else {
+                    snapshot.summary
+                },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
@@ -579,44 +593,50 @@ private fun WeatherSectionCard(
                 modifier = Modifier.size(22.dp),
             )
             Text(
-                text = snapshot.conditionDescription,
+                text = if (waitingForStartupLocation) {
+                    "Waiting for current conditions"
+                } else {
+                    snapshot.conditionDescription
+                },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            WeatherMetricTile(
-                label = "Current",
-                value = snapshot.currentTemperatureCelsius.formatDegrees(),
-                modifier = Modifier.weight(1f),
-            )
-            WeatherMetricTile(
-                label = "Feels Like",
-                value = snapshot.apparentTemperatureCelsius.formatDegrees(),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            WeatherMetricTile(
-                label = "Rain Chance",
-                value = snapshot.rainChancePercent?.let { "$it%" } ?: "n/a",
-                modifier = Modifier.weight(1f),
-            )
-            WeatherMetricTile(
-                label = "Wind",
-                value = snapshot.windSpeedKph.formatWindSummary(snapshot.windDirectionDegrees),
-                modifier = Modifier.weight(1f),
-            )
+        if (waitingForStartupLocation.not()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                WeatherMetricTile(
+                    label = "Current",
+                    value = snapshot.currentTemperatureCelsius.formatDegrees(),
+                    modifier = Modifier.weight(1f),
+                )
+                WeatherMetricTile(
+                    label = "Feels Like",
+                    value = snapshot.apparentTemperatureCelsius.formatDegrees(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                WeatherMetricTile(
+                    label = "Rain Chance",
+                    value = snapshot.rainChancePercent?.let { "$it%" } ?: "n/a",
+                    modifier = Modifier.weight(1f),
+                )
+                WeatherMetricTile(
+                    label = "Wind",
+                    value = snapshot.windSpeedKph.formatWindSummary(snapshot.windDirectionDegrees),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
-        if (snapshot.hourlyForecast.isNotEmpty()) {
+        if (waitingForStartupLocation.not() && snapshot.hourlyForecast.isNotEmpty()) {
             Text(
                 text = "Next checkpoints",
                 style = MaterialTheme.typography.labelLarge,
@@ -635,7 +655,7 @@ private fun WeatherSectionCard(
             }
         }
 
-        if (forecastExpanded && snapshot.dailyForecast.isNotEmpty()) {
+        if (waitingForStartupLocation.not() && forecastExpanded && snapshot.dailyForecast.isNotEmpty()) {
             Text(
                 text = "Forecast",
                 style = MaterialTheme.typography.labelLarge,
@@ -1194,6 +1214,7 @@ private fun TravelContextSectionCard(
 
         TravelLocationPanels(
             travelContext = travelContext,
+            startupLocation = state.snapshot.startupLocation,
             publicIpEnabled = state.settings.publicIpGeolocationEnabled,
             hasLocationPermission = hasLocationPermission,
             onRequestLocationPermission = onRequestLocationPermission,
@@ -1249,6 +1270,7 @@ private fun TravelContextSectionCard(
 @Composable
 private fun TravelLocationPanels(
     travelContext: com.iloapps.nomaddashboard.core.model.TravelContextSnapshot,
+    startupLocation: StartupLocationBootstrapState,
     publicIpEnabled: Boolean,
     hasLocationPermission: Boolean,
     onRequestLocationPermission: () -> Unit,
@@ -1265,16 +1287,19 @@ private fun TravelLocationPanels(
                         source = "Device",
                         headline = travelContext.deviceLocationLabel(),
                         status = when {
+                            startupLocation.isChecking -> "Checking"
                             travelContext.hasDeviceLocation() -> "Ready"
                             hasLocationPermission.not() -> "Permission"
                             else -> "Waiting"
                         },
                         tone = when {
+                            startupLocation.isChecking -> NomadBadgeTone.Info
                             travelContext.hasDeviceLocation() -> NomadBadgeTone.Accent
                             hasLocationPermission.not() -> NomadBadgeTone.Warning
                             else -> NomadBadgeTone.Info
                         },
                         supporting = when {
+                            startupLocation.isChecking -> "Android is resolving current coordinates and place details."
                             travelContext.hasDeviceLocation() -> travelContext.deviceRegionCountryLine()
                             hasLocationPermission.not() -> "Allow location to compare the device's physical position."
                             else -> "Location permission is granted, but Android has not resolved a place yet."
@@ -1312,23 +1337,26 @@ private fun TravelLocationPanels(
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TravelLocationPanel(
-                    source = "Device",
-                    headline = travelContext.deviceLocationLabel(),
-                    status = when {
-                        travelContext.hasDeviceLocation() -> "Ready"
-                        hasLocationPermission.not() -> "Permission"
-                        else -> "Waiting"
-                    },
-                    tone = when {
-                        travelContext.hasDeviceLocation() -> NomadBadgeTone.Accent
-                        hasLocationPermission.not() -> NomadBadgeTone.Warning
-                        else -> NomadBadgeTone.Info
-                    },
-                    supporting = when {
-                        travelContext.hasDeviceLocation() -> travelContext.deviceRegionCountryLine()
-                        hasLocationPermission.not() -> "Allow location to compare the device's physical position."
-                        else -> "Location permission is granted, but Android has not resolved a place yet."
+                    TravelLocationPanel(
+                        source = "Device",
+                        headline = travelContext.deviceLocationLabel(),
+                        status = when {
+                            startupLocation.isChecking -> "Checking"
+                            travelContext.hasDeviceLocation() -> "Ready"
+                            hasLocationPermission.not() -> "Permission"
+                            else -> "Waiting"
+                        },
+                        tone = when {
+                            startupLocation.isChecking -> NomadBadgeTone.Info
+                            travelContext.hasDeviceLocation() -> NomadBadgeTone.Accent
+                            hasLocationPermission.not() -> NomadBadgeTone.Warning
+                            else -> NomadBadgeTone.Info
+                        },
+                        supporting = when {
+                            startupLocation.isChecking -> "Android is resolving current coordinates and place details."
+                            travelContext.hasDeviceLocation() -> travelContext.deviceRegionCountryLine()
+                            hasLocationPermission.not() -> "Allow location to compare the device's physical position."
+                            else -> "Location permission is granted, but Android has not resolved a place yet."
                     },
                     actionLabel = if (hasLocationPermission.not()) "Allow location" else null,
                     actionIcon = if (hasLocationPermission.not()) Icons.Rounded.MyLocation else null,
@@ -1956,9 +1984,11 @@ private fun dashboardInterruptionButtonColor(
 private fun FuelPricesSectionCard(
     enabled: Boolean,
     snapshot: FuelPriceSnapshot,
+    startupLocation: StartupLocationBootstrapState,
     onOpenSettings: () -> Unit,
     onOpenMap: (FuelStationPrice) -> Unit,
 ) {
+    val waitingForStartupLocation = enabled && startupLocation.isChecking && snapshot.status != FuelPriceStatus.READY
     if (enabled.not()) {
         NomadCard {
             NomadSectionClusterHeader(
@@ -1983,11 +2013,20 @@ private fun FuelPricesSectionCard(
     NomadCard {
         NomadSectionClusterHeader(
             title = "Fuel Prices",
-            subtitle = fuelPricesSubtitle(enabled = true, snapshot = snapshot),
-            badges = listOf(snapshot.sourceName to badgeToneForFuel(snapshot)),
+            subtitle = if (waitingForStartupLocation) {
+                "Checking device location before nearby fuel lookup"
+            } else {
+                fuelPricesSubtitle(enabled = true, snapshot = snapshot)
+            },
+            badges = listOf(snapshot.sourceName to badgeToneForFuel(snapshot, startupLocation)),
         )
-        when (snapshot.status) {
-            FuelPriceStatus.READY -> {
+        when {
+            waitingForStartupLocation -> Text(
+                text = "Checking device location before fuel providers choose the right nearby search.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.84f),
+            )
+            snapshot.status == FuelPriceStatus.READY -> {
                 snapshot.diesel?.let { FuelPriceRow(price = it, onOpenMap = { onOpenMap(it) }) }
                 snapshot.gasoline?.let { FuelPriceRow(price = it, onOpenMap = { onOpenMap(it) }) }
                 listOfNotNull(snapshot.detail.takeIf(String::isNotBlank), snapshot.note).forEach { line ->
@@ -2013,9 +2052,13 @@ private fun FuelPricesSectionCard(
 private fun LocalInfoSectionCard(
     enabled: Boolean,
     snapshot: LocalInfoSnapshot,
+    startupLocation: StartupLocationBootstrapState,
     onOpenSettings: () -> Unit,
 ) {
-    val badge = localInfoBadge(snapshot)
+    val waitingForStartupLocation = enabled &&
+        startupLocation.isChecking &&
+        snapshot.status !in setOf(LocalInfoStatus.READY, LocalInfoStatus.PARTIAL)
+    val badge = localInfoBadge(snapshot, startupLocation)
     val sourceLine = "Sources: " + (
         if (enabled) snapshot.sources.map { it.name }.ifEmpty { LocalInfoCapabilitySources }
         else LocalInfoCapabilitySources
@@ -2024,7 +2067,7 @@ private fun LocalInfoSectionCard(
     NomadCard(modifier = Modifier.testTag(LocalInfoCardTag)) {
         NomadSectionClusterHeader(
             title = "Local Info",
-            subtitle = localInfoSubtitle(enabled = enabled, snapshot = snapshot),
+            subtitle = localInfoSubtitle(enabled = enabled, snapshot = snapshot, startupLocation = startupLocation),
             actions = {
                 badge?.let {
                     NomadStatusBadge(text = it.first, tone = it.second)
@@ -2042,6 +2085,19 @@ private fun LocalInfoSectionCard(
         if (enabled.not()) {
             Text(
                 text = "Local Info is disabled. Enable it in Settings.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = sourceLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+            )
+            return@NomadCard
+        }
+
+        if (waitingForStartupLocation) {
+            Text(
+                text = "Checking device location before loading local context, holidays, and price signals.",
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
@@ -2249,10 +2305,15 @@ private fun FuelPriceRow(
 internal fun EmergencyCareSectionCard(
     enabled: Boolean,
     snapshot: EmergencyCareSnapshot,
+    startupLocation: StartupLocationBootstrapState = StartupLocationBootstrapState(),
     onOpenMap: () -> Unit = {},
 ) {
+    val waitingForStartupLocation = enabled &&
+        startupLocation.isChecking &&
+        snapshot.status != EmergencyCareStatus.READY
     val subtitle = when {
         enabled.not() -> "Off"
+        waitingForStartupLocation -> "Checking device location before nearby search"
         snapshot.status == EmergencyCareStatus.CONFIGURATION_REQUIRED -> "Configuration"
         snapshot.countryName != null -> "${snapshot.countryName} · within ${snapshot.searchRadiusKilometers.toInt()} km"
         else -> snapshot.detail
@@ -2261,7 +2322,7 @@ internal fun EmergencyCareSectionCard(
         NomadSectionClusterHeader(
             title = "Emergency Care",
             subtitle = subtitle,
-            badges = listOf(snapshot.sourceName to badgeToneForEmergency(snapshot)),
+            badges = listOf(snapshot.sourceName to badgeToneForEmergency(snapshot, startupLocation)),
             actions = {
                 val hasFacility = snapshot.facility != null
                 NomadActionChip(
@@ -2275,6 +2336,11 @@ internal fun EmergencyCareSectionCard(
         if (enabled.not()) {
             Text(
                 text = "Enable emergency care in Settings to keep nearby hospitals visible from the main dashboard.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        } else if (waitingForStartupLocation) {
+            Text(
+                text = "Checking device location before nearby hospitals can be searched.",
                 style = MaterialTheme.typography.bodyLarge,
             )
         } else {
@@ -2320,21 +2386,22 @@ internal fun EmergencyCareSectionCard(
 @Composable
 internal fun TravelAlertsSectionCard(
     snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState = StartupLocationBootstrapState(),
     modifier: Modifier = Modifier,
 ) {
     NomadCard(modifier = modifier.testTag(TravelAlertsCardTag)) {
         NomadSectionClusterHeader(
             title = "Travel Alerts",
-            subtitle = snapshot.primaryCountryName?.let { travelAlertsCoverageText(snapshot, it) } ?: "Monitoring travel signals",
+            subtitle = travelAlertsSubtitleLine(snapshot, startupLocation),
             actions = {
                 NomadStatusBadge(
-                    text = travelAlertsSubtitle(snapshot),
-                    tone = badgeToneForAlerts(snapshot),
+                    text = travelAlertsSubtitle(snapshot, startupLocation),
+                    tone = badgeToneForAlerts(snapshot, startupLocation),
                 )
             },
         )
         Text(
-            text = travelAlertsContextLine(snapshot),
+            text = travelAlertsContextLine(snapshot, startupLocation),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
         )
@@ -2506,33 +2573,54 @@ private fun SurfForecastCheckpoint(
     }
 }
 
-private fun statusBadgeForWeather(snapshot: WeatherSnapshot): Pair<String, NomadBadgeTone> =
-    if (snapshot.currentTemperatureCelsius != null) {
+private fun statusBadgeForWeather(
+    snapshot: WeatherSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): Pair<String, NomadBadgeTone> =
+    if (startupLocation.isChecking && snapshot.currentTemperatureCelsius == null) {
+        "Checking" to NomadBadgeTone.Info
+    } else if (snapshot.currentTemperatureCelsius != null) {
         "Live" to NomadBadgeTone.Good
     } else {
         "Limited" to NomadBadgeTone.Warning
     }
 
-private fun badgeToneForFuel(snapshot: FuelPriceSnapshot): NomadBadgeTone = when (snapshot.status) {
-    FuelPriceStatus.READY -> NomadBadgeTone.Good
-    FuelPriceStatus.NO_STATIONS_FOUND,
-    FuelPriceStatus.CONFIGURATION_REQUIRED,
-    FuelPriceStatus.UNAVAILABLE,
-    FuelPriceStatus.UNSUPPORTED,
-    -> NomadBadgeTone.Warning
+private fun badgeToneForFuel(
+    snapshot: FuelPriceSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): NomadBadgeTone = when {
+    startupLocation.isChecking && snapshot.status != FuelPriceStatus.READY -> NomadBadgeTone.Info
+    else -> when (snapshot.status) {
+        FuelPriceStatus.READY -> NomadBadgeTone.Good
+        FuelPriceStatus.NO_STATIONS_FOUND,
+        FuelPriceStatus.CONFIGURATION_REQUIRED,
+        FuelPriceStatus.UNAVAILABLE,
+        FuelPriceStatus.UNSUPPORTED,
+        -> NomadBadgeTone.Warning
+    }
 }
 
-private fun badgeToneForEmergency(snapshot: EmergencyCareSnapshot): NomadBadgeTone = when (snapshot.status) {
-    EmergencyCareStatus.READY -> NomadBadgeTone.Good
-    EmergencyCareStatus.LOADING -> NomadBadgeTone.Info
-    EmergencyCareStatus.CONFIGURATION_REQUIRED,
-    EmergencyCareStatus.PERMISSION_REQUIRED,
-    EmergencyCareStatus.UNAVAILABLE,
-    EmergencyCareStatus.ERROR,
-    -> NomadBadgeTone.Warning
+private fun badgeToneForEmergency(
+    snapshot: EmergencyCareSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): NomadBadgeTone = when {
+    startupLocation.isChecking && snapshot.status != EmergencyCareStatus.READY -> NomadBadgeTone.Info
+    else -> when (snapshot.status) {
+        EmergencyCareStatus.READY -> NomadBadgeTone.Good
+        EmergencyCareStatus.LOADING -> NomadBadgeTone.Info
+        EmergencyCareStatus.CONFIGURATION_REQUIRED,
+        EmergencyCareStatus.PERMISSION_REQUIRED,
+        EmergencyCareStatus.UNAVAILABLE,
+        EmergencyCareStatus.ERROR,
+        -> NomadBadgeTone.Warning
+    }
 }
 
-private fun badgeToneForAlerts(snapshot: TravelAlertsSnapshot): NomadBadgeTone = when {
+private fun badgeToneForAlerts(
+    snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): NomadBadgeTone = when {
+    startupLocation.isChecking && snapshot.primaryCountryCode == null -> NomadBadgeTone.Info
     snapshot.highestSeverity?.rank ?: 0 >= TravelAlertSeverity.WARNING.rank -> NomadBadgeTone.Warning
     snapshot.hasUnavailableStates -> NomadBadgeTone.Warning
     snapshot.hasStaleStates -> NomadBadgeTone.Info
@@ -2624,12 +2712,13 @@ private fun FuelStationPrice.toFuelLine(): String {
 private fun weatherOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel =
     DashboardOverviewTileModel(
         title = "Weather",
-        headline = snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" } ?: "Waiting",
+        headline = snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" }
+            ?: if (snapshot.startupLocation.isChecking) "Checking" else "Waiting",
         detail = listOfNotNull(
             snapshot.weather.conditionDescription.takeUnless { it.equals("Weather unavailable", ignoreCase = true) },
-            travelAlertsCompactLabel(snapshot.travelAlerts),
+            travelAlertsCompactLabel(snapshot.travelAlerts, snapshot.startupLocation),
         ).joinToString(" · ").ifBlank { "Refresh to load current conditions" },
-        tone = statusBadgeForWeather(snapshot.weather).second,
+        tone = statusBadgeForWeather(snapshot.weather, snapshot.startupLocation).second,
     )
 
 private fun networkOverviewTile(snapshot: DashboardSnapshot): DashboardOverviewTileModel {
@@ -2757,7 +2846,13 @@ private fun dashboardLocationLabel(state: DashboardUiState): String =
     listOfNotNull(
         state.snapshot.travelContext.city,
         state.snapshot.travelContext.country,
-    ).joinToString(", ").ifBlank { "Location unavailable" }
+    ).joinToString(", ").ifBlank {
+        if (state.snapshot.startupLocation.isChecking) {
+            "Checking device location..."
+        } else {
+            "Location unavailable"
+        }
+    }
 
 private fun travelContextSubtitle(
     state: DashboardUiState,
@@ -2766,6 +2861,7 @@ private fun travelContextSubtitle(
     val travelContext = state.snapshot.travelContext
     val alignment = travelLocationAlignment(travelContext)
     return when {
+        state.snapshot.startupLocation.isChecking -> "Checking device location before location-based cards refresh."
         alignment?.label == "Mismatch" -> "Device and network location differ."
         travelContext.hasDeviceLocation() -> "Device-aware travel context."
         hasLocationPermission.not() -> "Allow location to compare your physical position."
@@ -2777,6 +2873,7 @@ private fun travelContextSubtitle(
 private fun dashboardSupportLine(state: DashboardUiState): String {
     val lastRefresh = state.snapshot.lastRefresh
     val refreshText = when {
+        state.snapshot.startupLocation.isChecking -> "Checking device location before loading location-based cards..."
         state.snapshot.isRefreshing -> "Refreshing travel signals..."
         lastRefresh != null -> "Updated ${lastRefresh.formatDashboardTimestamp()}"
         else -> "Tap refresh to load live travel signals"
@@ -2789,11 +2886,14 @@ private fun dashboardSupportLine(state: DashboardUiState): String {
     return (listOf(refreshText) + liveSignals).joinToString(" · ")
 }
 
-private fun travelAlertsCompactLabel(snapshot: TravelAlertsSnapshot): String {
+private fun travelAlertsCompactLabel(
+    snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): String {
     val highestSeverity = snapshot.highestSeverity
     return when {
         highestSeverity?.rank ?: 0 >= TravelAlertSeverity.WARNING.rank ->
-            "Alerts ${travelAlertsSubtitle(snapshot).lowercase()}"
+            "Alerts ${travelAlertsSubtitle(snapshot, startupLocation).lowercase()}"
         highestSeverity != null -> "Alerts ${highestSeverity.badgeTitle().lowercase()}"
         snapshot.hasStaleStates -> "Alerts stale"
         snapshot.hasUnavailableStates -> "Alerts limited"
@@ -2810,15 +2910,30 @@ private fun summaryToneColor(tone: NomadBadgeTone) = when (tone) {
     NomadBadgeTone.Neutral -> MaterialTheme.colorScheme.outline
 }
 
-private fun travelAlertsSubtitle(snapshot: TravelAlertsSnapshot): String {
+private fun travelAlertsSubtitle(
+    snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): String {
     val highestSeverity = snapshot.highestSeverity
     return when {
+        startupLocation.isChecking && snapshot.primaryCountryCode == null -> "Checking"
         highestSeverity != null && highestSeverity.rank >= TravelAlertSeverity.WARNING.rank -> highestSeverity.badgeTitle()
         snapshot.hasStaleStates -> "Stale"
         snapshot.hasUnavailableStates -> "Limited"
         highestSeverity != null -> highestSeverity.badgeTitle()
         else -> "Checking"
     }
+}
+
+private fun travelAlertsSubtitleLine(
+    snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): String = when {
+    startupLocation.isChecking && snapshot.primaryCountryCode == null ->
+        "Checking device location before country-based alerts"
+    snapshot.primaryCountryName != null ->
+        travelAlertsCoverageText(snapshot, snapshot.primaryCountryName ?: "")
+    else -> "Monitoring travel signals"
 }
 
 private fun travelAlertsCoverageText(
@@ -2833,8 +2948,13 @@ private fun travelAlertsCoverageText(
     }
 }
 
-private fun travelAlertsContextLine(snapshot: TravelAlertsSnapshot): String =
-    if (snapshot.primaryCountryCode == null) {
+private fun travelAlertsContextLine(
+    snapshot: TravelAlertsSnapshot,
+    startupLocation: StartupLocationBootstrapState,
+): String =
+    if (startupLocation.isChecking && snapshot.primaryCountryCode == null) {
+        "The app waits for startup location resolution before advisory and regional security checks fall back to network identity."
+    } else if (snapshot.primaryCountryCode == null) {
         "Checks advisory and regional security as soon as the app can resolve your current country."
     } else {
         "Checks your current country plus bordering countries so nearby changes show up before you cross the next border."
@@ -3091,7 +3211,11 @@ private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.hasIpLoc
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.deviceLocationLabel(): String =
     listOfNotNull(deviceCity, deviceCountry).joinToString(", ").ifBlank {
-        deviceCountry ?: "Location unavailable"
+        deviceCountry ?: if (deviceLatitude != null && deviceLongitude != null) {
+            String.format(Locale.US, "%.3f, %.3f", deviceLatitude, deviceLongitude)
+        } else {
+            "Location unavailable"
+        }
     }
 
 private fun com.iloapps.nomaddashboard.core.model.TravelContextSnapshot.ipLocationLabel(): String =
@@ -3160,9 +3284,14 @@ private fun Instant.formatTravelAlertDate(): String =
 private fun localInfoSubtitle(
     enabled: Boolean,
     snapshot: LocalInfoSnapshot,
+    startupLocation: StartupLocationBootstrapState,
 ): String {
     if (enabled.not()) {
         return "Location context, holidays, and price signals"
+    }
+
+    if (startupLocation.isChecking && snapshot.status == LocalInfoStatus.OFF) {
+        return "Checking device location before local context"
     }
 
     val location = listOfNotNull(snapshot.locality, snapshot.region, snapshot.countryName).joinToString(" · ")
@@ -3188,14 +3317,20 @@ private fun localInfoNeedsSettingsAction(
 
 private fun localInfoBadge(
     snapshot: LocalInfoSnapshot,
-): Pair<String, NomadBadgeTone>? = when (snapshot.status) {
-    LocalInfoStatus.OFF -> "Off" to NomadBadgeTone.Info
-    LocalInfoStatus.CHECKING -> "Checking" to NomadBadgeTone.Info
-    LocalInfoStatus.READY -> "Ready" to NomadBadgeTone.Good
-    LocalInfoStatus.PARTIAL -> "Partial" to NomadBadgeTone.Info
-    LocalInfoStatus.LOCATION_REQUIRED -> "Location Needed" to NomadBadgeTone.Warning
-    LocalInfoStatus.UNSUPPORTED -> "Unsupported" to NomadBadgeTone.Info
-    LocalInfoStatus.UNAVAILABLE -> "Unavailable" to NomadBadgeTone.Warning
+    startupLocation: StartupLocationBootstrapState,
+): Pair<String, NomadBadgeTone>? = when {
+    startupLocation.isChecking &&
+        snapshot.status !in setOf(LocalInfoStatus.READY, LocalInfoStatus.PARTIAL) ->
+        "Checking" to NomadBadgeTone.Info
+    else -> when (snapshot.status) {
+        LocalInfoStatus.OFF -> "Off" to NomadBadgeTone.Info
+        LocalInfoStatus.CHECKING -> "Checking" to NomadBadgeTone.Info
+        LocalInfoStatus.READY -> "Ready" to NomadBadgeTone.Good
+        LocalInfoStatus.PARTIAL -> "Partial" to NomadBadgeTone.Info
+        LocalInfoStatus.LOCATION_REQUIRED -> "Location Needed" to NomadBadgeTone.Warning
+        LocalInfoStatus.UNSUPPORTED -> "Unsupported" to NomadBadgeTone.Info
+        LocalInfoStatus.UNAVAILABLE -> "Unavailable" to NomadBadgeTone.Warning
+    }
 }
 
 private fun LocalPriceIndicatorKind.displayName(): String = when (this) {

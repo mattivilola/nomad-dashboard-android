@@ -39,7 +39,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Public IP lookup | Implemented | FreeIPAPI remains primary, with a plain-IP fallback path plus copyable dashboard presentation and last-known retention during transient lookup failures |
 | IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema and by-address fallback geolocation when the current-IP endpoint fails |
 | Device vs IP location comparison | Implemented | Travel Context now shows the current device place and the public-IP-derived place side by side when available |
-| Travel context card | Implemented | Card now compares device and public-IP location, exposes Android-native map actions, and shows denser Wi-Fi travel telemetry instead of only basic region/country fields |
+| Travel context card | Implemented | Card now compares device and public-IP location, exposes Android-native map actions, shows denser Wi-Fi travel telemetry, and keeps a startup `checking device location` state instead of flashing immediate unavailable copy during cold launch |
 
 ## Dashboard UX polish
 
@@ -63,7 +63,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Current weather | Implemented | Open-Meteo with device-location-first lookup when enabled in Settings, otherwise IP geolocation fallback |
+| Current weather | Implemented | Open-Meteo now uses a startup device-location bootstrap: device coordinates first within a short wait window, then IP geolocation fallback if device location is still unavailable |
 | Hourly weather checkpoints | Implemented | Open-Meteo hourly data now drives real `+3h`, `+6h`, and `+12h` dashboard checkpoints with icons, rain chance, and wind |
 | Daily forecast summary | Implemented | Open-Meteo daily data now renders icon-led forecast rows with temperature, rain chance, and wind detail |
 | Weather expand/collapse preference | Implemented | Setting is wired |
@@ -83,11 +83,11 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Fuel card | Implemented | Dashboard card now highlights the cheapest nearby diesel and gasoline stations in a more scan-friendly row layout while keeping the same ready/configuration/unavailable/no-stations states |
-| Local Info card | Implemented | Optional dashboard card now combines resolved location context, Nager.Date public holidays, best-effort OpenHolidays school holidays when a confident subdivision match exists, and the existing Eurostat/HUD USER price rows; partial upstream failures stay visible instead of blanking the card |
+| Fuel card | Implemented | Dashboard card now highlights the cheapest nearby diesel and gasoline stations in a more scan-friendly row layout while keeping the same ready/configuration/unavailable/no-stations states plus a startup location-checking state before IP fallback |
+| Local Info card | Implemented | Optional dashboard card now combines resolved location context, Nager.Date public holidays, best-effort OpenHolidays school holidays when a confident subdivision match exists, and the existing Eurostat/HUD USER price rows; startup now waits briefly for device place resolution before falling back to IP context |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
 | Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
-| Emergency care card | Implemented | Dashboard card now renders loading, ready, permission-required, configuration-required, unavailable, and error states with a direct Maps handoff when a nearby hospital is resolved |
+| Emergency care card | Implemented | Dashboard card now renders loading, ready, permission-required, configuration-required, unavailable, and error states with a direct Maps handoff when a nearby hospital is resolved, while startup keeps a short device-location check before IP fallback |
 | Nearby hospitals via Places | Implemented | Uses Google Places Nearby Search (New) with device-location first and public-IP geolocation fallback |
 | In-app map preview | Planned | Depends on Maps integration |
 

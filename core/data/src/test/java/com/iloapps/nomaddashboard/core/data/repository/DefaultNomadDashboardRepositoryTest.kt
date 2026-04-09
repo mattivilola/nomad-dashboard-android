@@ -15,6 +15,8 @@ import com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResul
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.data.timetracking.UpdateTimeTrackingEntryResult
 import com.google.common.truth.Truth.assertThat
+import com.iloapps.nomaddashboard.core.data.location.DeviceLocationResolutionStatus
+import com.iloapps.nomaddashboard.core.data.location.DeviceLocationSnapshot
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
@@ -53,6 +55,7 @@ import com.iloapps.nomaddashboard.core.model.LocalPriceSummaryBand
 import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapPhase
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.TimeTrackingEntry
@@ -78,11 +81,15 @@ import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -476,7 +483,7 @@ class DefaultNomadDashboardRepositoryTest {
             visitedDeviceLocationProvider = object : VisitedDeviceLocationProvider {
                 override fun hasLocationPermission(): Boolean = false
 
-                override suspend fun currentPlace(): ResolvedVisitedPlace? = error("should not be called")
+                override suspend fun currentLocation(): DeviceLocationSnapshot = error("should not be called")
             },
             applicationScope = backgroundScope,
         )
@@ -1084,6 +1091,155 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(securityState?.signal?.summary).contains("nearby security bulletin")
     }
 
+    @Test
+    fun `refresh uses device coordinates when reverse geocoding is unavailable`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForWeather = true,
+            fuelPricesEnabled = true,
+            emergencyCareEnabled = true,
+        )
+        val openMeteoService = FakeOpenMeteoService()
+        val fuelPriceProvider = FakeFuelPriceProvider()
+        val emergencyCareProvider = FakeEmergencyCareProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = fuelPriceProvider,
+            openMeteoService = openMeteoService,
+            emergencyCareProvider = emergencyCareProvider,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                coordinatesOnly = 48.8566 to 2.3522,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        repository.refresh()
+        advanceUntilIdle()
+
+        val weatherRequest = openMeteoService.requests.first { it.current.contains("temperature_2m") }
+        val fuelRequest = fuelPriceProvider.requests.single()
+        val emergencyRequest = emergencyCareProvider.requests.single()
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }
+
+        assertThat(weatherRequest.latitude).isWithin(0.001).of(48.8566)
+        assertThat(weatherRequest.longitude).isWithin(0.001).of(2.3522)
+        assertThat(fuelRequest.latitude).isWithin(0.001).of(48.8566)
+        assertThat(fuelRequest.countryCode).isEqualTo("FI")
+        assertThat(emergencyRequest.latitude).isWithin(0.001).of(48.8566)
+        assertThat(emergencyRequest.locationSource).isEqualTo(EmergencyCareLocationSource.DEVICE)
+        assertThat(snapshot.startupLocation.phase).isEqualTo(StartupLocationBootstrapPhase.USING_DEVICE_LOCATION)
+    }
+
+    @Test
+    fun `refresh exposes checking startup state before ip fallback completes`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForWeather = true,
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                delayMillis = 5_000,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        val refresh = async { repository.refresh() }
+        runCurrent()
+
+        val checkingSnapshot = repository.snapshot.value
+        assertThat(checkingSnapshot.isRefreshing).isTrue()
+        assertThat(checkingSnapshot.startupLocation.isChecking).isTrue()
+        assertThat(checkingSnapshot.startupLocation.phase)
+            .isEqualTo(StartupLocationBootstrapPhase.CHECKING_DEVICE_LOCATION)
+
+        advanceTimeBy(4_000)
+        advanceUntilIdle()
+        refresh.await()
+
+        val finalSnapshot = repository.snapshot.first { it.lastRefresh != null }
+        assertThat(finalSnapshot.startupLocation.phase)
+            .isEqualTo(StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION)
+        assertThat(finalSnapshot.travelContext.countryCode).isEqualTo("FI")
+    }
+
+    @Test
+    fun `refresh without ip fallback ends with unavailable location states after startup wait`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = false,
+            useCurrentLocationForWeather = true,
+            fuelPricesEnabled = true,
+            emergencyCareEnabled = true,
+            localInfoEnabled = true,
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                delayMillis = 5_000,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        val refresh = async { repository.refresh() }
+        runCurrent()
+        assertThat(repository.snapshot.value.startupLocation.isChecking).isTrue()
+
+        advanceTimeBy(4_000)
+        advanceUntilIdle()
+        refresh.await()
+
+        val snapshot = repository.snapshot.first { it.lastRefresh != null }
+        assertThat(snapshot.startupLocation.phase)
+            .isEqualTo(StartupLocationBootstrapPhase.NO_LOCATION_SOURCE_AVAILABLE)
+        assertThat(snapshot.weather.summary).isEqualTo("Weather data unavailable")
+        assertThat(snapshot.fuelPrices.status).isEqualTo(FuelPriceStatus.UNAVAILABLE)
+        assertThat(snapshot.emergencyCare.status).isEqualTo(EmergencyCareStatus.UNAVAILABLE)
+        assertThat(snapshot.localInfo.status).isEqualTo(LocalInfoStatus.LOCATION_REQUIRED)
+        assertThat(snapshot.travelAlerts.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.ADVISORY)?.reason)
+            .isEqualTo(TravelAlertUnavailableReason.COUNTRY_REQUIRED)
+    }
+
+    @Test
+    fun `refresh runs as a single flight when concurrent callers overlap`() = runTest {
+        val settings = AppSettings(
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForWeather = true,
+        )
+        val openMeteoService = FakeOpenMeteoService()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            openMeteoService = openMeteoService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = null,
+                delayMillis = 5_000,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        val firstRefresh = async { repository.refresh() }
+        val secondRefresh = async { repository.refresh() }
+        runCurrent()
+
+        advanceTimeBy(4_000)
+        advanceUntilIdle()
+        firstRefresh.await()
+        secondRefresh.await()
+
+        assertThat(openMeteoService.requests.count { it.current.contains("temperature_2m") }).isEqualTo(1)
+        assertThat(repository.snapshot.first { it.lastRefresh != null }.startupLocation.phase)
+            .isEqualTo(StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION)
+    }
+
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
@@ -1429,10 +1585,38 @@ private class FakeOpenMeteoMarineService(
 private class FakeVisitedDeviceLocationProvider(
     private val value: ResolvedVisitedPlace?,
     private val hasLocationPermission: Boolean = true,
+    private val coordinatesOnly: Pair<Double, Double>? = null,
+    private val delayMillis: Long = 0,
 ) : VisitedDeviceLocationProvider {
     override fun hasLocationPermission(): Boolean = hasLocationPermission
 
-    override suspend fun currentPlace(): ResolvedVisitedPlace? = value
+    override suspend fun currentLocation(): DeviceLocationSnapshot {
+        if (delayMillis > 0) {
+            delay(delayMillis)
+        }
+        if (hasLocationPermission.not()) {
+            return DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
+        }
+        value?.let { place ->
+            return DeviceLocationSnapshot(
+                status = DeviceLocationResolutionStatus.PLACE_RESOLVED,
+                latitude = place.latitude,
+                longitude = place.longitude,
+                city = place.city,
+                region = place.region,
+                country = place.country,
+                countryCode = place.countryCode,
+            )
+        }
+        coordinatesOnly?.let { (latitude, longitude) ->
+            return DeviceLocationSnapshot(
+                status = DeviceLocationResolutionStatus.COORDINATES_ONLY,
+                latitude = latitude,
+                longitude = longitude,
+            )
+        }
+        return DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+    }
 }
 
 private class FakeFuelPriceProvider(

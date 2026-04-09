@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
@@ -64,6 +65,7 @@ class LocalInfoSectionCardTest {
                             ),
                         ),
                     ),
+                    hasLocationPermission = true,
                     onRefresh = {},
                 )
             }
@@ -73,8 +75,8 @@ class LocalInfoSectionCardTest {
         composeRule.onNodeWithText("Tarifa / Andalusia / Spain").assertIsDisplayed()
         composeRule.onNodeWithText("Next: Labour Day").assertIsDisplayed()
         composeRule.onNodeWithText("On break").assertIsDisplayed()
-        composeRule.onNodeWithText("Meal Out").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat").assertIsDisplayed()
+        composeRule.onNodeWithText("Meal Out").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -102,6 +104,7 @@ class LocalInfoSectionCardTest {
                             sources = listOf(HolidaySourceAttribution("Nager.Date")),
                         ),
                     ),
+                    hasLocationPermission = true,
                     onRefresh = {},
                 )
             }
@@ -123,6 +126,7 @@ class LocalInfoSectionCardTest {
                             detail = "Allow location or enable IP-based location to show Local Info.",
                         ),
                     ),
+                    hasLocationPermission = true,
                     onRefresh = {},
                 )
             }
@@ -149,6 +153,7 @@ class LocalInfoSectionCardTest {
                             sources = listOf(HolidaySourceAttribution("Nager.Date")),
                         ),
                     ),
+                    hasLocationPermission = true,
                     onRefresh = {},
                 )
             }
@@ -167,6 +172,7 @@ class LocalInfoSectionCardTest {
                         enabled = false,
                         snapshot = LocalInfoSnapshot(),
                     ),
+                    hasLocationPermission = true,
                     onRefresh = {},
                 )
             }

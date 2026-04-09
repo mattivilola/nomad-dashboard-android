@@ -93,6 +93,10 @@ Current repository state:
   samples now drive a real local history chart
 - weather refresh now honors the existing device-location weather setting and
   falls back to IP geolocation when device coordinates are unavailable
+- startup location bootstrap hardening landed: dashboard refresh is now
+  single-flight, device coordinates survive reverse-geocoder misses, and
+  location-based cards show a shared `checking device location` state before
+  falling back to IP context on cold start
 - weather and surf refinement landed: the dashboard now uses real Open-Meteo
   hourly checkpoints, icon-led forecast rows with rain and wind detail, and a
   live marine surf subsection for the saved surf spot instead of placeholder
@@ -293,6 +297,18 @@ Verified:
 - `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugAndroidTestKotlin :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-09 after updating the Local Info dashboard Android test
   contract and debug screenshot fixtures
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest' -Pksp.incremental=false`
+  passed on 2026-04-09 after adding startup-location bootstrap coverage for
+  coordinates-only device fixes, startup checking state, IP fallback, and
+  single-flight refresh behavior
+- `source scripts/android-env.sh && ANDROID_SERIAL=emulator-5554 run_gradle :feature:dashboard:connectedDebugAndroidTest -Pksp.incremental=false`
+  passed on 2026-04-09 after updating the dashboard UI tests for the startup
+  location waiting state
+- `source scripts/android-env.sh && run_gradle :app:assembleDebug -Pksp.incremental=false`
+  passed on 2026-04-09 after the startup location bootstrap hardening slice
+- physical-device cold restart smoke verification passed on 2026-04-09 via
+  `adb -s 9fb1404 shell am force-stop com.iloapps.nomaddashboard.dev` plus
+  `adb -s 9fb1404 shell am start -W -n com.iloapps.nomaddashboard.dev/com.iloapps.nomaddashboard.MainActivity`
 - `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
   passed on 2026-04-08 after wiring the Local Price Level settings navigation
   path and updating the debug screenshot fixtures

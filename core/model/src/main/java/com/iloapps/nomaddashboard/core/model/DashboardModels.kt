@@ -71,6 +71,18 @@ data class TravelContextSnapshot(
     val deviceLongitude: Double? = null,
 )
 
+enum class StartupLocationBootstrapPhase {
+    CHECKING_DEVICE_LOCATION,
+    USING_DEVICE_LOCATION,
+    FALLING_BACK_TO_IP_LOCATION,
+    NO_LOCATION_SOURCE_AVAILABLE,
+}
+
+data class StartupLocationBootstrapState(
+    val phase: StartupLocationBootstrapPhase = StartupLocationBootstrapPhase.NO_LOCATION_SOURCE_AVAILABLE,
+    val isChecking: Boolean = false,
+)
+
 data class WeatherDayForecast(
     val date: LocalDate,
     val summary: String,
@@ -193,6 +205,7 @@ data class DashboardSnapshot(
     val connectivity: ConnectivitySnapshot = ConnectivitySnapshot(),
     val power: PowerSnapshot = PowerSnapshot(),
     val travelContext: TravelContextSnapshot = TravelContextSnapshot(),
+    val startupLocation: StartupLocationBootstrapState = StartupLocationBootstrapState(),
     val weather: WeatherSnapshot = WeatherSnapshot(),
     val marine: MarineSnapshot? = null,
     val travelAlerts: TravelAlertsSnapshot = TravelAlertsSnapshot(),

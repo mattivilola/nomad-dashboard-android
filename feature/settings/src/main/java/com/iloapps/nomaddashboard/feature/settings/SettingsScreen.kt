@@ -146,7 +146,13 @@ fun SettingsScreen(
                     description = "Show local place context, public holidays, best-effort school holidays, and local price signals.",
                     checked = settings.localInfoEnabled,
                 ) {
-                    onUpdate { current -> current.copy(localInfoEnabled = it) }
+                    onUpdate { current ->
+                        if (it) {
+                            current.ensureDashboardCard(DashboardCardId.LOCAL_INFO).copy(localInfoEnabled = true)
+                        } else {
+                            current.copy(localInfoEnabled = false)
+                        }
+                    }
                 }
                 SettingsToggleRow(
                     title = "Enable fuel prices",
@@ -687,6 +693,16 @@ private fun AppSettings.moveCard(card: DashboardCardId, delta: Int): AppSettings
     list.removeAt(index)
     list.add(target, card)
     return copy(dashboardCardOrder = list)
+}
+
+private fun AppSettings.ensureDashboardCard(card: DashboardCardId): AppSettings {
+    if (dashboardCardOrder.contains(card)) {
+        return this
+    }
+    return copy(
+        dashboardCardOrder = dashboardCardOrder + card,
+        dashboardCardWidthModes = dashboardCardWidthModes + (card to DashboardCardWidthMode.WIDE),
+    )
 }
 
 private fun formatCoordinate(value: Double): String = String.format(Locale.US, "%.5f", value)

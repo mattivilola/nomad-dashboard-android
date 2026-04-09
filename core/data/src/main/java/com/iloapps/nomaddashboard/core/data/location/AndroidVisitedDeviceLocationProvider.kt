@@ -28,25 +28,34 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
 ) : VisitedDeviceLocationProvider {
     override fun hasLocationPermission(): Boolean = hasLocationPermissionInternal()
 
-    override suspend fun currentPlace(): ResolvedVisitedPlace? {
+    override suspend fun currentLocation(): DeviceLocationSnapshot {
         if (hasLocationPermissionInternal().not()) {
-            return null
+            return DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
         }
 
-        val location = currentLocation() ?: return null
-        val details = reverseGeocode(location) ?: return null
-        return ResolvedVisitedPlace(
-            city = details.locality?.trim()?.takeIf(String::isNotBlank),
-            region = details.adminArea?.trim()?.takeIf(String::isNotBlank),
-            country = details.countryName?.trim()?.takeIf(String::isNotBlank) ?: return null,
-            countryCode = details.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+        val location = currentCoordinates()
+            ?: return DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+        val details = withTimeoutOrNull(ReverseGeocodeTimeoutMillis) {
+            reverseGeocode(location)
+        }
+        val country = details?.countryName?.trim()?.takeIf(String::isNotBlank)
+        return DeviceLocationSnapshot(
+            status = if (country != null) {
+                DeviceLocationResolutionStatus.PLACE_RESOLVED
+            } else {
+                DeviceLocationResolutionStatus.COORDINATES_ONLY
+            },
+            city = details?.locality?.trim()?.takeIf(String::isNotBlank),
+            region = details?.adminArea?.trim()?.takeIf(String::isNotBlank),
+            country = country,
+            countryCode = details?.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
             latitude = location.latitude,
             longitude = location.longitude,
         )
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun currentLocation(): Location? {
+    private suspend fun currentCoordinates(): Location? {
         val locationManager = context.getSystemService<LocationManager>() ?: return null
         val providers = buildList {
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
@@ -135,3 +144,5 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
             Manifest.permission.ACCESS_FINE_LOCATION,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
 }
+
+private const val ReverseGeocodeTimeoutMillis = 1_500L

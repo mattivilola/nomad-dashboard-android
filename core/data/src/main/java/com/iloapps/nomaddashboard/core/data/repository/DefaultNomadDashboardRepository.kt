@@ -11,6 +11,8 @@ import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
 import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoLocationSource
 import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
 import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoRequest
+import com.iloapps.nomaddashboard.core.data.location.DeviceLocationResolutionStatus
+import com.iloapps.nomaddashboard.core.data.location.DeviceLocationSnapshot
 import com.iloapps.nomaddashboard.core.data.location.ResolvedVisitedPlace
 import com.iloapps.nomaddashboard.core.data.location.VisitedDeviceLocationProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
@@ -38,6 +40,8 @@ import com.iloapps.nomaddashboard.core.model.MarineSnapshot
 import com.iloapps.nomaddashboard.core.model.MetricHistoryPoint
 import com.iloapps.nomaddashboard.core.model.LocalInfoSnapshot
 import com.iloapps.nomaddashboard.core.model.LocalInfoStatus
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapPhase
+import com.iloapps.nomaddashboard.core.model.StartupLocationBootstrapState
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.SummaryTile
@@ -69,6 +73,7 @@ import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineHourly
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,6 +83,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -119,6 +127,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
         .stateIn(applicationScope, SharingStarted.Eagerly, DashboardSnapshot())
 
     private var previousTrafficSample: TrafficSample? = null
+    private val refreshCoordinatorMutex = Mutex()
+    private var activeRefresh: CompletableDeferred<Unit>? = null
 
     init {
         applicationScope.launch {
@@ -127,10 +137,52 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     override suspend fun refresh() {
+        val (refreshSignal, shouldRun) = refreshCoordinatorMutex.withLock {
+            activeRefresh?.takeIf { it.isActive }?.let { existing ->
+                existing to false
+            } ?: CompletableDeferred<Unit>().also { created ->
+                activeRefresh = created
+            }.let { created ->
+                created to true
+            }
+        }
+
+        if (shouldRun.not()) {
+            refreshSignal.await()
+            return
+        }
+
+        try {
+            performRefresh()
+            refreshSignal.complete(Unit)
+        } catch (error: Throwable) {
+            refreshSignal.completeExceptionally(error)
+            throw error
+        } finally {
+            refreshCoordinatorMutex.withLock {
+                if (activeRefresh === refreshSignal) {
+                    activeRefresh = null
+                }
+            }
+        }
+    }
+
+    private suspend fun performRefresh() {
         val currentSettings = settings.first()
         val currentProviderCredentials = providerCredentials.first()
-        val previousTravelContext = internalSnapshot.value.travelContext
-        internalSnapshot.update { it.copy(isRefreshing = true) }
+        val previousSnapshot = internalSnapshot.value
+        val previousTravelContext = previousSnapshot.travelContext
+        val previousTravelAlerts = previousSnapshot.travelAlerts
+        val hasLocationPermission = visitedDeviceLocationProvider.hasLocationPermission()
+        internalSnapshot.update {
+            it.copy(
+                isRefreshing = true,
+                startupLocation = initialStartupLocationState(
+                    publicIpGeolocationEnabled = currentSettings.publicIpGeolocationEnabled,
+                    hasLocationPermission = hasLocationPermission,
+                ),
+            )
+        }
         val refreshedAt = Instant.now()
 
         val (connectivity, currentTraffic) = telemetryReader.connectivity(previousTrafficSample)
@@ -144,16 +196,17 @@ class DefaultNomadDashboardRepository @Inject constructor(
             recordedAtMillis = currentTraffic.capturedAtMillis,
         )
 
-        val currentDevicePlace = if (visitedDeviceLocationProvider.hasLocationPermission()) {
-            runCatching { visitedDeviceLocationProvider.currentPlace() }.getOrNull()
-        } else {
-            null
-        }
+        val deviceLocation = resolveStartupDeviceLocation(hasLocationPermission)
+        val currentDevicePlace = deviceLocation.toResolvedVisitedPlaceOrNull()
 
         val travelContext = refreshTravelContext(
             currentSettings = currentSettings,
             previous = previousTravelContext,
-            currentDevicePlace = currentDevicePlace,
+            deviceLocation = deviceLocation,
+        )
+        val startupLocation = resolvedStartupLocationState(
+            deviceLocation = deviceLocation,
+            travelContext = travelContext,
         )
 
         if (currentSettings.visitedPlacesEnabled) {
@@ -174,7 +227,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
         val weatherLocation = buildWeatherLocation(
             currentSettings = currentSettings,
-            currentDevicePlace = currentDevicePlace,
+            deviceLocation = deviceLocation,
             travelContext = travelContext,
         )
         val weather = if (weatherLocation != null) {
@@ -217,7 +270,6 @@ class DefaultNomadDashboardRepository @Inject constructor(
             refreshedAt = refreshedAt,
         )
 
-        val previousTravelAlerts = internalSnapshot.value.travelAlerts
         val primaryTravelAlertCountryCode = currentDevicePlace?.countryCode
             ?.trim()
             ?.takeIf(String::isNotBlank)
@@ -237,6 +289,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
         internalSnapshot.update { current ->
             current.copy(
                 isRefreshing = true,
+                travelContext = travelContext,
+                startupLocation = startupLocation,
                 travelAlerts = checkingTravelAlerts,
                 localInfo = checkingLocalInfoSnapshot(
                     enabled = currentSettings.localInfoEnabled,
@@ -257,7 +311,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         )
         val emergencyCare = refreshEmergencyCare(
             currentSettings = currentSettings,
-            currentDevicePlace = currentDevicePlace,
+            deviceLocation = deviceLocation,
             travelContext = travelContext,
         )
         val localInfo = refreshLocalInfo(
@@ -280,7 +334,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val timeTrackingReport = timeTrackingRepository.report.first()
         val fuelPrices = if (currentSettings.fuelPricesEnabled) {
             buildFuelSearchRequest(
-                currentDevicePlace = currentDevicePlace,
+                deviceLocation = deviceLocation,
                 travelContext = travelContext,
             )?.let { request ->
                 fuelPriceProvider.prices(
@@ -330,6 +384,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             connectivity = connectivityWithHistory,
             power = power,
             travelContext = travelContext,
+            startupLocation = startupLocation,
             weather = weather,
             marine = marine,
             travelAlerts = travelAlerts,
@@ -389,7 +444,53 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     override suspend fun resolveSurfSpotFromCurrentLocation(): SurfSpotConfiguration? =
-        visitedDeviceLocationProvider.currentPlace()?.toSurfSpotConfiguration()
+        visitedDeviceLocationProvider.currentLocation().toSurfSpotConfigurationOrNull()
+
+    private fun initialStartupLocationState(
+        publicIpGeolocationEnabled: Boolean,
+        hasLocationPermission: Boolean,
+    ): StartupLocationBootstrapState = when {
+        hasLocationPermission -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.CHECKING_DEVICE_LOCATION,
+            isChecking = true,
+        )
+        publicIpGeolocationEnabled -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION,
+        )
+        else -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.NO_LOCATION_SOURCE_AVAILABLE,
+        )
+    }
+
+    private suspend fun resolveStartupDeviceLocation(
+        hasLocationPermission: Boolean,
+    ): DeviceLocationSnapshot {
+        if (hasLocationPermission.not()) {
+            return DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
+        }
+
+        return withTimeoutOrNull(StartupLocationBootstrapWaitMillis) {
+            runCatching { visitedDeviceLocationProvider.currentLocation() }
+                .getOrElse {
+                    DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+                }
+        } ?: DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+    }
+
+    private fun resolvedStartupLocationState(
+        deviceLocation: DeviceLocationSnapshot,
+        travelContext: TravelContextSnapshot,
+    ): StartupLocationBootstrapState = when {
+        deviceLocation.hasCoordinates -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.USING_DEVICE_LOCATION,
+        )
+        travelContext.containsIpContext() -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION,
+        )
+        else -> StartupLocationBootstrapState(
+            phase = StartupLocationBootstrapPhase.NO_LOCATION_SOURCE_AVAILABLE,
+        )
+    }
 
     private suspend fun enrichConnectivityWithHistory(
         connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
@@ -692,7 +793,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
     private suspend fun refreshEmergencyCare(
         currentSettings: AppSettings,
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
         travelContext: TravelContextSnapshot,
     ): EmergencyCareSnapshot {
         if (currentSettings.emergencyCareEnabled.not()) {
@@ -700,7 +801,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         val request = buildEmergencyCareSearchRequest(
-            currentDevicePlace = currentDevicePlace,
+            deviceLocation = deviceLocation,
             travelContext = travelContext,
         )
         if (request != null) {
@@ -742,7 +843,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private suspend fun refreshTravelContext(
         currentSettings: AppSettings,
         previous: TravelContextSnapshot,
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
     ): TravelContextSnapshot {
         val ipTravelContext = if (currentSettings.publicIpGeolocationEnabled) {
             fetchCurrentTravelContext(previous = previous)
@@ -752,7 +853,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             TravelContextSnapshot()
         }
 
-        return ipTravelContext.withDeviceLocation(currentDevicePlace)
+        return ipTravelContext.withDeviceLocation(deviceLocation)
     }
 
     private suspend fun refreshLocalInfo(
@@ -850,19 +951,20 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     private fun buildFuelSearchRequest(
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
         travelContext: TravelContextSnapshot,
     ): FuelSearchRequest? {
-        currentDevicePlace?.let { place ->
-            val latitude = place.latitude
-            val longitude = place.longitude
-            val countryCode = place.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+        if (deviceLocation.hasCoordinates) {
+            val latitude = deviceLocation.latitude
+            val longitude = deviceLocation.longitude
+            val countryCode = deviceLocation.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+                ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
             if (latitude != null && longitude != null && countryCode != null) {
                 return FuelSearchRequest(
                     latitude = latitude,
                     longitude = longitude,
                     countryCode = countryCode,
-                    countryName = place.country,
+                    countryName = deviceLocation.country ?: travelContext.country,
                 )
             }
         }
@@ -937,12 +1039,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
     private fun buildWeatherLocation(
         currentSettings: AppSettings,
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
         travelContext: TravelContextSnapshot,
     ): Pair<Double, Double>? {
         if (currentSettings.useCurrentLocationForWeather) {
-            val latitude = currentDevicePlace?.latitude
-            val longitude = currentDevicePlace?.longitude
+            val latitude = deviceLocation.latitude
+            val longitude = deviceLocation.longitude
             if (latitude != null && longitude != null) {
                 return latitude to longitude
             }
@@ -977,18 +1079,19 @@ class DefaultNomadDashboardRepository @Inject constructor(
     }
 
     private fun buildEmergencyCareSearchRequest(
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
         travelContext: TravelContextSnapshot,
     ): EmergencyCareSearchRequest? {
-        currentDevicePlace?.let { place ->
-            val latitude = place.latitude
-            val longitude = place.longitude
+        if (deviceLocation.hasCoordinates) {
+            val latitude = deviceLocation.latitude
+            val longitude = deviceLocation.longitude
             if (latitude != null && longitude != null) {
                 return EmergencyCareSearchRequest(
                     latitude = latitude,
                     longitude = longitude,
-                    countryCode = place.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
-                    countryName = place.country,
+                    countryCode = deviceLocation.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
+                        ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+                    countryName = deviceLocation.country ?: travelContext.country,
                     locationSource = EmergencyCareLocationSource.DEVICE,
                 )
             }
@@ -1161,15 +1264,18 @@ class DefaultNomadDashboardRepository @Inject constructor(
             ).joinToString(", ")
                 .ifBlank { "Surf Spot" }
 
-    private fun ResolvedVisitedPlace.toSurfSpotConfiguration(): SurfSpotConfiguration =
-        SurfSpotConfiguration(
+    private fun DeviceLocationSnapshot.toSurfSpotConfigurationOrNull(): SurfSpotConfiguration? {
+        val latitude = latitude ?: return null
+        val longitude = longitude ?: return null
+        return SurfSpotConfiguration(
             name = listOfNotNull(
                 city?.trim()?.takeIf(String::isNotBlank),
-                country.trim().takeIf(String::isNotBlank),
+                country?.trim()?.takeIf(String::isNotBlank),
             ).joinToString(", ").ifBlank { "Current location" },
             latitude = latitude,
             longitude = longitude,
         )
+    }
 
     private fun FreeIpApiResponse.toTravelContextSnapshot(
         previous: TravelContextSnapshot,
@@ -1186,15 +1292,15 @@ class DefaultNomadDashboardRepository @Inject constructor(
         )
 
     private fun TravelContextSnapshot.withDeviceLocation(
-        currentDevicePlace: ResolvedVisitedPlace?,
+        deviceLocation: DeviceLocationSnapshot,
     ): TravelContextSnapshot =
         copy(
-            deviceCity = currentDevicePlace?.city?.trim()?.takeIf(String::isNotBlank),
-            deviceRegion = currentDevicePlace?.region?.trim()?.takeIf(String::isNotBlank),
-            deviceCountry = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank),
-            deviceCountryCode = currentDevicePlace?.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
-            deviceLatitude = currentDevicePlace?.latitude,
-            deviceLongitude = currentDevicePlace?.longitude,
+            deviceCity = deviceLocation.city?.trim()?.takeIf(String::isNotBlank),
+            deviceRegion = deviceLocation.region?.trim()?.takeIf(String::isNotBlank),
+            deviceCountry = deviceLocation.country?.trim()?.takeIf(String::isNotBlank),
+            deviceCountryCode = deviceLocation.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase(),
+            deviceLatitude = deviceLocation.latitude,
+            deviceLongitude = deviceLocation.longitude,
         )
 
     private fun TravelContextSnapshot.containsIpContext(): Boolean =
@@ -1223,6 +1329,7 @@ private const val ConnectivityDownloadMetricKind = "connectivity_download_mbps"
 private const val ConnectivityUploadMetricKind = "connectivity_upload_mbps"
 private const val ConnectivityLatencyMetricKind = "connectivity_latency_ms"
 private const val PowerBatteryPercentMetricKind = "power_battery_percent"
+private const val StartupLocationBootstrapWaitMillis = 4_000L
 
 private fun travelAlertLogDebug(tag: String, message: String) {
     runCatching { Log.d(tag, message) }

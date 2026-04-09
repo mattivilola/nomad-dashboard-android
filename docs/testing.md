@@ -238,6 +238,15 @@ Latest verification attempt:
   connected test itself was not run because `adb devices` reported no attached
   emulator or physical device
 - on 2026-04-09, `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugAndroidTestKotlin :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+- on 2026-04-09, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest' -Pksp.incremental=false`
+  passed after the startup-location bootstrap hardening slice
+- on 2026-04-09, `source scripts/android-env.sh && ANDROID_SERIAL=emulator-5554 run_gradle :feature:dashboard:connectedDebugAndroidTest -Pksp.incremental=false`
+  passed after the dashboard startup-location waiting-state updates
+- on 2026-04-09, `source scripts/android-env.sh && run_gradle :app:assembleDebug -Pksp.incremental=false`
+  passed after the startup-location bootstrap hardening slice
+- on 2026-04-09, physical-device cold restart smoke verification passed via
+  `adb -s 9fb1404 shell am force-stop com.iloapps.nomaddashboard.dev` and
+  `adb -s 9fb1404 shell am start -W -n com.iloapps.nomaddashboard.dev/com.iloapps.nomaddashboard.MainActivity`
   passed after updating the Local Info dashboard card Android tests and debug
   screenshot fixtures; the connected test itself was not run because the
   command only compiled the Android-test targets
