@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Pause
@@ -256,9 +257,14 @@ fun DashboardScreen(
                     .padding(top = 16.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                val headerLocationRows = dashboardHeaderLocationRows(state.snapshot.travelContext)
                 NomadTopBar(
                     title = "Nomad Dashboard",
-                    subtitle = dashboardLocationLabel(state),
+                    subtitle = if (headerLocationRows.isEmpty()) {
+                        dashboardLocationLabel(state)
+                    } else {
+                        dashboardHeaderLocationSubtitle(headerLocationRows)
+                    },
                     supportingText = dashboardSupportLine(state),
                     titleLeading = {
                         Image(
@@ -289,6 +295,9 @@ fun DashboardScreen(
                         }
                     },
                 )
+                if (headerLocationRows.isNotEmpty()) {
+                    DashboardHeaderLocationComparisonStrip(rows = headerLocationRows)
+                }
             }
         }
 
@@ -398,6 +407,103 @@ fun DashboardScreen(
                     },
                 )
             }
+        }
+    }
+}
+
+private data class DashboardHeaderLocationRow(
+    val kind: DashboardHeaderLocationKind,
+    val value: String,
+)
+
+private enum class DashboardHeaderLocationKind(
+    val label: String,
+    val icon: ImageVector,
+    val tone: NomadBadgeTone,
+) {
+    DEVICE(
+        label = "Device",
+        icon = Icons.Rounded.MyLocation,
+        tone = NomadBadgeTone.Accent,
+    ),
+    IP(
+        label = "Public IP",
+        icon = Icons.Rounded.Language,
+        tone = NomadBadgeTone.Info,
+    ),
+}
+
+@Composable
+private fun DashboardHeaderLocationComparisonStrip(
+    rows: List<DashboardHeaderLocationRow>,
+) {
+    if (rows.size == 1) {
+        Column(
+            modifier = Modifier.testTag("dashboard_header_location_comparison"),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            rows.forEach { row ->
+                DashboardHeaderLocationTile(
+                    row = row,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dashboard_header_location_comparison"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            rows.forEach { row ->
+                DashboardHeaderLocationTile(
+                    row = row,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardHeaderLocationTile(
+    row: DashboardHeaderLocationRow,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .testTag("dashboard_header_location_${row.kind.name.lowercase()}")
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = row.kind.icon,
+                    contentDescription = row.kind.label,
+                    tint = summaryToneColor(row.kind.tone),
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = row.kind.label.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = row.value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -2868,6 +2974,27 @@ private fun dashboardLocationLabel(state: DashboardUiState): String =
             "Location unavailable"
         }
     }
+
+private fun dashboardHeaderLocationRows(
+    travelContext: com.iloapps.nomaddashboard.core.model.TravelContextSnapshot,
+): List<DashboardHeaderLocationRow> = buildList {
+    travelContext.takeIf { it.hasDeviceLocation() }
+        ?.deviceLocationLabel()
+        ?.takeUnless { it == "Location unavailable" }
+        ?.let { add(DashboardHeaderLocationRow(kind = DashboardHeaderLocationKind.DEVICE, value = it)) }
+    travelContext.takeIf { it.hasIpLocation() }
+        ?.ipLocationLabel()
+        ?.takeUnless { it == "Location unavailable" }
+        ?.let { add(DashboardHeaderLocationRow(kind = DashboardHeaderLocationKind.IP, value = it)) }
+}
+
+private fun dashboardHeaderLocationSubtitle(
+    rows: List<DashboardHeaderLocationRow>,
+): String = when (rows.singleOrNull()?.kind) {
+    DashboardHeaderLocationKind.DEVICE -> "Device-based location"
+    DashboardHeaderLocationKind.IP -> "IP-based location"
+    null -> "Device and IP location"
+}
 
 private fun travelContextSubtitle(
     state: DashboardUiState,

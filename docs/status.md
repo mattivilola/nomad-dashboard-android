@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-04-09
+Last updated: 2026-04-15
 
 ## Overall
 
@@ -118,6 +118,14 @@ Current repository state:
   is still missing, the dashboard now shows a prominent top-of-screen grant
   card ahead of the main cards so release installs do not hide the permission
   path below the fold
+- dashboard header parity now mirrors the recent macOS travel-context behavior:
+  the top header shows device and public-IP locations side by side when they
+  resolve, keeps source icon/label differences visible at a glance, and falls
+  back to the existing location line when neither source is available
+- travel-alert compact-copy parity now mirrors macOS: the advisory summary
+  stays concise and stable in the compact/top dashboard presentation, the
+  fuller Smartraveller explanation remains in the detail body, and numeric
+  apostrophe entities such as `&#039;` decode correctly
 
 ## Completed
 
@@ -189,6 +197,8 @@ Current repository state:
 
 - dashboard UX parity pass is underway; the first implementation landed for the
   compact phone dashboard, but screenshot verification is still pending
+- dashboard header / compact travel-alert screenshot verification is still
+  pending because the local emulator exits before it appears in `adb devices`
 - travel-context physical-device smoke verification is pending for public-IP
   refresh, copy-IP, location permission CTA, and map handoff behavior
 - visited UX parity pass is underway; the first implementation landed for a
@@ -230,6 +240,9 @@ Verified:
 - Smartraveller detail-summary coverage plus dashboard Android-test compile
   passed on 2026-04-09 via
   `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+- dashboard header location-comparison coverage, compact advisory-summary
+  coverage, and dashboard Android-test compile passed on 2026-04-15 via
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
 - time-tracking repository/storage/runtime coverage added and passing
 - `make build` passed again on 2026-04-07 after the encrypted credential
   storage and settings hardening slice
@@ -337,6 +350,10 @@ Not yet fully re-verified after the whole-app UX parity slice in this session:
   with a missing `app/build/tmp/kotlin-classes/debug/com` output path
 - `make screenshots` still cannot complete reliably when the local
   `Pixel_5_API_31` emulator exits before `adb` exposes a serial
+- `make test-emulator` failed again on 2026-04-15 before connected tests could
+  start because the local `Pixel_5_API_31` emulator process exited before it
+  appeared in `adb devices`; the recent log again showed the existing
+  `child_port_handshake` / `bootcompleted.ini` cleanup issue
 - Local Info verification did not include a connected Android test run
   because `adb devices` reported no attached emulator or physical device during
   the narrowed dashboard-card pass

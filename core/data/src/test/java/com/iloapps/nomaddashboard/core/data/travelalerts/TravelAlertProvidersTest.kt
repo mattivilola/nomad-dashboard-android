@@ -140,7 +140,7 @@ class TravelAlertProvidersTest {
         )
 
         assertThat(signal.severity).isEqualTo(TravelAlertSeverity.CAUTION)
-        assertThat(signal.summary).isEqualTo("Exercise a high degree of caution in Turkiye due to the risk of civil unrest.")
+        assertThat(signal.summary).isEqualTo("Türkiye: exercise a high degree of caution.")
         assertThat(signal.detailSummary).isEqualTo("Exercise a high degree of caution in Turkiye due to the risk of civil unrest.")
     }
 
@@ -236,6 +236,45 @@ class TravelAlertProvidersTest {
         )
 
         assertThat(detail).isEqualTo("Exercise a high degree of caution in France due to the threat of terrorism.")
+    }
+
+    @Test
+    fun `smartraveller detail parser decodes numeric apostrophe entities`() {
+        val provider = SmartravellerAdvisoryProvider(
+            service = object : SmartravellerService {
+                override suspend fun destinations(): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+
+                override suspend fun destinationsExport(): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+
+                override suspend fun destinationPage(url: String): Response<ResponseBody> = Response.error(
+                    404,
+                    "{}".toResponseBody(JsonMediaType),
+                )
+            },
+            countryNameResolver = CountryNameResolver(),
+            json = json,
+            browserFetcher = object : SmartravellerBrowserFetcher {
+                override suspend fun destinationsHtml(): String = error("browser fallback should not be used")
+            },
+        )
+
+        val detail = provider.parseDestinationDetailSummary(
+            """
+            <html>
+              <body>
+                <p>Exercise a high degree of caution because you&#039;re travelling during a disruption.</p>
+              </body>
+            </html>
+            """.trimIndent(),
+        )
+
+        assertThat(detail).isEqualTo("Exercise a high degree of caution because you're travelling during a disruption.")
     }
 
     @Test

@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.jsoup.parser.Parser
 
 @Singleton
 class SmartravellerAdvisoryProvider @Inject constructor(
@@ -59,12 +60,10 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             loadDestinationDetailSummary(url)
         }
         val summary = when {
-            worst.severity == TravelAlertSeverity.CLEAR ->
-                "No elevated travel advisories across ${matches.size} monitored countries."
-            worst.countryCode.equals(primaryCountryCode, ignoreCase = true) && detailSummary.isNullOrBlank().not() ->
-                detailSummary.orEmpty()
             worst.countryCode.equals(primaryCountryCode, ignoreCase = true) ->
                 "${worst.countryName}: ${worst.destination.adviceLabel}."
+            worst.severity == TravelAlertSeverity.CLEAR ->
+                "No elevated travel advisories across your nearby countries."
             else ->
                 "${worst.countryName} nearby: ${worst.destination.adviceLabel}."
         }
@@ -206,14 +205,14 @@ class SmartravellerAdvisoryProvider @Inject constructor(
     internal fun parseDestinationDetailSummary(rawBody: String): String? {
         val document = Jsoup.parse(rawBody, SOURCE_URL)
         document.select("p, li").asSequence()
-            .map { element -> element.text().normalizedWhitespace() }
+            .map { element -> element.text().decodedAndNormalizedHtmlText() }
             .mapNotNull { text -> AdviceSummaryRegex.find(text)?.value?.normalizedWhitespace() }
             .firstOrNull()
             ?.let { return it }
 
         return document.body()
             ?.text()
-            ?.normalizedWhitespace()
+            ?.decodedAndNormalizedHtmlText()
             ?.let { text -> AdviceSummaryRegex.find(text)?.value?.normalizedWhitespace() }
     }
 
@@ -375,6 +374,9 @@ private fun JsonObject.firstInt(vararg keys: String): Int? =
 
 private fun String.normalizedWhitespace(): String =
     trim().replace(Regex("""\s+"""), " ")
+
+private fun String.decodedAndNormalizedHtmlText(): String =
+    Parser.unescapeEntities(this, false).normalizedWhitespace()
 
 private fun JsonObject.firstInstant(vararg keys: String): Instant? =
     keys.firstNotNullOfOrNull { key ->

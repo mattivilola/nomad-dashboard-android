@@ -85,4 +85,41 @@ class TravelAlertsSectionCardTest {
         composeRule.onNodeWithText("ReliefWeb app name approval required.").assertIsDisplayed()
         composeRule.onNodeWithText("Limited").assertIsDisplayed()
     }
+
+    @Test
+    fun rendersCompactSummaryAndExpandedDetailSeparatelyForPrimaryAdvisory() {
+        composeRule.setContent {
+            TravelAlertsSectionCard(
+                snapshot = TravelAlertsSnapshot(
+                    enabledKinds = listOf(TravelAlertKind.ADVISORY),
+                    primaryCountryCode = "FR",
+                    primaryCountryName = "France",
+                    coverageCountryCodes = listOf("FR", "ES"),
+                    states = listOf(
+                        TravelAlertSignalState(
+                            kind = TravelAlertKind.ADVISORY,
+                            status = TravelAlertSignalStatus.READY,
+                            signal = TravelAlertSignalSnapshot(
+                                kind = TravelAlertKind.ADVISORY,
+                                severity = TravelAlertSeverity.CAUTION,
+                                title = "Travel advisory",
+                                summary = "France: exercise a high degree of caution.",
+                                detailSummary = "Exercise a high degree of caution because you're travelling during a disruption.",
+                                sourceName = "Smartraveller",
+                                sourceUrl = "https://www.smartraveller.gov.au/destinations/europe/france",
+                                updatedAt = Instant.parse("2026-04-07T10:00:00Z"),
+                            ),
+                            sourceName = "Smartraveller",
+                            lastAttemptedAt = Instant.parse("2026-04-07T10:00:00Z"),
+                            lastSuccessAt = Instant.parse("2026-04-07T10:00:00Z"),
+                        ),
+                    ),
+                    fetchedAt = Instant.parse("2026-04-07T10:00:00Z"),
+                ),
+            )
+        }
+
+        composeRule.onNodeWithText("France: exercise a high degree of caution.").assertIsDisplayed()
+        composeRule.onNodeWithText("Exercise a high degree of caution because you're travelling during a disruption.").assertIsDisplayed()
+    }
 }

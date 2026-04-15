@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-09
+Last updated: 2026-04-15
 
 ## Local Setup
 
@@ -212,9 +212,20 @@ Current verified result:
   slice
 - `:feature:dashboard:connectedDebugAndroidTest` passed on 2026-04-08 inside
   the `make test` lane after the dashboard header and compact overview polish
+- `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed on 2026-04-15 after adding dashboard-header device/IP comparison
+  coverage, advisory summary/detail separation coverage, and numeric apostrophe
+  entity decoding coverage
 - debug APK was installed and launched on a physical Android phone over wireless debugging
 
 Latest verification attempt:
+- on 2026-04-15, `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertProvidersTest' :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin -Pksp.incremental=false`
+  passed after aligning the dashboard header comparison with the current macOS
+  behavior and tightening advisory compact/detail rendering contracts
+- on 2026-04-15, `make test-emulator`
+  failed before connected tests could start because the local
+  `Pixel_5_API_31` emulator exited before `adb devices` exposed a serial; the
+  log again showed the existing Crashpad / `bootcompleted.ini` cleanup issue
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:model:compileDebugKotlin :core:datastore:compileDebugKotlin -Pksp.incremental=false`
   passed after extending app settings for the new time-tracking auto window
 - on 2026-04-08, `source scripts/android-env.sh && run_gradle :core:datastore:compileDebugKotlin :core:datastore:testDebugUnitTest -Pksp.incremental=false`

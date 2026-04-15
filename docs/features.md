@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-04-09
+Last updated: 2026-04-15
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -16,7 +16,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header with the Nomad symbol mark, visible refresh progress, a weather-first three-up overview strip, and metric-led detail cards without duplicate top navigation |
+| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header with the Nomad symbol mark, visible refresh progress, a weather-first three-up overview strip, metric-led detail cards without duplicate top navigation, and a top-header device-versus-public-IP location comparison when either source resolves |
 | First-run location onboarding | Implemented | When Android location permission is still missing, the dashboard now shows a top-of-screen grant card before the main cards so device-aware features are discoverable on fresh installs |
 | Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
 | About screen | Implemented | About now acts as a real trust and brand surface with stronger product framing, local-first privacy explanation, live app version metadata, and direct links to the website and GitHub project |
@@ -74,8 +74,8 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Travel alerts card | Implemented | Dashboard card now shows an aggregate status in the header row plus dedicated Travel Advisory and Regional Security panels with checking, ready, stale, and unavailable states, compact summaries, explicit border-country coverage context, and a direct `More details` action when a source page is available |
-| Smartraveller advisory | Implemented | Uses the live Smartraveller destinations page first, falls back to the legacy `destinations-export` feed, and then retries through a hidden WebView fetch on Android; tolerant country-name matching and Level 1/2/3/4 severity mapping still cover the current country plus all bordering countries, and the dashboard now surfaces the concise destination-page reason sentence when Smartraveller publishes one |
+| Travel alerts card | Implemented | Dashboard card now shows an aggregate status in the header row plus dedicated Travel Advisory and Regional Security panels with checking, ready, stale, and unavailable states, compact summaries, explicit border-country coverage context, and a direct `More details` action when a source page is available; advisory summary and detail text are now separated so the compact row stays short while the fuller explanation remains available below |
+| Smartraveller advisory | Implemented | Uses the live Smartraveller destinations page first, falls back to the legacy `destinations-export` feed, and then retries through a hidden WebView fetch on Android; tolerant country-name matching and Level 1/2/3/4 severity mapping still cover the current country plus all bordering countries, the compact dashboard summary now mirrors macOS by staying short and stable, and numeric apostrophe entities such as `&#039;` decode correctly in advisory detail text |
 | ReliefWeb regional security | Implemented | Uses ReliefWeb reports with primary-country plus bordering-country coverage; requires an approved ReliefWeb app name saved in Settings |
 | Weather alerts | Deferred | Provider decision still pending |
 

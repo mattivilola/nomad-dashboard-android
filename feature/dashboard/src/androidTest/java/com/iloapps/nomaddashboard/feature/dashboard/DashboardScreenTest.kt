@@ -1,7 +1,9 @@
 package com.iloapps.nomaddashboard.feature.dashboard
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
@@ -82,6 +84,75 @@ class DashboardScreenTest {
         }
 
         composeRule.onNodeWithTag("dashboard_refresh_progress").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsDeviceAndIpLocationsInDashboardHeader() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        snapshot = DashboardSnapshot(
+                            travelContext = TravelContextSnapshot(
+                                city = "Tarifa",
+                                country = "Spain",
+                                deviceCity = "Cadiz",
+                                deviceCountry = "Spain",
+                            ),
+                        ),
+                    ),
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dashboard_header_location_comparison").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_header_location_device").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_header_location_ip").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsOnlyDeviceLocationInDashboardHeaderWhenIpLocationMissing() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        snapshot = DashboardSnapshot(
+                            travelContext = TravelContextSnapshot(
+                                deviceCity = "Cadiz",
+                                deviceCountry = "Spain",
+                            ),
+                        ),
+                    ),
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dashboard_header_location_device").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("dashboard_header_location_ip").assertCountEquals(0)
+    }
+
+    @Test
+    fun showsOnlyIpLocationInDashboardHeaderWhenDeviceLocationMissing() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        snapshot = DashboardSnapshot(
+                            travelContext = TravelContextSnapshot(
+                                city = "Tarifa",
+                                country = "Spain",
+                            ),
+                        ),
+                    ),
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dashboard_header_location_ip").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("dashboard_header_location_device").assertCountEquals(0)
     }
 
     @Test
