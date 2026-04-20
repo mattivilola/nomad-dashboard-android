@@ -101,6 +101,8 @@ make release-dry-run
 
 Current dry-run output also prints `CLOSED_TRACK`, which is the exact value
 `make publish-closed` will use.
+`make publish-closed` resolves that value after loading local env files such as
+`Config/Signing.env`.
 
 Build signed bundle:
 
