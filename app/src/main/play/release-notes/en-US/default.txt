@@ -1,1 +1,1 @@
-This update adds replace Local Price Level with Local Info, adding public and school holidays, ensure all default dashboard cards are present in user settings with correct default widths, harden startup location bootstrap and single-flight dashboard refresh, and traveler warning chips for active public and school holidays.
+This update adds dashboard header location comparison and advisory text processing.
