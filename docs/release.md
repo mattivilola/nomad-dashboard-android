@@ -1,6 +1,6 @@
 # Release Workflow
 
-Last updated: 2026-04-08
+Last updated: 2026-04-20
 
 ## Release Strategy
 
@@ -45,6 +45,8 @@ Optional Play publishing override:
   - optional closed-testing track name for `make publish-closed`
   - defaults to `closed`; set it if your Play Console closed track uses a
     different custom name
+  - if Play returns `Track not found: closed`, your closed track likely has a
+    custom name and this env var must match that exact Play Console track name
 
 From `Config/AppConfig.env` as needed:
 - no provider credentials; keep this file for non-secret helper config only
@@ -96,6 +98,9 @@ Dry-run release metadata:
 ```sh
 make release-dry-run
 ```
+
+Current dry-run output also prints `CLOSED_TRACK`, which is the exact value
+`make publish-closed` will use.
 
 Build signed bundle:
 
