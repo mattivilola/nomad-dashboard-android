@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-04-23
+
+### Added
+- Implemented dashboard section caching and warm start.
+
+### Build & Release
+- Allow custom Google Play closed track names for publishing.
+- Load local environment files for closed track publishing.
+- Added regression checks for release helper closed track publishing.
+
 ## [0.7.0] - 2026-04-20
 
 ### Improved

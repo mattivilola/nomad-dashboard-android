@@ -1,1 +1,1 @@
-This update adds dashboard header location comparison and advisory text processing.
+This update adds dashboard section caching and warm start.
