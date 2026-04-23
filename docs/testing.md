@@ -110,6 +110,20 @@ Current behavior:
 - selects the first attached non-emulator Android target
 - intended for occasional smoke verification, not the default unattended loop
 
+Run release-helper shell regression checks:
+
+```sh
+make test-release-helpers
+```
+
+Current behavior:
+- verifies `release-preflight.sh --dry-run` and `publish-closed.sh` resolve the
+  same custom `NOMAD_PLAY_CLOSED_TRACK` value from a local env file
+- stubs out the final publish handoff so the check never calls Gradle or Google
+  Play
+- guards the closed-track regression fixed on 2026-04-20 where
+  `publish-closed.sh` previously ignored the env-backed custom track name
+
 Capture deterministic emulator screenshots for UX review:
 
 ```sh

@@ -1,7 +1,7 @@
 APP_NAME := NomadDashboard
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device screenshot screenshot-device screenshots lint probe-sources bundle-release apk-release release-dry-run publish-internal publish-closed publish-production release release-patch release-minor release-major clean
+.PHONY: help bootstrap doctor connect-wireless start-emulator build run rerun test test-emulator test-device test-release-helpers screenshot screenshot-device screenshots lint probe-sources bundle-release apk-release release-dry-run publish-internal publish-closed publish-production release release-patch release-minor release-major clean
 
 help: ## Print available make targets
 	@printf "\nAvailable commands:\n\n"
@@ -37,6 +37,9 @@ test-emulator: ## Run unit tests and connected tests against the emulator only
 
 test-device: ## Run unit tests and connected tests against a physical device
 	./scripts/test-device.sh
+
+test-release-helpers: ## Run shell regression checks for release helper scripts
+	./scripts/test-release-helpers.sh
 
 screenshot: ## Capture a timestamped screenshot from the selected adb target
 	./scripts/capture-device-screenshot.sh
