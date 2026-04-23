@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-04-15
+Last updated: 2026-04-23
 
 ## Overall
 
@@ -97,6 +97,18 @@ Current repository state:
   single-flight, device coordinates survive reverse-geocoder misses, and
   location-based cards show a shared `checking device location` state before
   falling back to IP context on cold start
+- dashboard startup warm-start and section-cache pass landed: the repository
+  now restores last-successful location-dependent dashboard sections from
+  Room-backed section cache storage, keeps cached card content visible during
+  refresh, and adds per-card refresh indicators for weather, travel alerts,
+  local info, fuel prices, and emergency care
+- startup location orchestration now runs device and IP resolution in the same
+  refresh cycle, prefers device context when it resolves first, falls back to
+  IP context when needed, and can promote location-dependent cards from IP
+  fallback to device context later in the same refresh
+- dashboard refresh retry hardening landed: IP lookup, weather, travel alerts,
+  local info, fuel, and emergency care now use shared transient retry logic,
+  and the repository no longer aborts the full refresh when one provider fails
 - weather and surf refinement landed: the dashboard now uses real Open-Meteo
   hourly checkpoints, icon-led forecast rows with rain and wind detail, and a
   live marine surf subsection for the saved surf spot instead of placeholder
@@ -336,6 +348,13 @@ Verified:
   scenarios
 
 Not yet fully re-verified after the whole-app UX parity slice in this session:
+- on 2026-04-23,
+  `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed after the dashboard startup warm-start/cache refactor
+- on 2026-04-23,
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh ignores device provider failure and skips writes when visited disabled' -Pksp.incremental=false`
+  still timed out under `UncompletedCoroutinesError`; the repository unit lane
+  needs one more follow-up pass before the startup refactor is fully test-clean
 - `./scripts/test.sh` reran on 2026-04-08; the new
   `:core:data:testDebugUnitTest` power-history coverage passed, but the broad
   emulator lane still failed in existing connected Android tests under

@@ -659,10 +659,18 @@ private fun WeatherSectionCard(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
-            NomadStatusBadge(
-                text = statusBadge.first,
-                tone = statusBadge.second,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (snapshot.isRefreshing) {
+                    SectionRefreshIndicator(tag = "dashboard_weather_refresh_indicator")
+                }
+                NomadStatusBadge(
+                    text = statusBadge.first,
+                    tone = statusBadge.second,
+                )
+            }
         }
 
         Row(
@@ -2125,6 +2133,11 @@ private fun FuelPricesSectionCard(
                 fuelPricesSubtitle(enabled = true, snapshot = snapshot)
             },
             badges = listOf(snapshot.sourceName to badgeToneForFuel(snapshot, startupLocation)),
+            actions = {
+                if (snapshot.isRefreshing) {
+                    SectionRefreshIndicator(tag = "dashboard_fuel_refresh_indicator")
+                }
+            },
         )
         when {
             waitingForStartupLocation -> Text(
@@ -2175,6 +2188,9 @@ private fun LocalInfoSectionCard(
             title = "Local Info",
             subtitle = localInfoSubtitle(enabled = enabled, snapshot = snapshot, startupLocation = startupLocation),
             actions = {
+                if (snapshot.isRefreshing) {
+                    SectionRefreshIndicator(tag = "dashboard_local_info_refresh_indicator")
+                }
                 badge?.let {
                     NomadStatusBadge(text = it.first, tone = it.second)
                 }
@@ -2445,6 +2461,9 @@ internal fun EmergencyCareSectionCard(
             subtitle = subtitle,
             badges = listOf(snapshot.sourceName to badgeToneForEmergency(snapshot, startupLocation)),
             actions = {
+                if (snapshot.isRefreshing) {
+                    SectionRefreshIndicator(tag = "dashboard_emergency_refresh_indicator")
+                }
                 val hasFacility = snapshot.facility != null
                 NomadActionChip(
                     label = "Open in Maps",
@@ -2515,6 +2534,9 @@ internal fun TravelAlertsSectionCard(
             title = "Travel Alerts",
             subtitle = travelAlertsSubtitleLine(snapshot, startupLocation),
             actions = {
+                if (snapshot.isRefreshing) {
+                    SectionRefreshIndicator(tag = "dashboard_travel_alerts_refresh_indicator")
+                }
                 NomadStatusBadge(
                     text = travelAlertsSubtitle(snapshot, startupLocation),
                     tone = badgeToneForAlerts(snapshot, startupLocation),
@@ -3050,6 +3072,16 @@ private fun summaryToneColor(tone: NomadBadgeTone) = when (tone) {
     NomadBadgeTone.Accent -> MaterialTheme.colorScheme.tertiary
     NomadBadgeTone.Info -> MaterialTheme.colorScheme.surfaceTint
     NomadBadgeTone.Neutral -> MaterialTheme.colorScheme.outline
+}
+
+@Composable
+private fun SectionRefreshIndicator(tag: String) {
+    CircularProgressIndicator(
+        modifier = Modifier
+            .size(16.dp)
+            .testTag(tag),
+        strokeWidth = 2.dp,
+    )
 }
 
 private fun travelAlertsSubtitle(

@@ -52,4 +52,5 @@ data class LocalInfoSnapshot(
     val fetchedAt: Instant? = null,
     val detail: String? = "Enable Local Info in Settings.",
     val note: String? = null,
+    val isRefreshing: Boolean = false,
 )

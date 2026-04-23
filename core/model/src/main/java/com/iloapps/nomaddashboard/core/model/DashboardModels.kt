@@ -141,6 +141,7 @@ data class WeatherSnapshot(
     val dailyForecast: List<WeatherDayForecast> = emptyList(),
     val sourceName: String = "Open-Meteo",
     val fetchedAt: Instant? = null,
+    val isRefreshing: Boolean = false,
 )
 
 enum class EmergencyCareStatus {
@@ -178,6 +179,7 @@ data class EmergencyCareSnapshot(
     val fetchedAt: Instant? = null,
     val detail: String = "Enable emergency care in Settings",
     val note: String? = null,
+    val isRefreshing: Boolean = false,
 )
 
 data class TimeTrackingDashboardState(

@@ -33,6 +33,7 @@ import com.iloapps.nomaddashboard.core.data.visited.RoomDatabaseTransactionRunne
 import com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.database.NomadDatabase
+import com.iloapps.nomaddashboard.core.database.dao.DashboardSectionCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalInfoCacheDao
@@ -323,10 +324,15 @@ object NomadInfrastructureModule {
             .addMigrations(NomadDatabase.MIGRATION_3_4)
             .addMigrations(NomadDatabase.MIGRATION_4_5)
             .addMigrations(NomadDatabase.MIGRATION_5_6)
+            .addMigrations(NomadDatabase.MIGRATION_6_7)
             .build()
 
     @Provides
     fun provideMetricPointDao(database: NomadDatabase): MetricPointDao = database.metricPointDao()
+
+    @Provides
+    fun provideDashboardSectionCacheDao(database: NomadDatabase): DashboardSectionCacheDao =
+        database.dashboardSectionCacheDao()
 
     @Provides
     fun provideLocalPriceCacheDao(database: NomadDatabase): LocalPriceCacheDao = database.localPriceCacheDao()

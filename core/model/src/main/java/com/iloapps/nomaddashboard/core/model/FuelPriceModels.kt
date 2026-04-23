@@ -40,4 +40,5 @@ data class FuelPriceSnapshot(
     val fetchedAt: Instant? = null,
     val detail: String = "Enable fuel prices in Settings",
     val note: String? = null,
+    val isRefreshing: Boolean = false,
 )

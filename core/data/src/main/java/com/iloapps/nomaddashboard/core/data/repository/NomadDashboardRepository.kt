@@ -16,6 +16,7 @@ interface NomadDashboardRepository {
     val visitedPlaces: Flow<List<VisitedPlace>>
     val visitedCountryDays: Flow<List<VisitedCountryDay>>
 
+    suspend fun warmStart()
     suspend fun refresh()
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings)
     suspend fun updateProviderCredentials(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings)

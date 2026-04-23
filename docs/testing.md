@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-15
+Last updated: 2026-04-23
 
 ## Local Setup
 
@@ -175,6 +175,14 @@ make lint
 ```
 
 Current verified result:
+- on 2026-04-23,
+  `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
+  passed after the dashboard startup warm-start/cache refactor
+- on 2026-04-23,
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh ignores device provider failure and skips writes when visited disabled' -Pksp.incremental=false`
+  still timed out with `UncompletedCoroutinesError`; the startup-refactor
+  repository tests need another follow-up pass before the full targeted unit
+  lane can be marked green again
 - `make build` passed on 2026-04-07 after setting `ksp.incremental=false` in
   repo-level `gradle.properties`
 - `make lint` passed on 2026-04-07 after setting `ksp.incremental=false` in

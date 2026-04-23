@@ -32,7 +32,9 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryPr
 import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerBrowserFetcher
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
+import com.iloapps.nomaddashboard.core.database.dao.DashboardSectionCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
@@ -91,6 +93,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -112,8 +115,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val observations = visitedStore.observations
         val snapshot = repository.snapshot.first { it.lastRefresh != null }
@@ -152,8 +154,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         assertThat(visitedStore.observations.map(VisitedObservation::source)).containsExactly(
             VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
@@ -181,8 +182,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
         assertThat(travelContext.publicIp).isEqualTo("1.2.3.4")
@@ -221,10 +221,8 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
+        refreshRepository(repository)
 
         val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
         assertThat(travelContext.publicIp).isEqualTo("1.2.3.4")
@@ -263,8 +261,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val travelContext = repository.snapshot.first { it.lastRefresh != null }.travelContext
         assertThat(travelContext.publicIp).isEqualTo("198.51.100.12")
@@ -289,8 +286,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
         assertThat(localInfo.status).isEqualTo(LocalInfoStatus.READY)
@@ -324,8 +320,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
         assertThat(localInfo.status).isEqualTo(LocalInfoStatus.PARTIAL)
@@ -360,8 +355,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
         assertThat(localInfo.status).isEqualTo(LocalInfoStatus.PARTIAL)
@@ -385,8 +379,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
         assertThat(localInfo.status).isEqualTo(LocalInfoStatus.LOCATION_REQUIRED)
@@ -417,8 +410,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val localInfo = repository.snapshot.first { it.lastRefresh != null }.localInfo
         assertThat(localInfo.status).isEqualTo(LocalInfoStatus.UNSUPPORTED)
@@ -488,8 +480,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         assertThat(visitedStore.observations).isEmpty()
         assertThat(repository.snapshot.first { it.lastRefresh != null }.visited.sourceSummary).isEqualTo("Disabled")
@@ -535,8 +526,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = fuelPriceProvider.requests.single()
         val snapshot = repository.snapshot.first { it.lastRefresh != null }
@@ -570,8 +560,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = fuelPriceProvider.requests.single()
         assertThat(request.countryCode).isEqualTo("FI")
@@ -593,8 +582,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         assertThat(fuelPriceProvider.requests).isEmpty()
         assertThat(repository.snapshot.first { it.lastRefresh != null }.fuelPrices.status)
@@ -643,8 +631,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = openMeteoService.requests.first { it.current.contains("temperature_2m") }
         val snapshot = repository.snapshot.first { it.lastRefresh != null }.weather
@@ -686,10 +673,8 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
+        refreshRepository(repository)
 
         val connectivity = repository.snapshot.first { it.lastRefresh != null }.connectivity
 
@@ -730,10 +715,8 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
+        refreshRepository(repository)
 
         val power = repository.snapshot.first { it.lastRefresh != null }.power
 
@@ -758,8 +741,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = openMeteoService.requests.first { it.current.contains("temperature_2m") }
         assertThat(request.latitude).isWithin(0.001).of(60.1699)
@@ -785,8 +767,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val weather = repository.snapshot.first { it.lastRefresh != null }.weather
         assertThat(weather.summary).isEqualTo("Grant location permission for weather.")
@@ -824,8 +805,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = emergencyCareProvider.requests.single()
         assertThat(request.latitude).isWithin(0.001).of(36.72)
@@ -848,8 +828,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val request = emergencyCareProvider.requests.single()
         assertThat(request.latitude).isWithin(0.001).of(60.1699)
@@ -874,8 +853,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val snapshot = repository.snapshot.first { it.lastRefresh != null }.emergencyCare
         assertThat(snapshot.status).isEqualTo(EmergencyCareStatus.PERMISSION_REQUIRED)
@@ -910,8 +888,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         assertThat(fuelPriceProvider.credentials.single().tankerkoenigApiKey).isEqualTo("user-key-123")
     }
@@ -942,8 +919,7 @@ class DefaultNomadDashboardRepositoryTest {
             timeTrackingRepository = FakeTimeTrackingRepository(active = activeRecord),
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val snapshot = repository.snapshot.first { it.lastRefresh != null }
         assertThat(snapshot.timeTracking.headline).isEqualTo("Running")
@@ -985,8 +961,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val snapshot = repository.snapshot.first { it.lastRefresh != null }.travelAlerts
         assertThat(snapshot.primaryCountryCode).isEqualTo("DE")
@@ -1012,8 +987,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val snapshot = repository.snapshot.first { it.lastRefresh != null }.travelAlerts
         assertThat(snapshot.state(com.iloapps.nomaddashboard.core.model.TravelAlertKind.ADVISORY)?.reason)
@@ -1036,8 +1010,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val securityState = repository.snapshot.first { it.lastRefresh != null }
             .travelAlerts
@@ -1076,12 +1049,10 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
         responseState.value = "__INVALID_JSON__"
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val securityState = repository.snapshot.first { it.lastRefresh != null }
             .travelAlerts
@@ -1115,8 +1086,7 @@ class DefaultNomadDashboardRepositoryTest {
             applicationScope = backgroundScope,
         )
 
-        repository.refresh()
-        advanceUntilIdle()
+        refreshRepository(repository)
 
         val weatherRequest = openMeteoService.requests.first { it.current.contains("temperature_2m") }
         val fuelRequest = fuelPriceProvider.requests.single()
@@ -1254,6 +1224,7 @@ class DefaultNomadDashboardRepositoryTest {
             ProviderCredentialSettings(reliefWebAppName = "NomadDashboardTests"),
         ),
         visitedHistoryStore: FakeVisitedHistoryStore,
+        dashboardSectionCacheDao: DashboardSectionCacheDao = FakeDashboardSectionCacheDao(),
         metricPointDao: MetricPointDao = FakeMetricPointDao(),
         visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
         applicationScope: CoroutineScope,
@@ -1278,12 +1249,14 @@ class DefaultNomadDashboardRepositoryTest {
             emergencyCareProvider = emergencyCareProvider,
             timeTrackingRepository = timeTrackingRepository,
             visitedHistoryStore = visitedHistoryStore,
+            dashboardSectionCacheDao = dashboardSectionCacheDao,
             metricPointDao = metricPointDao,
             visitedDeviceLocationProvider = visitedDeviceLocationProvider,
             providerCredentialStore = providerCredentialStore,
             smartravellerAdvisoryProvider = smartravellerAdvisoryProvider,
             reliefWebSecurityProvider = reliefWebSecurityProvider,
             neighborCountryResolver = neighborCountryResolver,
+            json = TestJson,
             applicationScope = applicationScope,
         )
 
@@ -1405,6 +1378,14 @@ class DefaultNomadDashboardRepositoryTest {
         )
 }
 
+private suspend fun TestScope.refreshRepository(
+    repository: DefaultNomadDashboardRepository,
+) {
+    val refresh = async { repository.refresh() }
+    advanceUntilIdle()
+    refresh.await()
+}
+
 private class FakeAppSettingsDataStore(
     initialValue: AppSettingsProto,
 ) : DataStore<AppSettingsProto> {
@@ -1491,6 +1472,16 @@ private class FakeMetricPointDao : MetricPointDao {
         points.filter { it.kind == kind }
             .sortedByDescending(MetricPointEntity::timestampEpochMillis)
             .take(limit)
+}
+
+private class FakeDashboardSectionCacheDao : DashboardSectionCacheDao {
+    private val entries = linkedMapOf<String, DashboardSectionCacheEntity>()
+
+    override suspend fun all(): List<DashboardSectionCacheEntity> = entries.values.toList()
+
+    override suspend fun upsert(entity: DashboardSectionCacheEntity) {
+        entries[entity.sectionId] = entity
+    }
 }
 
 private class FakeFreeIpApiService : FreeIpApiService {

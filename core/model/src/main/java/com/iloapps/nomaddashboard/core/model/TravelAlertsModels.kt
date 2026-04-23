@@ -97,6 +97,7 @@ data class TravelAlertsSnapshot(
         )
     },
     val fetchedAt: Instant? = null,
+    val isRefreshing: Boolean = false,
 ) {
     fun state(kind: TravelAlertKind): TravelAlertSignalState? = states.firstOrNull { it.kind == kind }
 

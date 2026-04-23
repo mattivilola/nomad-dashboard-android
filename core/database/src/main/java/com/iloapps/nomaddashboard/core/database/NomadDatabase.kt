@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.migration.Migration
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
+import com.iloapps.nomaddashboard.core.database.dao.DashboardSectionCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalPriceCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.LocalInfoCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
@@ -14,6 +15,7 @@ import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
+import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.LocalPriceCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.LocalInfoCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
@@ -25,6 +27,7 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
 @Database(
     entities = [
         MetricPointEntity::class,
+        DashboardSectionCacheEntity::class,
         LocalPriceCacheEntity::class,
         LocalInfoCacheEntity::class,
         VisitedPlaceEntity::class,
@@ -33,12 +36,13 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
         TimeTrackingEntryEntity::class,
         TimeTrackingInterruptionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(NomadDatabaseConverters::class)
 abstract class NomadDatabase : RoomDatabase() {
     abstract fun metricPointDao(): MetricPointDao
+    abstract fun dashboardSectionCacheDao(): DashboardSectionCacheDao
     abstract fun localPriceCacheDao(): LocalPriceCacheDao
     abstract fun localInfoCacheDao(): LocalInfoCacheDao
     abstract fun visitedPlaceDao(): VisitedPlaceDao
@@ -208,6 +212,20 @@ abstract class NomadDatabase : RoomDatabase() {
                     """
                     CREATE TABLE IF NOT EXISTS local_info_cache (
                         cacheKey TEXT NOT NULL PRIMARY KEY,
+                        payloadJson TEXT NOT NULL,
+                        fetchedAtEpochMillis INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS dashboard_section_cache (
+                        sectionId TEXT NOT NULL PRIMARY KEY,
                         payloadJson TEXT NOT NULL,
                         fetchedAtEpochMillis INTEGER NOT NULL
                     )

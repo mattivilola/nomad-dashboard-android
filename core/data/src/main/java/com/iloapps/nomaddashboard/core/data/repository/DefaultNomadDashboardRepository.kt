@@ -25,6 +25,7 @@ import com.iloapps.nomaddashboard.core.data.travelalerts.SmartravellerAdvisoryPr
 import com.iloapps.nomaddashboard.core.data.travelalerts.TravelAlertDiagnosticError
 import com.iloapps.nomaddashboard.core.data.visited.VisitedHistoryStore
 import com.iloapps.nomaddashboard.core.data.visited.VisitedObservation
+import com.iloapps.nomaddashboard.core.database.dao.DashboardSectionCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
@@ -75,17 +76,20 @@ import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -108,12 +112,14 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val emergencyCareProvider: EmergencyCareProvider,
     private val timeTrackingRepository: TimeTrackingRepository,
     private val visitedHistoryStore: VisitedHistoryStore,
+    private val dashboardSectionCacheDao: DashboardSectionCacheDao,
     private val metricPointDao: MetricPointDao,
     private val visitedDeviceLocationProvider: VisitedDeviceLocationProvider,
     private val providerCredentialStore: ProviderCredentialStore,
     private val smartravellerAdvisoryProvider: SmartravellerAdvisoryProvider,
     private val reliefWebSecurityProvider: ReliefWebSecurityProvider,
     private val neighborCountryResolver: BundledNeighborCountryResolver,
+    private val json: Json,
     @ApplicationScope
     private val applicationScope: CoroutineScope,
 ) : NomadDashboardRepository {
@@ -124,19 +130,32 @@ class DefaultNomadDashboardRepository @Inject constructor(
 
     private val internalSnapshot = MutableStateFlow(DashboardSnapshot())
     override val snapshot: StateFlow<DashboardSnapshot> = internalSnapshot
-        .stateIn(applicationScope, SharingStarted.Eagerly, DashboardSnapshot())
 
     private var previousTrafficSample: TrafficSample? = null
     private val refreshCoordinatorMutex = Mutex()
     private var activeRefresh: CompletableDeferred<Unit>? = null
 
-    init {
-        applicationScope.launch {
-            migrateLegacyProviderCredentials()
+    override suspend fun warmStart() {
+        migrateLegacyProviderCredentials()
+        val cachedSections = loadCachedDashboardSections(
+            entries = dashboardSectionCacheDao.all(),
+            json = json,
+        )
+        internalSnapshot.update { current ->
+            current.copy(
+                lastRefresh = cachedSections.lastRefresh ?: current.lastRefresh,
+                travelContext = cachedSections.travelContext ?: current.travelContext,
+                weather = cachedSections.weather ?: current.weather,
+                travelAlerts = cachedSections.travelAlerts ?: current.travelAlerts,
+                localInfo = cachedSections.localInfo ?: current.localInfo,
+                fuelPrices = cachedSections.fuelPrices ?: current.fuelPrices,
+                emergencyCare = cachedSections.emergencyCare ?: current.emergencyCare,
+            )
         }
     }
 
     override suspend fun refresh() {
+        migrateLegacyProviderCredentials()
         val (refreshSignal, shouldRun) = refreshCoordinatorMutex.withLock {
             activeRefresh?.takeIf { it.isActive }?.let { existing ->
                 existing to false
@@ -153,11 +172,13 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         try {
-            performRefresh()
+            runCatching {
+                performRefresh()
+            }.onFailure { error ->
+                logWarn("Dashboard refresh failed", error)
+                clearRefreshingStateAfterFailure()
+            }
             refreshSignal.complete(Unit)
-        } catch (error: Throwable) {
-            refreshSignal.completeExceptionally(error)
-            throw error
         } finally {
             refreshCoordinatorMutex.withLock {
                 if (activeRefresh === refreshSignal) {
@@ -167,12 +188,11 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
     }
 
-    private suspend fun performRefresh() {
+    private suspend fun performRefresh() = supervisorScope {
         val currentSettings = settings.first()
         val currentProviderCredentials = providerCredentials.first()
         val previousSnapshot = internalSnapshot.value
         val previousTravelContext = previousSnapshot.travelContext
-        val previousTravelAlerts = previousSnapshot.travelAlerts
         val hasLocationPermission = visitedDeviceLocationProvider.hasLocationPermission()
         internalSnapshot.update {
             it.copy(
@@ -180,6 +200,22 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 startupLocation = initialStartupLocationState(
                     publicIpGeolocationEnabled = currentSettings.publicIpGeolocationEnabled,
                     hasLocationPermission = hasLocationPermission,
+                ),
+                weather = it.weather.copy(
+                    isRefreshing = currentSettings.useCurrentLocationForWeather || currentSettings.publicIpGeolocationEnabled,
+                ),
+                travelAlerts = it.travelAlerts.copy(isRefreshing = true),
+                localInfo = refreshingLocalInfoSnapshot(
+                    enabled = currentSettings.localInfoEnabled,
+                    previous = it.localInfo,
+                ),
+                fuelPrices = refreshingFuelPriceSnapshot(
+                    enabled = currentSettings.fuelPricesEnabled,
+                    previous = it.fuelPrices,
+                ),
+                emergencyCare = refreshingEmergencyCareSnapshot(
+                    enabled = currentSettings.emergencyCareEnabled,
+                    previous = it.emergencyCare,
                 ),
             )
         }
@@ -195,179 +231,632 @@ class DefaultNomadDashboardRepository @Inject constructor(
             power = telemetryReader.power(),
             recordedAtMillis = currentTraffic.capturedAtMillis,
         )
+        val marineDeferred = async {
+            refreshMarineSnapshot(
+                surfSpot = currentSettings.surfSpot,
+                refreshedAt = refreshedAt,
+            )
+        }
+        val deviceLocationDeferred = async { resolveStartupDeviceLocation(hasLocationPermission) }
+        val ipTravelContextDeferred = async {
+            resolveIpTravelContext(
+                currentSettings = currentSettings,
+                previous = previousTravelContext,
+            )
+        }
+        try {
+            val locationContext = resolveInitialLocationContext(
+                currentSettings = currentSettings,
+                previousTravelContext = previousTravelContext,
+                hasLocationPermission = hasLocationPermission,
+                deviceLocationDeferred = deviceLocationDeferred,
+                ipTravelContextDeferred = ipTravelContextDeferred,
+            )
 
-        val deviceLocation = resolveStartupDeviceLocation(hasLocationPermission)
-        val currentDevicePlace = deviceLocation.toResolvedVisitedPlaceOrNull()
+            recordVisitedObservations(
+                currentSettings = currentSettings,
+                locationContext = locationContext,
+            )
 
-        val travelContext = refreshTravelContext(
-            currentSettings = currentSettings,
-            previous = previousTravelContext,
-            deviceLocation = deviceLocation,
-        )
-        val startupLocation = resolvedStartupLocationState(
-            deviceLocation = deviceLocation,
-            travelContext = travelContext,
-        )
+            val initialSections = refreshLocationDependentSections(
+                currentSettings = currentSettings,
+                providerCredentials = currentProviderCredentials,
+                previousSnapshot = previousSnapshot,
+                locationContext = locationContext,
+                refreshedAt = refreshedAt,
+                keepRefreshing = locationContext.awaitingDevicePromotion,
+            )
 
-        if (currentSettings.visitedPlacesEnabled) {
-            val refreshStartedAt = Instant.now()
+            persistSectionCaches(
+                refreshedAt = refreshedAt,
+                travelContext = locationContext.travelContext,
+                sections = initialSections,
+            )
 
-            buildIpObservation(travelContext, refreshStartedAt)?.let { observation ->
-                runCatching { visitedHistoryStore.recordObservation(observation) }
+            val visitedPlaces = visitedHistoryStore.visitedPlaces.first()
+            val visitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
+            val activeTimeTracking = timeTrackingRepository.currentActiveEntry()
+            val pendingTimeTracking = timeTrackingRepository.pendingEntries.first()
+            val timeTrackingReport = timeTrackingRepository.report.first()
+            val marine = marineDeferred.await()
+
+            internalSnapshot.value = buildDashboardSnapshot(
+                refreshedAt = refreshedAt,
+                isRefreshing = locationContext.awaitingDevicePromotion,
+                connectivity = connectivityWithHistory,
+                power = power,
+                travelContext = locationContext.travelContext,
+                startupLocation = locationContext.startupLocation,
+                weather = initialSections.weather,
+                marine = marine,
+                travelAlerts = initialSections.travelAlerts,
+                localInfo = initialSections.localInfo,
+                fuelPrices = initialSections.fuelPrices,
+                emergencyCare = initialSections.emergencyCare,
+                currentSettings = currentSettings,
+                activeTimeTracking = activeTimeTracking,
+                pendingTimeTrackingCount = pendingTimeTracking.size,
+                timeTrackingReport = timeTrackingReport,
+                visitedPlaceSummary = visitedPlaces.visitedPlaceSummary(),
+                trackedDays = visitedCountryDays.size,
+            )
+
+            if (locationContext.awaitingDevicePromotion.not()) {
+                return@supervisorScope
             }
 
-            if (currentSettings.useCurrentLocationForVisitedPlaces) {
-                currentDevicePlace?.let { place ->
-                    runCatching {
-                        visitedHistoryStore.recordObservation(place.toObservation(refreshStartedAt))
-                    }
+            val promotedLocation = awaitPromotedDeviceLocation(
+                initial = locationContext,
+                deviceLocationDeferred = deviceLocationDeferred,
+            ) ?: run {
+                internalSnapshot.update {
+                    it.copy(
+                        isRefreshing = false,
+                        startupLocation = it.startupLocation.copy(isChecking = false),
+                        weather = it.weather.copy(isRefreshing = false),
+                        travelAlerts = it.travelAlerts.copy(isRefreshing = false),
+                        localInfo = it.localInfo.copy(isRefreshing = false),
+                        fuelPrices = it.fuelPrices.copy(isRefreshing = false),
+                        emergencyCare = it.emergencyCare.copy(isRefreshing = false),
+                    )
+                }
+                return@supervisorScope
+            }
+
+            internalSnapshot.update {
+                it.copy(
+                    isRefreshing = true,
+                    travelContext = promotedLocation.travelContext,
+                    startupLocation = promotedLocation.startupLocation.copy(isChecking = true),
+                    weather = it.weather.copy(isRefreshing = true),
+                    travelAlerts = it.travelAlerts.copy(isRefreshing = true),
+                    localInfo = it.localInfo.copy(isRefreshing = true),
+                    fuelPrices = it.fuelPrices.copy(isRefreshing = true),
+                    emergencyCare = it.emergencyCare.copy(isRefreshing = true),
+                )
+            }
+
+            recordVisitedObservations(
+                currentSettings = currentSettings,
+                locationContext = promotedLocation,
+            )
+
+            val promotedSections = refreshLocationDependentSections(
+                currentSettings = currentSettings,
+                providerCredentials = currentProviderCredentials,
+                previousSnapshot = internalSnapshot.value,
+                locationContext = promotedLocation,
+                refreshedAt = Instant.now(),
+                keepRefreshing = false,
+            )
+
+            persistSectionCaches(
+                refreshedAt = Instant.now(),
+                travelContext = promotedLocation.travelContext,
+                sections = promotedSections,
+            )
+
+            internalSnapshot.value = buildDashboardSnapshot(
+                refreshedAt = Instant.now(),
+                isRefreshing = false,
+                connectivity = connectivityWithHistory,
+                power = power,
+                travelContext = promotedLocation.travelContext,
+                startupLocation = promotedLocation.startupLocation,
+                weather = promotedSections.weather,
+                marine = marine,
+                travelAlerts = promotedSections.travelAlerts,
+                localInfo = promotedSections.localInfo,
+                fuelPrices = promotedSections.fuelPrices,
+                emergencyCare = promotedSections.emergencyCare,
+                currentSettings = currentSettings,
+                activeTimeTracking = activeTimeTracking,
+                pendingTimeTrackingCount = pendingTimeTracking.size,
+                timeTrackingReport = timeTrackingReport,
+                visitedPlaceSummary = visitedPlaces.visitedPlaceSummary(),
+                trackedDays = visitedCountryDays.size,
+            )
+        } finally {
+            marineDeferred.cancel()
+            deviceLocationDeferred.cancel()
+            ipTravelContextDeferred.cancel()
+        }
+    }
+
+    private suspend fun clearRefreshingStateAfterFailure() {
+        internalSnapshot.update {
+            it.copy(
+                isRefreshing = false,
+                startupLocation = it.startupLocation.copy(isChecking = false),
+                weather = it.weather.copy(isRefreshing = false),
+                travelAlerts = it.travelAlerts.copy(isRefreshing = false),
+                localInfo = it.localInfo.copy(isRefreshing = false),
+                fuelPrices = it.fuelPrices.copy(isRefreshing = false),
+                emergencyCare = it.emergencyCare.copy(isRefreshing = false),
+            )
+        }
+    }
+
+    private suspend fun resolveInitialLocationContext(
+        currentSettings: AppSettings,
+        previousTravelContext: TravelContextSnapshot,
+        hasLocationPermission: Boolean,
+        deviceLocationDeferred: Deferred<DeviceLocationSnapshot>,
+        ipTravelContextDeferred: Deferred<TravelContextSnapshot>,
+    ): ResolvedLocationContext {
+        yield()
+        val earlyDeviceLocation = if (hasLocationPermission) {
+            runCatching {
+                if (deviceLocationDeferred.isActive.not()) deviceLocationDeferred.await() else null
+            }.getOrNull()
+        } else {
+            DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
+        }
+
+        if (earlyDeviceLocation?.hasCoordinates == true) {
+            val ipTravelContext = if (currentSettings.publicIpGeolocationEnabled) {
+                runCatching {
+                    if (ipTravelContextDeferred.isActive.not()) ipTravelContextDeferred.await() else null
+                }.getOrNull()
+                    ?: previousTravelContext.takeIf { it.containsIpContext() }
+                    ?: TravelContextSnapshot()
+            } else {
+                TravelContextSnapshot()
+            }
+            return ResolvedLocationContext(
+                deviceLocation = earlyDeviceLocation,
+                currentDevicePlace = earlyDeviceLocation.toResolvedVisitedPlaceOrNull(),
+                travelContext = ipTravelContext.withDeviceLocation(earlyDeviceLocation),
+                startupLocation = StartupLocationBootstrapState(
+                    phase = StartupLocationBootstrapPhase.USING_DEVICE_LOCATION,
+                ),
+                awaitingDevicePromotion = false,
+            )
+        }
+
+        val ipTravelContext = if (currentSettings.publicIpGeolocationEnabled) {
+            runCatching {
+                if (ipTravelContextDeferred.isActive.not()) ipTravelContextDeferred.await() else null
+            }.getOrNull() ?: ipTravelContextDeferred.await()
+        } else {
+            TravelContextSnapshot()
+        }
+
+        if (ipTravelContext.containsIpContext()) {
+            val interimDeviceLocation = earlyDeviceLocation ?: if (hasLocationPermission) {
+                DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+            } else {
+                DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
+            }
+            return ResolvedLocationContext(
+                deviceLocation = interimDeviceLocation,
+                currentDevicePlace = interimDeviceLocation.toResolvedVisitedPlaceOrNull(),
+                travelContext = ipTravelContext.withDeviceLocation(interimDeviceLocation),
+                startupLocation = StartupLocationBootstrapState(
+                    phase = StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION,
+                    isChecking = hasLocationPermission,
+                ),
+                awaitingDevicePromotion = hasLocationPermission,
+            )
+        }
+
+        val finalDeviceLocation = if (hasLocationPermission) {
+            deviceLocationDeferred.await()
+        } else {
+            DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.PERMISSION_MISSING)
+        }
+
+        return ResolvedLocationContext(
+            deviceLocation = finalDeviceLocation,
+            currentDevicePlace = finalDeviceLocation.toResolvedVisitedPlaceOrNull(),
+            travelContext = TravelContextSnapshot().withDeviceLocation(finalDeviceLocation),
+            startupLocation = resolvedStartupLocationState(
+                deviceLocation = finalDeviceLocation,
+                travelContext = TravelContextSnapshot(),
+            ),
+            awaitingDevicePromotion = false,
+        )
+    }
+
+    private suspend fun awaitPromotedDeviceLocation(
+        initial: ResolvedLocationContext,
+        deviceLocationDeferred: Deferred<DeviceLocationSnapshot>,
+    ): ResolvedLocationContext? {
+        if (initial.awaitingDevicePromotion.not()) {
+            return null
+        }
+
+        val promotedDeviceLocation = runCatching { deviceLocationDeferred.await() }
+            .getOrElse {
+                DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+            }
+        if (shouldPromoteDeviceLocation(initial.deviceLocation, promotedDeviceLocation).not()) {
+            return null
+        }
+
+        return ResolvedLocationContext(
+            deviceLocation = promotedDeviceLocation,
+            currentDevicePlace = promotedDeviceLocation.toResolvedVisitedPlaceOrNull(),
+            travelContext = initial.travelContext.withDeviceLocation(promotedDeviceLocation),
+            startupLocation = StartupLocationBootstrapState(
+                phase = StartupLocationBootstrapPhase.USING_DEVICE_LOCATION,
+            ),
+            awaitingDevicePromotion = false,
+        )
+    }
+
+    private fun shouldPromoteDeviceLocation(
+        previous: DeviceLocationSnapshot,
+        candidate: DeviceLocationSnapshot,
+    ): Boolean = candidate.hasCoordinates && (
+        previous.hasCoordinates.not() ||
+            (previous.hasPlace.not() && candidate.hasPlace)
+        )
+
+    private suspend fun resolveIpTravelContext(
+        currentSettings: AppSettings,
+        previous: TravelContextSnapshot,
+    ): TravelContextSnapshot =
+        if (currentSettings.publicIpGeolocationEnabled) {
+            fetchCurrentTravelContext(previous = previous)
+                ?: previous.takeIf { it.containsIpContext() }
+                ?: TravelContextSnapshot()
+        } else {
+            TravelContextSnapshot()
+        }
+
+    private suspend fun recordVisitedObservations(
+        currentSettings: AppSettings,
+        locationContext: ResolvedLocationContext,
+    ) {
+        if (currentSettings.visitedPlacesEnabled.not()) {
+            return
+        }
+
+        val observedAt = Instant.now()
+        buildIpObservation(locationContext.travelContext, observedAt)?.let { observation ->
+            runCatching { visitedHistoryStore.recordObservation(observation) }
+        }
+
+        if (currentSettings.useCurrentLocationForVisitedPlaces) {
+            locationContext.currentDevicePlace?.let { place ->
+                runCatching {
+                    visitedHistoryStore.recordObservation(place.toObservation(observedAt))
                 }
             }
         }
+    }
 
+    private suspend fun refreshLocationDependentSections(
+        currentSettings: AppSettings,
+        providerCredentials: ProviderCredentialSettings,
+        previousSnapshot: DashboardSnapshot,
+        locationContext: ResolvedLocationContext,
+        refreshedAt: Instant,
+        keepRefreshing: Boolean,
+    ): LocationDependentSections = supervisorScope {
+        val weatherDeferred = async {
+            refreshWeatherSnapshot(
+                currentSettings = currentSettings,
+                previous = previousSnapshot.weather,
+                deviceLocation = locationContext.deviceLocation,
+                travelContext = locationContext.travelContext,
+                refreshedAt = refreshedAt,
+                keepRefreshing = keepRefreshing,
+            )
+        }
+        val travelAlertsDeferred = async {
+            refreshTravelAlertsSnapshot(
+                previous = previousSnapshot.travelAlerts,
+                currentDevicePlace = locationContext.currentDevicePlace,
+                travelContext = locationContext.travelContext,
+                providerCredentials = providerCredentials,
+                keepRefreshing = keepRefreshing,
+            )
+        }
+        val localInfoDeferred = async {
+            refreshLocalInfoSnapshot(
+                currentSettings = currentSettings,
+                providerCredentials = providerCredentials,
+                currentDevicePlace = locationContext.currentDevicePlace,
+                travelContext = locationContext.travelContext,
+                previous = previousSnapshot.localInfo,
+                keepRefreshing = keepRefreshing,
+            )
+        }
+        val fuelDeferred = async {
+            refreshFuelPriceSnapshot(
+                currentSettings = currentSettings,
+                providerCredentials = providerCredentials,
+                deviceLocation = locationContext.deviceLocation,
+                currentDevicePlace = locationContext.currentDevicePlace,
+                travelContext = locationContext.travelContext,
+                previous = previousSnapshot.fuelPrices,
+                keepRefreshing = keepRefreshing,
+            )
+        }
+        val emergencyDeferred = async {
+            refreshEmergencyCareSnapshot(
+                currentSettings = currentSettings,
+                deviceLocation = locationContext.deviceLocation,
+                travelContext = locationContext.travelContext,
+                previous = previousSnapshot.emergencyCare,
+                keepRefreshing = keepRefreshing,
+            )
+        }
+
+        LocationDependentSections(
+            weather = weatherDeferred.await(),
+            travelAlerts = travelAlertsDeferred.await(),
+            localInfo = localInfoDeferred.await(),
+            fuelPrices = fuelDeferred.await(),
+            emergencyCare = emergencyDeferred.await(),
+        )
+    }
+
+    private suspend fun refreshWeatherSnapshot(
+        currentSettings: AppSettings,
+        previous: WeatherSnapshot,
+        deviceLocation: DeviceLocationSnapshot,
+        travelContext: TravelContextSnapshot,
+        refreshedAt: Instant,
+        keepRefreshing: Boolean,
+    ): WeatherSnapshot {
         val weatherLocation = buildWeatherLocation(
             currentSettings = currentSettings,
             deviceLocation = deviceLocation,
             travelContext = travelContext,
         )
-        val weather = if (weatherLocation != null) {
-            runCatching {
+        if (weatherLocation == null) {
+            val fallback = previous.takeIf { it.fetchedAt != null }
+            return (fallback ?: WeatherSnapshot(
+                summary = unavailableWeatherSummary(currentSettings),
+                conditionDescription = "Weather unavailable",
+            )).copy(isRefreshing = keepRefreshing)
+        }
+
+        return runCatching {
+            retryTransient {
                 openMeteoService.forecast(
                     latitude = weatherLocation.first,
                     longitude = weatherLocation.second,
                     forecastDays = 7,
                 )
-            }.map { response ->
-                WeatherSnapshot(
-                    currentTemperatureCelsius = response.current?.temperatureCelsius,
-                    apparentTemperatureCelsius = response.current?.apparentTemperatureCelsius,
-                    windSpeedKph = response.current?.windSpeedKph,
-                    windDirectionDegrees = response.current?.windDirectionDegrees,
-                    rainChancePercent = response.current?.precipitationProbability,
-                    summary = weatherSummary(response.daily),
-                    conditionDescription = weatherCodeSummary(response.current?.weatherCode),
-                    weatherCode = response.current?.weatherCode,
-                    hourlyForecast = response.hourly.toHourlyForecast(
-                        timezone = response.timezone,
-                        utcOffsetSeconds = response.utcOffsetSeconds,
-                        referenceTime = refreshedAt,
-                        offsetsHours = listOf(3, 6, 12),
-                    ),
-                    dailyForecast = response.daily?.toForecast() ?: emptyList(),
-                    fetchedAt = refreshedAt,
-                )
-            }.getOrElse {
-                WeatherSnapshot(summary = "Weather unavailable", conditionDescription = "Weather unavailable")
             }
-        } else {
+        }.map { response ->
             WeatherSnapshot(
-                summary = unavailableWeatherSummary(currentSettings),
-                conditionDescription = "Weather unavailable",
+                currentTemperatureCelsius = response.current?.temperatureCelsius,
+                apparentTemperatureCelsius = response.current?.apparentTemperatureCelsius,
+                windSpeedKph = response.current?.windSpeedKph,
+                windDirectionDegrees = response.current?.windDirectionDegrees,
+                rainChancePercent = response.current?.precipitationProbability,
+                summary = weatherSummary(response.daily),
+                conditionDescription = weatherCodeSummary(response.current?.weatherCode),
+                weatherCode = response.current?.weatherCode,
+                hourlyForecast = response.hourly.toHourlyForecast(
+                    timezone = response.timezone,
+                    utcOffsetSeconds = response.utcOffsetSeconds,
+                    referenceTime = refreshedAt,
+                    offsetsHours = listOf(3, 6, 12),
+                ),
+                dailyForecast = response.daily?.toForecast() ?: emptyList(),
+                fetchedAt = refreshedAt,
+                isRefreshing = keepRefreshing,
             )
+        }.getOrElse { error ->
+            logWarn("Weather refresh failed", error)
+            previous.takeIf { it.fetchedAt != null }?.copy(isRefreshing = false)
+                ?: WeatherSnapshot(
+                    summary = "Weather unavailable",
+                    conditionDescription = "Weather unavailable",
+                    isRefreshing = false,
+                )
         }
-        val marine = refreshMarineSnapshot(
-            surfSpot = currentSettings.surfSpot,
-            refreshedAt = refreshedAt,
-        )
+    }
 
-        val primaryTravelAlertCountryCode = currentDevicePlace?.countryCode
+    private suspend fun refreshTravelAlertsSnapshot(
+        previous: TravelAlertsSnapshot,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+        providerCredentials: ProviderCredentialSettings,
+        keepRefreshing: Boolean,
+    ): TravelAlertsSnapshot {
+        val primaryCountryCode = currentDevicePlace?.countryCode
             ?.trim()
             ?.takeIf(String::isNotBlank)
             ?.uppercase()
             ?: travelContext.countryCode?.trim()?.takeIf(String::isNotBlank)?.uppercase()
-        val primaryTravelAlertCountryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
+        val primaryCountryName = currentDevicePlace?.country?.trim()?.takeIf(String::isNotBlank)
             ?: travelContext.country?.trim()?.takeIf(String::isNotBlank)
-        val coverageCountryCodes = primaryTravelAlertCountryCode?.let { primaryCountryCode ->
-            listOf(primaryCountryCode) + neighborCountryResolver.neighboringCountryCodes(primaryCountryCode)
+        val coverageCountryCodes = primaryCountryCode?.let { primary ->
+            listOf(primary) + neighborCountryResolver.neighboringCountryCodes(primary)
         }.orEmpty().map { it.uppercase() }.distinct()
-        val checkingTravelAlerts = synchronizedTravelAlertsSnapshot(
-            previous = previousTravelAlerts,
-            primaryCountryCode = primaryTravelAlertCountryCode,
-            primaryCountryName = primaryTravelAlertCountryName,
+
+        return refreshTravelAlerts(
+            previous = previous,
+            primaryCountryCode = primaryCountryCode,
+            primaryCountryName = primaryCountryName,
             coverageCountryCodes = coverageCountryCodes,
-        )
-        internalSnapshot.update { current ->
-            current.copy(
-                isRefreshing = true,
+            providerCredentials = providerCredentials,
+        ).copy(isRefreshing = keepRefreshing)
+    }
+
+    private suspend fun refreshLocalInfoSnapshot(
+        currentSettings: AppSettings,
+        providerCredentials: ProviderCredentialSettings,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+        previous: LocalInfoSnapshot,
+        keepRefreshing: Boolean,
+    ): LocalInfoSnapshot =
+        runCatching {
+            refreshLocalInfo(
+                currentSettings = currentSettings,
+                currentProviderCredentials = providerCredentials,
+                currentDevicePlace = currentDevicePlace,
                 travelContext = travelContext,
-                startupLocation = startupLocation,
-                travelAlerts = checkingTravelAlerts,
-                localInfo = checkingLocalInfoSnapshot(
-                    enabled = currentSettings.localInfoEnabled,
-                    previous = current.localInfo,
-                ),
-                emergencyCare = loadingEmergencyCareSnapshot(
-                    enabled = currentSettings.emergencyCareEnabled,
-                    previous = current.emergencyCare,
-                ),
-            )
+            ).copy(isRefreshing = keepRefreshing)
+        }.getOrElse { error ->
+            logWarn("Local Info refresh failed", error)
+            previous.takeIf { it.fetchedAt != null }?.copy(isRefreshing = false)
+                ?: LocalInfoSnapshot(
+                    status = LocalInfoStatus.UNAVAILABLE,
+                    detail = "Local Info is unavailable right now.",
+                    isRefreshing = false,
+                )
         }
-        val travelAlerts = refreshTravelAlerts(
-            previous = previousTravelAlerts,
-            primaryCountryCode = primaryTravelAlertCountryCode,
-            primaryCountryName = primaryTravelAlertCountryName,
-            coverageCountryCodes = coverageCountryCodes,
-            providerCredentials = currentProviderCredentials,
-        )
-        val emergencyCare = refreshEmergencyCare(
-            currentSettings = currentSettings,
+
+    private suspend fun refreshFuelPriceSnapshot(
+        currentSettings: AppSettings,
+        providerCredentials: ProviderCredentialSettings,
+        deviceLocation: DeviceLocationSnapshot,
+        currentDevicePlace: ResolvedVisitedPlace?,
+        travelContext: TravelContextSnapshot,
+        previous: FuelPriceSnapshot,
+        keepRefreshing: Boolean,
+    ): FuelPriceSnapshot {
+        if (currentSettings.fuelPricesEnabled.not()) {
+            return FuelPriceSnapshot(detail = "Enable fuel prices in Settings")
+        }
+
+        val request = buildFuelSearchRequest(
             deviceLocation = deviceLocation,
             travelContext = travelContext,
-        )
-        val localInfo = refreshLocalInfo(
-            currentSettings = currentSettings,
-            currentProviderCredentials = currentProviderCredentials,
-            currentDevicePlace = currentDevicePlace,
-            travelContext = travelContext,
-        )
-
-        val overallHeadline = when {
-            connectivityWithHistory.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
-            connectivityWithHistory.isOnline -> "Connected"
-            else -> "Waiting"
-        }
-        val visitedPlaces = visitedHistoryStore.visitedPlaces.first()
-        val visitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
-        val visitedPlaceSummary = visitedPlaces.visitedPlaceSummary()
-        val activeTimeTracking = timeTrackingRepository.currentActiveEntry()
-        val pendingTimeTracking = timeTrackingRepository.pendingEntries.first()
-        val timeTrackingReport = timeTrackingRepository.report.first()
-        val fuelPrices = if (currentSettings.fuelPricesEnabled) {
-            buildFuelSearchRequest(
-                deviceLocation = deviceLocation,
-                travelContext = travelContext,
-            )?.let { request ->
-                fuelPriceProvider.prices(
-                    request = request,
-                    credentials = FuelProviderCredentials(
-                        tankerkoenigApiKey = currentProviderCredentials.tankerkoenigApiKey,
-                    ),
-                )
-            } ?: FuelPriceSnapshot(
+        ) ?: return previous.takeIf { it.fetchedAt != null }?.copy(isRefreshing = false)
+            ?: FuelPriceSnapshot(
                 status = FuelPriceStatus.UNAVAILABLE,
                 sourceName = "Nomad Fuel Prices",
                 countryCode = currentDevicePlace?.countryCode ?: travelContext.countryCode,
                 countryName = currentDevicePlace?.country ?: travelContext.country,
                 detail = "Nearby fuel prices need a resolved current location and country.",
             )
-        } else {
-            FuelPriceSnapshot(detail = "Enable fuel prices in Settings")
+
+        return runCatching {
+            retryTransient {
+                fuelPriceProvider.prices(
+                    request = request,
+                    credentials = FuelProviderCredentials(
+                        tankerkoenigApiKey = providerCredentials.tankerkoenigApiKey,
+                    ),
+                )
+            }.copy(isRefreshing = keepRefreshing)
+        }.getOrElse { error ->
+            logWarn("Fuel refresh failed", error)
+            previous.takeIf { it.fetchedAt != null }?.copy(isRefreshing = false)
+                ?: FuelPriceSnapshot(
+                    status = FuelPriceStatus.UNAVAILABLE,
+                    sourceName = "Nomad Fuel Prices",
+                    countryCode = currentDevicePlace?.countryCode ?: travelContext.countryCode,
+                    countryName = currentDevicePlace?.country ?: travelContext.country,
+                    detail = "Nearby fuel prices are unavailable right now.",
+                )
+        }
+    }
+
+    private suspend fun refreshEmergencyCareSnapshot(
+        currentSettings: AppSettings,
+        deviceLocation: DeviceLocationSnapshot,
+        travelContext: TravelContextSnapshot,
+        previous: EmergencyCareSnapshot,
+        keepRefreshing: Boolean,
+    ): EmergencyCareSnapshot =
+        runCatching {
+            retryTransient {
+                refreshEmergencyCare(
+                    currentSettings = currentSettings,
+                    deviceLocation = deviceLocation,
+                    travelContext = travelContext,
+                ).also { snapshot ->
+                    if (snapshot.status == EmergencyCareStatus.ERROR) {
+                        throw java.io.IOException(snapshot.detail)
+                    }
+                }
+            }.copy(isRefreshing = keepRefreshing)
+        }.getOrElse { error ->
+            logWarn("Emergency care refresh failed", error)
+            previous.takeIf { it.fetchedAt != null }?.copy(isRefreshing = false)
+                ?: EmergencyCareSnapshot(
+                    status = EmergencyCareStatus.ERROR,
+                    detail = "Nearby hospitals are unavailable right now.",
+                    isRefreshing = false,
+                )
         }
 
-        internalSnapshot.value = DashboardSnapshot(
+    private suspend fun persistSectionCaches(
+        refreshedAt: Instant,
+        travelContext: TravelContextSnapshot,
+        sections: LocationDependentSections,
+    ) {
+        if (travelContext.containsIpContext() || travelContext.deviceLatitude != null || travelContext.deviceLongitude != null) {
+            dashboardSectionCacheDao.upsert(travelContext.toCacheEntity(json = json, fetchedAt = refreshedAt))
+        }
+        sections.weather.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) }
+        sections.travelAlerts.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) }
+        sections.localInfo.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) }
+        sections.fuelPrices.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) }
+        sections.emergencyCare.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) }
+    }
+
+    private fun buildDashboardSnapshot(
+        refreshedAt: Instant,
+        isRefreshing: Boolean,
+        connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
+        power: com.iloapps.nomaddashboard.core.model.PowerSnapshot,
+        travelContext: TravelContextSnapshot,
+        startupLocation: StartupLocationBootstrapState,
+        weather: WeatherSnapshot,
+        marine: MarineSnapshot?,
+        travelAlerts: TravelAlertsSnapshot,
+        localInfo: LocalInfoSnapshot,
+        fuelPrices: FuelPriceSnapshot,
+        emergencyCare: EmergencyCareSnapshot,
+        currentSettings: AppSettings,
+        activeTimeTracking: com.iloapps.nomaddashboard.core.model.TimeTrackingRecord?,
+        pendingTimeTrackingCount: Int,
+        timeTrackingReport: com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot,
+        visitedPlaceSummary: com.iloapps.nomaddashboard.core.model.VisitedPlaceSummary,
+        trackedDays: Int,
+    ): DashboardSnapshot {
+        val overallHeadline = when {
+            connectivity.isOnline && (power.batteryPercent ?: 0) > 20 -> "Ready"
+            connectivity.isOnline -> "Connected"
+            else -> "Waiting"
+        }
+
+        return DashboardSnapshot(
             lastRefresh = refreshedAt,
-            isRefreshing = false,
+            isRefreshing = isRefreshing,
             overallSummary = SummaryTile(
                 title = "Overall",
                 headline = overallHeadline,
                 detail = "${travelContextPrimaryLocation(travelContext) ?: "Travel-ready"} system telemetry",
-                level = if (connectivityWithHistory.isOnline) SignalLevel.GOOD else SignalLevel.WARNING,
+                level = if (connectivity.isOnline) SignalLevel.GOOD else SignalLevel.WARNING,
             ),
             networkSummary = SummaryTile(
                 title = "Network",
-                headline = connectivityWithHistory.internetState,
-                detail = connectivityWithHistory.wifiName ?: "Collecting network quality",
-                level = if (connectivityWithHistory.isOnline) SignalLevel.GOOD else SignalLevel.BAD,
+                headline = connectivity.internetState,
+                detail = connectivity.wifiName ?: "Collecting network quality",
+                level = if (connectivity.isOnline) SignalLevel.GOOD else SignalLevel.BAD,
             ),
             powerSummary = SummaryTile(
                 title = "Power",
@@ -381,7 +870,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                     else -> SignalLevel.WARNING
                 },
             ),
-            connectivity = connectivityWithHistory,
+            connectivity = connectivity,
             power = power,
             travelContext = travelContext,
             startupLocation = startupLocation,
@@ -396,7 +885,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 headline = when {
                     currentSettings.projectTimeTrackingEnabled.not() -> "Disabled"
                     activeTimeTracking != null -> "Running"
-                    pendingTimeTracking.isNotEmpty() -> "Paused"
+                    pendingTimeTrackingCount > 0 -> "Paused"
                     else -> "Ready"
                 },
                 detail = when {
@@ -407,8 +896,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
                         val mode = if (activeTimeTracking.entry.isAutomaticallyTracked()) "Auto" else "Manual"
                         "$mode capture since $localTime · ${timeTrackingReport.interruptionsToday} interruption(s) today"
                     }
-                    pendingTimeTracking.isNotEmpty() ->
-                        "${pendingTimeTracking.size} buffered segment(s) waiting for allocation · ${timeTrackingReport.interruptionsToday} interruption(s) today."
+                    pendingTimeTrackingCount > 0 ->
+                        "$pendingTimeTrackingCount buffered segment(s) waiting for allocation · ${timeTrackingReport.interruptionsToday} interruption(s) today."
                     else -> "Dashboard quick-allocation is ready once your projects are set up."
                 },
                 interruptionsToday = timeTrackingReport.interruptionsToday,
@@ -418,7 +907,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             visited = VisitedSummary(
                 citiesVisited = visitedPlaceSummary.citiesVisited,
                 countriesVisited = visitedPlaceSummary.countriesVisited,
-                trackedDays = visitedCountryDays.size,
+                trackedDays = trackedDays,
                 sourceSummary = visitedSourceSummary(currentSettings),
             ),
         )
@@ -683,7 +1172,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         return try {
-            val signal = fetch()
+            val signal = retryTransient { fetch() }
             travelAlertLogInfo(
                 TravelAlertsLogTag,
                 "travel alert ${kind.name.lowercase()} ready severity=${signal.severity.name.lowercase()} source=${signal.sourceName}",
@@ -705,7 +1194,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 "travel alert ${kind.name.lowercase()} failed reason=${reason.name.lowercase()} diagnostic=${diagnosticSummary ?: "none"} message=${error.message ?: "none"}",
                 error,
             )
-            val previousSignal = previous?.signal
+            val previousSignal = previous?.resolvedSignal ?: previous?.signal
             if (previousSignal != null) {
                 TravelAlertSignalState(
                     kind = kind,
@@ -716,7 +1205,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                     sourceName = retainedSourceName,
                     sourceUrl = retainedSourceUrl,
                     lastAttemptedAt = attemptedAt,
-                    lastSuccessAt = previous.lastSuccessAt,
+                    lastSuccessAt = previous?.lastSuccessAt,
                 )
             } else {
                 TravelAlertSignalState(
@@ -826,18 +1315,14 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
     }
 
-    private fun loadingEmergencyCareSnapshot(
+    private fun refreshingEmergencyCareSnapshot(
         enabled: Boolean,
         previous: EmergencyCareSnapshot,
     ): EmergencyCareSnapshot =
         if (enabled.not()) {
             EmergencyCareSnapshot(detail = "Enable emergency care in Settings")
         } else {
-            previous.copy(
-                status = EmergencyCareStatus.LOADING,
-                detail = "Searching nearby hospitals...",
-                note = previous.note.takeIf { previous.facility != null },
-            )
+            previous.copy(isRefreshing = true)
         }
 
     private suspend fun refreshTravelContext(
@@ -873,21 +1358,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
             currentDevicePlace = currentDevicePlace,
             travelContext = travelContext,
         )
-        return runCatching {
+        return retryTransient {
             localInfoProvider.localInfo(
                 request = request,
                 hudUserApiToken = currentProviderCredentials.hudUserApiToken,
-            )
-        }.getOrElse {
-            LocalInfoSnapshot(
-                status = LocalInfoStatus.UNAVAILABLE,
-                locality = request.locality,
-                region = request.region,
-                countryCode = request.countryCode,
-                countryName = request.countryName,
-                timezone = request.timeZoneId,
-                fetchedAt = Instant.now(),
-                detail = "Local Info is unavailable right now.",
             )
         }
     }
@@ -896,16 +1370,22 @@ class DefaultNomadDashboardRepository @Inject constructor(
         previous: TravelContextSnapshot,
     ): TravelContextSnapshot? {
         runCatching {
-            freeIpApiService.lookupMe().toTravelContextSnapshot(previous = previous)
+            retryTransient {
+                freeIpApiService.lookupMe()
+            }.toTravelContextSnapshot(previous = previous)
         }.getOrNull()?.takeIf { it.containsIpContext() }?.let { return it }
 
-        val fallbackIpAddress = runCatching { ipifyService.lookupIp().ip.normalizedOr(previous.publicIp) }
+        val fallbackIpAddress = runCatching {
+            retryTransient { ipifyService.lookupIp() }.ip.normalizedOr(previous.publicIp)
+        }
             .getOrNull()
             ?.normalizedOr(previous.publicIp)
             ?: return null
 
         return runCatching {
-            freeIpApiService.lookup(fallbackIpAddress).toTravelContextSnapshot(previous = previous)
+            retryTransient {
+                freeIpApiService.lookup(fallbackIpAddress)
+            }.toTravelContextSnapshot(previous = previous)
                 .copy(publicIp = fallbackIpAddress)
         }.getOrNull()?.takeIf { it.containsIpContext() }
     }
@@ -1028,14 +1508,29 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 detail = "Local Info is disabled. Enable it in Settings.",
             )
         } else {
-            previous.copy(
-                status = LocalInfoStatus.CHECKING,
-                detail = "Looking up local context and holiday calendar.",
-                note = previous.note.takeIf {
-                    previous.publicHoliday != null || previous.schoolHoliday != null || previous.localPriceLevel.rows.isNotEmpty()
-                },
-            )
+            previous.copy(isRefreshing = true)
         }
+
+    private fun refreshingLocalInfoSnapshot(
+        enabled: Boolean,
+        previous: LocalInfoSnapshot,
+    ): LocalInfoSnapshot = checkingLocalInfoSnapshot(enabled = enabled, previous = previous)
+
+    private fun refreshingFuelPriceSnapshot(
+        enabled: Boolean,
+        previous: FuelPriceSnapshot,
+    ): FuelPriceSnapshot =
+        if (enabled.not()) {
+            FuelPriceSnapshot(detail = "Enable fuel prices in Settings")
+        } else {
+            previous.copy(isRefreshing = true)
+        }
+
+    private fun loadingEmergencyCareSnapshot(
+        enabled: Boolean,
+        previous: EmergencyCareSnapshot,
+    ): EmergencyCareSnapshot =
+        refreshingEmergencyCareSnapshot(enabled = enabled, previous = previous)
 
     private fun buildWeatherLocation(
         currentSettings: AppSettings,
@@ -1330,6 +1825,34 @@ private const val ConnectivityUploadMetricKind = "connectivity_upload_mbps"
 private const val ConnectivityLatencyMetricKind = "connectivity_latency_ms"
 private const val PowerBatteryPercentMetricKind = "power_battery_percent"
 private const val StartupLocationBootstrapWaitMillis = 4_000L
+private const val DevicePreferredGraceMillis = 1_500L
+private const val IpLookupGraceMillis = 1_500L
+
+private data class ResolvedLocationContext(
+    val deviceLocation: DeviceLocationSnapshot,
+    val currentDevicePlace: ResolvedVisitedPlace?,
+    val travelContext: TravelContextSnapshot,
+    val startupLocation: StartupLocationBootstrapState,
+    val awaitingDevicePromotion: Boolean,
+)
+
+private data class LocationDependentSections(
+    val weather: WeatherSnapshot,
+    val travelAlerts: TravelAlertsSnapshot,
+    val localInfo: LocalInfoSnapshot,
+    val fuelPrices: FuelPriceSnapshot,
+    val emergencyCare: EmergencyCareSnapshot,
+)
+
+private fun logWarn(message: String, error: Throwable? = null) {
+    runCatching {
+        if (error != null) {
+            Log.w("NomadDashboard", message, error)
+        } else {
+            Log.w("NomadDashboard", message)
+        }
+    }
+}
 
 private fun travelAlertLogDebug(tag: String, message: String) {
     runCatching { Log.d(tag, message) }

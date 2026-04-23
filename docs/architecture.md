@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-04-09
+Last updated: 2026-04-23
 
 ## Overview
 
@@ -91,6 +91,8 @@ Responsibilities:
   Nager.Date public holidays, OpenHolidays subdivision and school-holiday
   matching, and reused Eurostat/HUD USER local price signals
 - travel-alert provider orchestration and country-coverage resolution
+- warm-start dashboard section cache hydration for location-dependent cards
+- shared transient retry policy for startup-dependent remote fetches
 - orchestration of local and remote data
 
 Key files:
@@ -118,6 +120,10 @@ Current dashboard data flow:
 1. `MainActivity` hosts navigation.
 2. `DashboardViewModel` subscribes to repository state.
 3. `DefaultNomadDashboardRepository` refreshes:
+   - loads cached location-dependent dashboard sections first through
+     `warmStart()` so cold launch can render the last-successful weather,
+     travel alerts, local info, fuel, emergency care, and travel context data
+     before fresh network work completes
    - Android connectivity and Wi-Fi state, including SSID, RSSI, link speed,
      and Wi-Fi band when the platform exposes them
    - retained connectivity metric history in Room for download, upload, and
@@ -131,6 +137,10 @@ Current dashboard data flow:
    - single-flight refresh orchestration so overlapping startup/manual/
      permission-triggered refresh calls reuse the same in-flight bootstrap
      work instead of computing against different partial location state
+   - staged location bootstrap that lets device and IP lookup race, prefers
+     device context when it resolves first, falls back to IP context otherwise,
+     and can promote location-dependent cards from IP fallback to device later
+     in the same refresh cycle
    - current device coordinates whenever Android location permission is
      available, even when reverse geocoding has not resolved a place name yet
    - current device place whenever reverse geocoding succeeds so the dashboard
@@ -156,6 +166,15 @@ Current dashboard data flow:
      plus the weather API’s wind series for near-term surf checkpoints
 4. Repository emits a `DashboardSnapshot`.
 5. Compose renders the snapshot through feature and design-system components.
+
+Dashboard startup cache flow:
+
+1. `DashboardViewModel` calls `repository.warmStart()` before the first live refresh.
+2. `DefaultNomadDashboardRepository` reads `dashboard_section_cache` rows from Room.
+3. The repository restores the last-successful location-dependent card snapshots
+   into the shared `DashboardSnapshot`.
+4. A live refresh then marks only those sections as refreshing, keeping their
+   cached content visible until fresh data or a fallback state arrives.
 
 Settings flow:
 

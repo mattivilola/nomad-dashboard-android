@@ -92,6 +92,7 @@ class DashboardViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            repository.warmStart()
             timeTrackingRepository.syncTracking()
             repository.refresh()
         }
