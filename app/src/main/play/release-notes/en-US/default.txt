@@ -1,1 +1,1 @@
-This update adds dashboard section caching and warm start.
+This update adds harden location services and refine app settings defaults.
