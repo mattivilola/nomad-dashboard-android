@@ -31,4 +31,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.kotlinx.serialization)
+
+    testImplementation(libs.junit4)
+    testImplementation(libs.truth)
 }

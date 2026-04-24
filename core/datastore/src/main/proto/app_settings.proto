@@ -25,4 +25,5 @@ message AppSettingsProto {
   int32 project_time_tracking_auto_start_minutes = 19;
   int32 project_time_tracking_auto_stop_minutes = 20;
   bool local_info_enabled = 21;
+  int32 settings_schema_version = 22;
 }

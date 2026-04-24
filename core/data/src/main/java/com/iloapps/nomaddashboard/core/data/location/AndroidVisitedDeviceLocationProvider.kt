@@ -69,9 +69,12 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
             }
         }.distinct()
 
+        providers.firstNotNullOfOrNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }?.let { return it }
+
         return providers.firstNotNullOfOrNull { provider ->
             currentLocationFromProvider(locationManager, provider)
-                ?: runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
         }
     }
 

@@ -633,6 +633,8 @@ Perform these checks on the first installed build:
 
 Implemented now:
 - settings proto round-trip unit test
+- settings proto default/migration tests for location-bootstrap defaults
+- ipify Retrofit contract test for the JSON fallback endpoint
 - visited model summary tests
 - visited map presentation tests for highlighted-country selection, marker extraction, and viewport fallback
 - visited history store merge and country-day logic tests
@@ -657,6 +659,7 @@ Implemented now:
 
 File:
 - [SettingsProtoMapperTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/datastore/src/test/java/com/iloapps/nomaddashboard/core/datastore/SettingsProtoMapperTest.kt)
+- [IpifyServiceTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/network/src/test/java/com/iloapps/nomaddashboard/core/network/api/IpifyServiceTest.kt)
 - [VisitedModelsTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/model/src/test/java/com/iloapps/nomaddashboard/core/model/VisitedModelsTest.kt)
 - [VisitedMapPresentationTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/visited/src/test/java/com/iloapps/nomaddashboard/feature/visited/VisitedMapPresentationTest.kt)
 - [VisitedScreenTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/visited/src/androidTest/java/com/iloapps/nomaddashboard/feature/visited/VisitedScreenTest.kt)

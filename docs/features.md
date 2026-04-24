@@ -37,7 +37,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Wi-Fi SSID / RSSI | Implemented | Uses `WifiManager`; the dashboard now also shows link speed and Wi-Fi band when Android exposes them |
 | VPN detection | Implemented | Uses network transport check |
 | Public IP lookup | Implemented | FreeIPAPI remains primary, with a plain-IP fallback path plus copyable dashboard presentation and last-known retention during transient lookup failures |
-| IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema and by-address fallback geolocation when the current-IP endpoint fails |
+| IP geolocation | Implemented | FreeIPAPI with tolerant timezone parsing for the provider's current response schema, DataStore default repair for fresh empty installs, and by-address fallback geolocation through ipify's JSON endpoint when the current-IP endpoint fails |
 | Device vs IP location comparison | Implemented | Travel Context now shows the current device place and the public-IP-derived place side by side when available |
 | Travel context card | Implemented | Card now compares device and public-IP location, exposes Android-native map actions, shows denser Wi-Fi travel telemetry, keeps a startup `checking device location` state instead of flashing immediate unavailable copy during cold launch, and can promote from IP fallback to device context later in the same refresh |
 

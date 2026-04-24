@@ -90,4 +90,56 @@ class SettingsProtoMapperTest {
 
         assertThat(roundTripped.tankerkonigApiKey).isEmpty()
     }
+
+    @Test
+    fun `default serializer value keeps model defaults that are true`() {
+        val restored = AppSettingsSerializer.defaultValue.toExternalModel()
+
+        assertThat(restored.publicIpGeolocationEnabled).isTrue()
+        assertThat(restored.shareAnonymousAnalytics).isTrue()
+        assertThat(restored.weatherForecastExpanded).isTrue()
+        assertThat(restored.visitedPlacesEnabled).isTrue()
+    }
+
+    @Test
+    fun `empty legacy settings repair location bootstrap defaults`() {
+        val restored = AppSettingsProto.getDefaultInstance().toExternalModel()
+
+        assertThat(restored.publicIpGeolocationEnabled).isTrue()
+        assertThat(restored.weatherForecastExpanded).isTrue()
+        assertThat(restored.visitedPlacesEnabled).isFalse()
+        assertThat(restored.surfSpot.name).isEqualTo(AppSettings().surfSpot.name)
+    }
+
+    @Test
+    fun `non-empty legacy settings do not repair explicit false privacy toggles`() {
+        val proto = AppSettingsProto.newBuilder()
+            .setAppearanceMode(AppearanceMode.DARK.name)
+            .build()
+
+        val restored = proto.toExternalModel()
+
+        assertThat(restored.publicIpGeolocationEnabled).isFalse()
+        assertThat(restored.shareAnonymousAnalytics).isFalse()
+        assertThat(restored.visitedPlacesEnabled).isFalse()
+    }
+
+    @Test
+    fun `schema v1 settings preserve explicit false defaults`() {
+        val proto = AppSettings()
+            .copy(
+                publicIpGeolocationEnabled = false,
+                shareAnonymousAnalytics = false,
+                weatherForecastExpanded = false,
+                visitedPlacesEnabled = false,
+            )
+            .toProto()
+
+        val restored = proto.toExternalModel()
+
+        assertThat(restored.publicIpGeolocationEnabled).isFalse()
+        assertThat(restored.shareAnonymousAnalytics).isFalse()
+        assertThat(restored.weatherForecastExpanded).isFalse()
+        assertThat(restored.visitedPlacesEnabled).isFalse()
+    }
 }

@@ -138,6 +138,11 @@ Current repository state:
   stays concise and stable in the compact/top dashboard presentation, the
   fuller Smartraveller explanation remains in the detail body, and numeric
   apostrophe entities such as `&#039;` decode correctly
+- production location refresh hardening landed: fresh/empty Proto DataStore
+  defaults now repair the IP geolocation and weather expansion defaults that
+  proto3 previously decoded as false; the ipify fallback now uses the live JSON
+  endpoint; Android device-location lookup now checks cached provider fixes
+  before waiting on a slow active fix
 
 ## Completed
 
@@ -204,6 +209,9 @@ Current repository state:
   implemented
 - travel-context comparison UI implemented for public-IP plus device location,
   copyable public IP, richer Wi-Fi detail, and Android-native map launches
+- settings schema versioning added so empty older/unversioned settings get the
+  intended location-bootstrap defaults while versioned or non-empty settings
+  preserve explicit user choices
 
 ## In Progress
 
