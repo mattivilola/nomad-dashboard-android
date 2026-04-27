@@ -1521,7 +1521,7 @@ private class SequenceFreeIpApiService(
 private class FakeIpifyService(
     private val ip: String? = "198.51.100.12",
 ) : IpifyService {
-    override suspend fun lookupIp(): IpifyResponse = IpifyResponse(ip = ip)
+    override suspend fun lookupIp(format: String): IpifyResponse = IpifyResponse(ip = ip)
 }
 
 private class FakeOpenMeteoService(

@@ -109,6 +109,10 @@ Current repository state:
 - dashboard refresh retry hardening landed: IP lookup, weather, travel alerts,
   local info, fuel, and emergency care now use shared transient retry logic,
   and the repository no longer aborts the full refresh when one provider fails
+- dashboard section-cache serialization fix landed: `core:data` now applies the
+  Kotlin serialization compiler plugin so cached travel-context DTOs have
+  generated serializers in release/debug builds, preventing a refresh abort
+  before live location-dependent cards can publish their snapshots
 - weather and surf refinement landed: the dashboard now uses real Open-Meteo
   hourly checkpoints, icon-led forecast rows with rain and wind detail, and a
   live marine surf subsection for the saved surf spot instead of placeholder

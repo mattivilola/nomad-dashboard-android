@@ -635,6 +635,7 @@ Implemented now:
 - settings proto round-trip unit test
 - settings proto default/migration tests for location-bootstrap defaults
 - ipify Retrofit contract test for the JSON fallback endpoint
+- dashboard section-cache serializer test for travel-context cache round trips
 - visited model summary tests
 - visited map presentation tests for highlighted-country selection, marker extraction, and viewport fallback
 - visited history store merge and country-day logic tests
@@ -668,6 +669,7 @@ File:
 - [GooglePlacesEmergencyCareProviderTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/emergency/GooglePlacesEmergencyCareProviderTest.kt)
 - [RoomTimeTrackingRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/timetracking/RoomTimeTrackingRepositoryTest.kt)
 - [DefaultNomadDashboardRepositoryTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepositoryTest.kt)
+- [DashboardSectionCacheSerializersTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/test/java/com/iloapps/nomaddashboard/core/data/repository/DashboardSectionCacheSerializersTest.kt)
 - [TimeTrackingForegroundServiceRuntimeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/test/java/com/iloapps/nomaddashboard/feature/timetracking/runtime/TimeTrackingForegroundServiceRuntimeTest.kt)
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
