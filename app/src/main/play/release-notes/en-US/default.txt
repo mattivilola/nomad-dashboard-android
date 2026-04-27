@@ -1,1 +1,1 @@
-This update adds dashboard section cache serialization and dashboard header layout with inline chips and prioritize live signals in top bar.
+This update adds refined dashboard header for long location names and prioritize location checking status.

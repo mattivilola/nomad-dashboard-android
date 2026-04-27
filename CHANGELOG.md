@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.4] - 2026-04-27
+
+### Improved
+- Refined dashboard header for long location names and prioritize location checking status.
+
 ## [0.7.3] - 2026-04-27
 
 ### Improved
