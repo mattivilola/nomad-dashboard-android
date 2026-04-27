@@ -260,12 +260,8 @@ fun DashboardScreen(
                 val headerLocationRows = dashboardHeaderLocationRows(state.snapshot.travelContext)
                 NomadTopBar(
                     title = "Nomad Dashboard",
-                    subtitle = if (headerLocationRows.isEmpty()) {
-                        dashboardLocationLabel(state)
-                    } else {
-                        dashboardHeaderLocationSubtitle(headerLocationRows)
-                    },
-                    supportingText = dashboardSupportLine(state),
+                    subtitle = dashboardSignalHeadline(state),
+                    supportingText = dashboardRefreshLine(state),
                     titleLeading = {
                         Image(
                             painter = painterResource(id = R.drawable.nomad_symbol_mark),
@@ -296,7 +292,7 @@ fun DashboardScreen(
                     },
                 )
                 if (headerLocationRows.isNotEmpty()) {
-                    DashboardHeaderLocationComparisonStrip(rows = headerLocationRows)
+                    DashboardHeaderLocationInlineRow(rows = headerLocationRows)
                 }
             }
         }
@@ -434,74 +430,60 @@ private enum class DashboardHeaderLocationKind(
 }
 
 @Composable
-private fun DashboardHeaderLocationComparisonStrip(
+@OptIn(ExperimentalLayoutApi::class)
+private fun DashboardHeaderLocationInlineRow(
     rows: List<DashboardHeaderLocationRow>,
 ) {
-    if (rows.size == 1) {
-        Column(
-            modifier = Modifier.testTag("dashboard_header_location_comparison"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            rows.forEach { row ->
-                DashboardHeaderLocationTile(
-                    row = row,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    } else {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("dashboard_header_location_comparison"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            rows.forEach { row ->
-                DashboardHeaderLocationTile(
-                    row = row,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("dashboard_header_location_comparison"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        rows.forEach { row ->
+            DashboardHeaderLocationChip(row = row)
         }
     }
 }
 
 @Composable
-private fun DashboardHeaderLocationTile(
+private fun DashboardHeaderLocationChip(
     row: DashboardHeaderLocationRow,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    Row(
         modifier = modifier
             .testTag("dashboard_header_location_${row.kind.name.lowercase()}")
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .clip(RoundedCornerShape(18.dp))
+            .background(summaryToneColor(row.kind.tone).copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = row.kind.icon,
-                    contentDescription = row.kind.label,
-                    tint = summaryToneColor(row.kind.tone),
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    text = row.kind.label.uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        Icon(
+            imageVector = row.kind.icon,
+            contentDescription = row.kind.label,
+            tint = summaryToneColor(row.kind.tone),
+            modifier = Modifier.size(16.dp),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = row.kind.label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 text = row.value,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -3010,14 +2992,6 @@ private fun dashboardHeaderLocationRows(
         ?.let { add(DashboardHeaderLocationRow(kind = DashboardHeaderLocationKind.IP, value = it)) }
 }
 
-private fun dashboardHeaderLocationSubtitle(
-    rows: List<DashboardHeaderLocationRow>,
-): String = when (rows.singleOrNull()?.kind) {
-    DashboardHeaderLocationKind.DEVICE -> "Device-based location"
-    DashboardHeaderLocationKind.IP -> "IP-based location"
-    null -> "Device and IP location"
-}
-
 private fun travelContextSubtitle(
     state: DashboardUiState,
     hasLocationPermission: Boolean,
@@ -3034,20 +3008,26 @@ private fun travelContextSubtitle(
     }
 }
 
-private fun dashboardSupportLine(state: DashboardUiState): String {
-    val lastRefresh = state.snapshot.lastRefresh
-    val refreshText = when {
-        state.snapshot.startupLocation.isChecking -> "Checking device location before loading location-based cards..."
-        state.snapshot.isRefreshing -> "Refreshing travel signals..."
-        lastRefresh != null -> "Updated ${lastRefresh.formatDashboardTimestamp()}"
-        else -> "Tap refresh to load live travel signals"
-    }
+private fun dashboardSignalHeadline(state: DashboardUiState): String {
     val liveSignals = listOfNotNull(
         state.snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" },
         state.snapshot.connectivity.internetState.takeIf { it != "Checking" },
         state.snapshot.power.batteryPercent?.let { "$it% battery" },
     )
-    return (listOf(refreshText) + liveSignals).joinToString(" · ")
+
+    return liveSignals.joinToString(" · ").ifBlank {
+        dashboardLocationLabel(state)
+    }
+}
+
+private fun dashboardRefreshLine(state: DashboardUiState): String {
+    val lastRefresh = state.snapshot.lastRefresh
+    return when {
+        state.snapshot.startupLocation.isChecking -> "Checking device location before loading location-based cards..."
+        state.snapshot.isRefreshing -> "Refreshing travel signals..."
+        lastRefresh != null -> "Updated ${lastRefresh.formatDashboardTimestamp()}"
+        else -> "Tap refresh to load live travel signals"
+    }
 }
 
 private fun travelAlertsCompactLabel(
