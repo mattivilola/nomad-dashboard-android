@@ -156,6 +156,37 @@ class DashboardScreenTest {
     }
 
     @Test
+    fun keepsStartupLocationCheckingCopyPrimaryWhenLiveSignalsExist() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        settings = AppSettings(
+                            publicIpGeolocationEnabled = true,
+                            useCurrentLocationForWeather = true,
+                            dashboardCardOrder = emptyList(),
+                        ),
+                        snapshot = DashboardSnapshot(
+                            isRefreshing = true,
+                            startupLocation = StartupLocationBootstrapState(
+                                phase = StartupLocationBootstrapPhase.CHECKING_DEVICE_LOCATION,
+                                isChecking = true,
+                            ),
+                            weather = WeatherSnapshot(
+                                currentTemperatureCelsius = 19.0,
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Checking device location...").assertIsDisplayed()
+    }
+
+    @Test
     fun showsStartupLocationCheckingCopyInsteadOfUnavailable() {
         composeRule.setContent {
             NomadTheme {
@@ -182,5 +213,31 @@ class DashboardScreenTest {
         composeRule.onNodeWithText("Checking device location...").assertIsDisplayed()
         composeRule.onNodeWithText("Checking device location before loading location-based cards...").assertIsDisplayed()
         composeRule.onNodeWithText("Checking device location before loading location-based weather.").assertIsDisplayed()
+    }
+
+    @Test
+    fun showsLongHeaderLocationValuesWithoutDroppingThem() {
+        val longDeviceLocation = "A Coruna, Spain, Atlantic Coast"
+
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = DashboardUiState(
+                        settings = AppSettings(dashboardCardOrder = emptyList()),
+                        snapshot = DashboardSnapshot(
+                            travelContext = TravelContextSnapshot(
+                                city = "Tarifa",
+                                country = "Spain",
+                                deviceCity = "A Coruna",
+                                deviceCountry = "Spain, Atlantic Coast",
+                            ),
+                        ),
+                    ),
+                    onRefresh = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(longDeviceLocation, useUnmergedTree = true).assertIsDisplayed()
     }
 }

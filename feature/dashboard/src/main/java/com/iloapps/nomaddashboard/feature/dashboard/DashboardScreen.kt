@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -467,9 +468,9 @@ private fun DashboardHeaderLocationChip(
             tint = summaryToneColor(row.kind.tone),
             modifier = Modifier.size(16.dp),
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier.widthIn(max = 220.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = row.kind.label.uppercase(),
@@ -483,7 +484,7 @@ private fun DashboardHeaderLocationChip(
                 text = row.value,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -3009,6 +3010,10 @@ private fun travelContextSubtitle(
 }
 
 private fun dashboardSignalHeadline(state: DashboardUiState): String {
+    if (state.snapshot.startupLocation.isChecking) {
+        return "Checking device location..."
+    }
+
     val liveSignals = listOfNotNull(
         state.snapshot.weather.currentTemperatureCelsius?.let { "${it.roundToInt()}°" },
         state.snapshot.connectivity.internetState.takeIf { it != "Checking" },
