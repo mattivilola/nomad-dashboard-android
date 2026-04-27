@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.3] - 2026-04-27
+
+### Improved
+- Enhanced dashboard header layout with inline chips and prioritize live signals in top bar.
+
+### Fixed
+- Fixed dashboard section cache serialization.
+
 ## [0.7.2] - 2026-04-24
 
 ### Fixed

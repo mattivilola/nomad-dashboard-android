@@ -1,1 +1,1 @@
-This update adds harden location services and refine app settings defaults.
+This update adds dashboard section cache serialization and dashboard header layout with inline chips and prioritize live signals in top bar.
