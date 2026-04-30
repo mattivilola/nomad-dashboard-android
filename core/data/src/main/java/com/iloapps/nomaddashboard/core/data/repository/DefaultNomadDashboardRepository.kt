@@ -57,6 +57,7 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertSignalStatus
 import com.iloapps.nomaddashboard.core.model.TravelAlertUnavailableReason
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedSummary
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
@@ -127,6 +128,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     override val providerCredentials: Flow<ProviderCredentialSettings> = providerCredentialStore.credentials
     override val visitedPlaces: Flow<List<VisitedPlace>> = visitedHistoryStore.visitedPlaces
     override val visitedCountryDays: Flow<List<VisitedCountryDay>> = visitedHistoryStore.visitedCountryDays
+    override val visitedPlaceEvents: Flow<List<VisitedPlaceEvent>> = visitedHistoryStore.visitedPlaceEvents
 
     private val internalSnapshot = MutableStateFlow(DashboardSnapshot())
     override val snapshot: StateFlow<DashboardSnapshot> = internalSnapshot
@@ -186,6 +188,10 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    override suspend fun clearVisitedHistory() {
+        visitedHistoryStore.clearHistory()
     }
 
     private suspend fun performRefresh() = supervisorScope {
@@ -534,16 +540,17 @@ class DefaultNomadDashboardRepository @Inject constructor(
         }
 
         val observedAt = Instant.now()
-        buildIpObservation(locationContext.travelContext, observedAt)?.let { observation ->
-            runCatching { visitedHistoryStore.recordObservation(observation) }
-        }
-
         if (currentSettings.useCurrentLocationForVisitedPlaces) {
             locationContext.currentDevicePlace?.let { place ->
                 runCatching {
                     visitedHistoryStore.recordObservation(place.toObservation(observedAt))
                 }
+                return
             }
+        }
+
+        buildIpObservation(locationContext.travelContext, observedAt)?.let { observation ->
+            runCatching { visitedHistoryStore.recordObservation(observation) }
         }
     }
 

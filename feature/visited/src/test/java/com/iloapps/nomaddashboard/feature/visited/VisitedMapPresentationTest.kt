@@ -3,7 +3,9 @@ package com.iloapps.nomaddashboard.feature.visited
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
+import com.iloapps.nomaddashboard.core.model.travelStopsForYear
 import java.time.Instant
 import java.time.LocalDate
 import org.junit.Test
@@ -129,6 +131,24 @@ class VisitedMapPresentationTest {
         assertThat(worldFallback.viewport.bounds).isEqualTo(VisitedMapBounds.World)
     }
 
+    @Test
+    fun `travel stops preserve chronological path order and group consecutive same place events`() {
+        val stops = listOf(
+            event("Paris", "France", "FR", "2026-01-02T08:00:00Z", LocalDate.of(2026, 1, 2)),
+            event("Paris", "France", "FR", "2026-01-03T08:00:00Z", LocalDate.of(2026, 1, 3)),
+            event("Berlin", "Germany", "DE", "2026-01-04T08:00:00Z", LocalDate.of(2026, 1, 4)),
+            event("Paris", "France", "FR", "2026-01-05T08:00:00Z", LocalDate.of(2026, 1, 5)),
+        ).travelStopsForYear(2026)
+
+        assertThat(stops.map { it.displayName }).containsExactly(
+            "Paris, France",
+            "Berlin, Germany",
+            "Paris, France",
+        ).inOrder()
+        assertThat(stops.map { it.dayCount }).containsExactly(2, 1, 1).inOrder()
+        assertThat(stops.map { it.sequenceNumber }).containsExactly(1, 2, 3).inOrder()
+    }
+
     private fun countryDay(
         countryCode: String,
         year: Int,
@@ -157,6 +177,26 @@ class VisitedMapPresentationTest {
         sources = listOf(VisitedPlaceSource.PUBLIC_IP_GEOLOCATION),
         firstVisitedAt = Instant.parse("2026-04-07T10:15:30Z"),
         lastVisitedAt = Instant.parse(lastVisitedAt),
+    )
+
+    private fun event(
+        city: String,
+        country: String,
+        countryCode: String,
+        observedAt: String,
+        observedDay: LocalDate,
+    ) = VisitedPlaceEvent(
+        id = "$countryCode-$city-$observedDay",
+        city = city,
+        region = "Region",
+        country = country,
+        countryCode = countryCode,
+        latitude = 50.0,
+        longitude = 10.0,
+        source = VisitedPlaceSource.DEVICE_LOCATION,
+        firstObservedAt = Instant.parse(observedAt),
+        lastObservedAt = Instant.parse(observedAt),
+        observedDay = observedDay,
     )
 
     private fun bounds(

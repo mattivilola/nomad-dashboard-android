@@ -30,6 +30,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,6 +67,7 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polygon
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadActionChip
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadBadgeTone
@@ -77,13 +79,22 @@ import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDayMonthSummary
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
+import com.iloapps.nomaddashboard.core.model.VisitedTravelStop
+import com.iloapps.nomaddashboard.core.model.availableEventYears
 import com.iloapps.nomaddashboard.core.model.availableYears
 import com.iloapps.nomaddashboard.core.model.monthlySummaries
+import com.iloapps.nomaddashboard.core.model.travelStopsForYear
 import com.iloapps.nomaddashboard.core.model.visitedPlaceSummary
 import com.iloapps.nomaddashboard.core.model.yearSummary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+
+private enum class VisitedMapMode {
+    WorldFootprint,
+    TravelPath,
+}
 
 @Composable
 fun VisitedRoute(
@@ -125,6 +136,7 @@ fun VisitedRoute(
         hasLocationPermission = hasLocationPermission,
         hasMapsApiKey = hasMapsApiKey,
         onRefresh = viewModel::refresh,
+        onClearHistory = viewModel::clearVisitedHistory,
         onRequestLocationPermission = {
             permissionLauncher.launch(
                 arrayOf(
@@ -143,15 +155,18 @@ fun VisitedScreen(
     hasLocationPermission: Boolean,
     hasMapsApiKey: Boolean,
     onRefresh: () -> Unit,
+    onClearHistory: () -> Unit,
     onRequestLocationPermission: () -> Unit,
 ) {
     val placeSummary = state.places.visitedPlaceSummary()
     val latestPlace = remember(state.places) {
         state.places.maxByOrNull(VisitedPlace::lastVisitedAt)
     }
-    val availableYears = state.countryDays.availableYears()
+    val eventYears = state.placeEvents.availableEventYears()
+    val availableYears = (state.countryDays.availableYears() + eventYears).distinct().sortedDescending()
     val currentYear = LocalDate.now().year
     var selectedYear by rememberSaveable { mutableIntStateOf(currentYear) }
+    var selectedMode by rememberSaveable { mutableStateOf(VisitedMapMode.WorldFootprint) }
 
     LaunchedEffect(availableYears) {
         selectedYear = when {
@@ -164,6 +179,9 @@ fun VisitedScreen(
 
     val selectedYearSummary = state.countryDays.yearSummary(selectedYear)
     val monthlySummaries = state.countryDays.monthlySummaries(selectedYear)
+    val travelStops = remember(state.placeEvents, selectedYear) {
+        state.placeEvents.travelStopsForYear(selectedYear)
+    }
     val countryShapes = rememberVisitedCountryShapes()
     val countryBoundsByCode = remember(countryShapes) {
         countryShapes.orEmpty().associate { it.countryCode to it.bounds }
@@ -194,6 +212,7 @@ fun VisitedScreen(
                 countryDays = state.countryDays,
                 hasLocationPermission = hasLocationPermission,
                 onRefresh = onRefresh,
+                onClearHistory = onClearHistory,
                 onRequestLocationPermission = onRequestLocationPermission,
             )
         }
@@ -228,12 +247,15 @@ fun VisitedScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.Top,
                         ) {
-                            WorldFootprintCard(
+                            VisitedMapCard(
                                 modifier = Modifier.weight(1.5f),
                                 hasMapsApiKey = hasMapsApiKey,
+                                mode = selectedMode,
+                                onSelectMode = { selectedMode = it },
                                 selectedYear = selectedYear,
                                 mapPresentation = mapPresentation,
                                 countryShapes = countryShapes,
+                                travelStops = travelStops,
                             )
                             CountryDaysCard(
                                 modifier = Modifier.weight(1f),
@@ -245,12 +267,15 @@ fun VisitedScreen(
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            WorldFootprintCard(
+                            VisitedMapCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 hasMapsApiKey = hasMapsApiKey,
+                                mode = selectedMode,
+                                onSelectMode = { selectedMode = it },
                                 selectedYear = selectedYear,
                                 mapPresentation = mapPresentation,
                                 countryShapes = countryShapes,
+                                travelStops = travelStops,
                             )
                             CountryDaysCard(
                                 modifier = Modifier.fillMaxWidth(),
@@ -266,6 +291,17 @@ fun VisitedScreen(
 
             items(monthlySummaries, key = { it.id }) { summary ->
                 MonthSummaryCard(summary = summary)
+            }
+
+            if (state.placeEvents.isNotEmpty()) {
+                item {
+                    TravelLogCard(
+                        availableYears = eventYears,
+                        selectedYear = selectedYear,
+                        onSelectYear = { selectedYear = it },
+                        stops = travelStops,
+                    )
+                }
             }
 
             item {
@@ -299,6 +335,7 @@ private fun VisitedOverviewCard(
     countryDays: List<VisitedCountryDay>,
     hasLocationPermission: Boolean,
     onRefresh: () -> Unit,
+    onClearHistory: () -> Unit,
     onRequestLocationPermission: () -> Unit,
 ) {
     val overviewBadges = buildList {
@@ -383,6 +420,12 @@ private fun VisitedOverviewCard(
                 Icon(Icons.Rounded.Refresh, contentDescription = null)
                 Text("Capture now", modifier = Modifier.padding(start = 8.dp))
             }
+            OutlinedButton(
+                onClick = onClearHistory,
+                enabled = placeSummary.citiesVisited > 0 || countryDays.isNotEmpty(),
+            ) {
+                Text("Clear history")
+            }
             if (settings.visitedPlacesEnabled && settings.useCurrentLocationForVisitedPlaces && hasLocationPermission.not()) {
                 NomadActionChip(
                     label = "Allow location",
@@ -418,7 +461,7 @@ private fun HowCaptureWorksCard() {
             badges = listOf("No cloud sync" to NomadBadgeTone.Info),
         )
         Text(
-            text = "Refresh records travel history. Same-day device readings replace IP captures, the first resolved country wins for a day, and longer gaps are inferred from the surrounding countries so the footprint stays readable.",
+            text = "Refresh records local travel history. Device location is preferred when it resolves; IP geolocation is only stored when device location is unavailable. Same-place same-day captures merge into one event, and country-day gaps are inferred from surrounding countries.",
             style = MaterialTheme.typography.bodyMedium,
         )
     }
@@ -426,12 +469,15 @@ private fun HowCaptureWorksCard() {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WorldFootprintCard(
+private fun VisitedMapCard(
     modifier: Modifier = Modifier,
     hasMapsApiKey: Boolean,
+    mode: VisitedMapMode,
+    onSelectMode: (VisitedMapMode) -> Unit,
     selectedYear: Int,
     mapPresentation: VisitedMapPresentation,
     countryShapes: List<VisitedMapCountryShape>?,
+    travelStops: List<VisitedTravelStop>,
 ) {
     val highlightedStyle = rememberHighlightedCountryStyle()
     val unvisitedStyle = rememberUnvisitedCountryStyle()
@@ -461,10 +507,31 @@ private fun WorldFootprintCard(
         modifier = modifier.testTag("visited_world_footprint"),
     ) {
         NomadSectionClusterHeader(
-            title = "World Footprint",
-            subtitle = "Opens around your most relevant region first, while keeping the selected-year footprint visible.",
+            title = if (mode == VisitedMapMode.WorldFootprint) "World Footprint" else "Travel Path",
+            subtitle = if (mode == VisitedMapMode.WorldFootprint) {
+                "Aggregate saved cities and selected-year country shading."
+            } else {
+                "Ordered $selectedYear stops with a route line between resolved locations."
+            },
             badges = footprintBadges,
         )
+
+        FlowRow(
+            modifier = Modifier.padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = mode == VisitedMapMode.WorldFootprint,
+                onClick = { onSelectMode(VisitedMapMode.WorldFootprint) },
+                label = { Text("World Footprint") },
+            )
+            FilterChip(
+                selected = mode == VisitedMapMode.TravelPath,
+                onClick = { onSelectMode(VisitedMapMode.TravelPath) },
+                label = { Text("Travel Path") },
+            )
+        }
 
         if (hasMapsApiKey.not()) {
             InlineStatusContent(
@@ -472,6 +539,8 @@ private fun WorldFootprintCard(
                 body = "Google Maps SDK for Android requires an app-level manifest API key. Configure a local debug or release key via Gradle or local.properties for this build, and keep private provider credentials in Settings only.",
                 icon = Icons.Rounded.TravelExplore,
             )
+        } else if (mode == VisitedMapMode.TravelPath) {
+            VisitedTravelPathMap(stops = travelStops)
         } else {
             VisitedWorldMap(
                 countryShapes = countryShapes.orEmpty(),
@@ -610,6 +679,161 @@ private fun VisitedWorldMap(
                     title = marker.title,
                     snippet = marker.subtitle,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisitedTravelPathMap(
+    stops: List<VisitedTravelStop>,
+) {
+    val coordinates = stops.mapNotNull { stop ->
+        stop.toCoordinate()?.let { stop to it }
+    }
+    val viewportBounds = remember(coordinates) {
+        VisitedMapBounds.fromCoordinates(coordinates.map { it.second })
+            ?.expanded(minLatitudeSpan = 8.0, minLongitudeSpan = 12.0, paddingFraction = 0.18)
+            ?: VisitedMapBounds.World
+    }
+    val cameraPositionState = rememberCameraPositionState {
+        position = viewportBounds.toCameraPosition()
+    }
+    var mapLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(mapLoaded, viewportBounds) {
+        if (mapLoaded) {
+            cameraPositionState.move(CameraUpdateFactory.newCameraPosition(viewportBounds.toCameraPosition()))
+        }
+    }
+
+    GoogleMap(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(380.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(20.dp),
+            ),
+        cameraPositionState = cameraPositionState,
+        properties = MapProperties(
+            isBuildingEnabled = false,
+            isIndoorEnabled = false,
+            isMyLocationEnabled = false,
+        ),
+        uiSettings = MapUiSettings(
+            compassEnabled = false,
+            indoorLevelPickerEnabled = false,
+            mapToolbarEnabled = false,
+            myLocationButtonEnabled = false,
+            rotationGesturesEnabled = false,
+            tiltGesturesEnabled = false,
+            zoomControlsEnabled = true,
+        ),
+        onMapLoaded = { mapLoaded = true },
+    ) {
+        if (coordinates.size >= 2) {
+            Polyline(
+                points = coordinates.map { it.second.toLatLng() },
+                color = MaterialTheme.colorScheme.primary,
+                width = 6f,
+            )
+        }
+        coordinates.forEach { (stop, coordinate) ->
+            Marker(
+                state = MarkerState(position = coordinate.toLatLng()),
+                title = "${stop.sequenceNumber}. ${stop.displayName}",
+                snippet = stop.dateRangeLabel(),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TravelLogCard(
+    availableYears: List<Int>,
+    selectedYear: Int,
+    onSelectYear: (Int) -> Unit,
+    stops: List<VisitedTravelStop>,
+) {
+    NomadCard(modifier = Modifier.testTag("visited_travel_log")) {
+        NomadSectionClusterHeader(
+            title = "Travel Log",
+            subtitle = if (stops.isEmpty()) {
+                "No chronological stops captured for $selectedYear yet."
+            } else {
+                "${stops.size} ordered stop${if (stops.size == 1) "" else "s"} captured for $selectedYear."
+            },
+            badges = listOf(selectedYear.toString() to NomadBadgeTone.Accent),
+        )
+
+        if (availableYears.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                availableYears.forEach { year ->
+                    FilterChip(
+                        selected = year == selectedYear,
+                        onClick = { onSelectYear(year) },
+                        label = { Text(year.toString()) },
+                    )
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            stops.forEach { stop ->
+                TravelStopRow(stop = stop)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TravelStopRow(stop: VisitedTravelStop) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        NomadPill(
+            text = stop.sequenceNumber.toString(),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = stop.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "${stop.dateRangeLabel()} · ${stop.dayCount} day${if (stop.dayCount == 1) "" else "s"}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.74f),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                stop.sources.forEach { source ->
+                    NomadPill(
+                        text = source.label(),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                    )
+                }
             }
         }
     }
@@ -825,6 +1049,25 @@ private fun VisitedPlaceSource.label(): String = when (this) {
     VisitedPlaceSource.PUBLIC_IP_GEOLOCATION -> "IP"
 }
 
+private fun VisitedTravelStop.dateRangeLabel(): String =
+    if (startDay == endDay) {
+        startDay.formatDayLabel()
+    } else {
+        "${startDay.formatDayLabel()} - ${endDay.formatDayLabel()}"
+    }
+
+private fun LocalDate.formatDayLabel(): String =
+    DateTimeFormatter.ofPattern("MMM d, yyyy").format(this)
+
+private fun VisitedTravelStop.toCoordinate(): VisitedMapCoordinate? {
+    val latitude = latitude ?: return null
+    val longitude = longitude ?: return null
+    if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
+        return null
+    }
+    return VisitedMapCoordinate(latitude = latitude, longitude = longitude)
+}
+
 private fun Double.asPercent(): String = "${(this * 100).toInt()}%"
 
 private fun java.time.Instant.formatTimestamp(): String =
@@ -868,6 +1111,18 @@ private fun VisitedMapPresentation.toCameraPosition(): CameraPosition {
         else -> 2.2f
     }
     return CameraPosition.fromLatLngZoom(target.toLatLng(), zoom)
+}
+
+private fun VisitedMapBounds.toCameraPosition(): CameraPosition {
+    val zoom = when {
+        latitudeSpan <= 4.0 && longitudeSpan <= 6.0 -> 6.4f
+        latitudeSpan <= 8.0 && longitudeSpan <= 12.0 -> 5.6f
+        latitudeSpan <= 14.0 && longitudeSpan <= 20.0 -> 4.8f
+        latitudeSpan <= 24.0 && longitudeSpan <= 34.0 -> 4.1f
+        latitudeSpan <= 40.0 && longitudeSpan <= 60.0 -> 3.3f
+        else -> 2.2f
+    }
+    return CameraPosition.fromLatLngZoom(center.toLatLng(), zoom)
 }
 
 private fun VisitedMapBounds.viewportKey(source: VisitedMapViewportSource): String =

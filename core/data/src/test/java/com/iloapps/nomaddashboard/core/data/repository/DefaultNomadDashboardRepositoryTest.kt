@@ -66,6 +66,7 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.network.api.FreeIpApiService
 import com.iloapps.nomaddashboard.core.network.api.IpifyService
@@ -129,7 +130,7 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
-    fun `refresh records device visit when toggle is enabled`() = runTest {
+    fun `refresh records only device visit when device resolves and ip appears to be vpn`() = runTest {
         val settings = AppSettings(
             visitedPlacesEnabled = true,
             publicIpGeolocationEnabled = true,
@@ -156,11 +157,33 @@ class DefaultNomadDashboardRepositoryTest {
 
         refreshRepository(repository)
 
-        assertThat(visitedStore.observations.map(VisitedObservation::source)).containsExactly(
-            VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
-            VisitedPlaceSource.DEVICE_LOCATION,
-        ).inOrder()
+        assertThat(visitedStore.observations.map(VisitedObservation::source))
+            .containsExactly(VisitedPlaceSource.DEVICE_LOCATION)
+        assertThat(visitedStore.observations.single().countryCode).isEqualTo("ES")
+        assertThat(visitedStore.observations.single().country).isEqualTo("Spain")
         assertThat(repository.snapshot.first { it.lastRefresh != null }.visited.sourceSummary).isEqualTo("IP + Device")
+    }
+
+    @Test
+    fun `refresh falls back to ip visit when device location is unavailable`() = runTest {
+        val settings = AppSettings(
+            visitedPlacesEnabled = true,
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForVisitedPlaces = true,
+        )
+        val visitedStore = FakeVisitedHistoryStore()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = visitedStore,
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(visitedStore.observations.map(VisitedObservation::source))
+            .containsExactly(VisitedPlaceSource.PUBLIC_IP_GEOLOCATION)
     }
 
     @Test
@@ -1881,10 +1904,12 @@ private val JsonMediaType = "application/json".toMediaType()
 private class FakeVisitedHistoryStore : VisitedHistoryStore {
     private val _visitedPlaces = MutableStateFlow<List<VisitedPlace>>(emptyList())
     private val _visitedCountryDays = MutableStateFlow<List<VisitedCountryDay>>(emptyList())
+    private val _visitedPlaceEvents = MutableStateFlow<List<VisitedPlaceEvent>>(emptyList())
     val observations = mutableListOf<VisitedObservation>()
 
     override val visitedPlaces: Flow<List<VisitedPlace>> = _visitedPlaces
     override val visitedCountryDays: Flow<List<VisitedCountryDay>> = _visitedCountryDays
+    override val visitedPlaceEvents: Flow<List<VisitedPlaceEvent>> = _visitedPlaceEvents
 
     override suspend fun recordObservation(observation: VisitedObservation) {
         observations += observation
@@ -1910,5 +1935,27 @@ private class FakeVisitedHistoryStore : VisitedHistoryStore {
                 isInferred = false,
             )
         }
+        _visitedPlaceEvents.value = observations.mapIndexed { index, it ->
+            VisitedPlaceEvent(
+                id = "event-$index",
+                city = it.city,
+                region = it.region,
+                country = it.country,
+                countryCode = it.countryCode,
+                latitude = it.latitude,
+                longitude = it.longitude,
+                source = it.source,
+                firstObservedAt = it.observedAt,
+                lastObservedAt = it.observedAt,
+                observedDay = LocalDate.ofInstant(it.observedAt, java.time.ZoneId.systemDefault()),
+            )
+        }
+    }
+
+    override suspend fun clearHistory() {
+        observations.clear()
+        _visitedPlaces.value = emptyList()
+        _visitedCountryDays.value = emptyList()
+        _visitedPlaceEvents.value = emptyList()
     }
 }

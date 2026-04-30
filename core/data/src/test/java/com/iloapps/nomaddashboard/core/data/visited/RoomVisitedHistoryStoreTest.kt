@@ -2,11 +2,15 @@ package com.iloapps.nomaddashboard.core.data.visited
 
 import com.google.common.truth.Truth.assertThat
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
+import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceEventDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.database.entity.VisitedCountryDayEntity
+import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEventEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
+import com.iloapps.nomaddashboard.core.model.travelStopsForYear
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
@@ -19,8 +23,9 @@ class RoomVisitedHistoryStoreTest {
     @Test
     fun `record observation merges places and prefers device coordinates`() = runTest {
         val placeDao = FakeVisitedPlaceDao()
+        val eventDao = FakeVisitedPlaceEventDao()
         val dayDao = FakeVisitedCountryDayDao()
-        val store = RoomVisitedHistoryStore(placeDao, dayDao, ImmediateTransactionRunner)
+        val store = RoomVisitedHistoryStore(placeDao, eventDao, dayDao, ImmediateTransactionRunner)
 
         store.recordObservation(
             observation(
@@ -60,8 +65,9 @@ class RoomVisitedHistoryStoreTest {
     @Test
     fun `same day device observation replaces ip country day`() = runTest {
         val placeDao = FakeVisitedPlaceDao()
+        val eventDao = FakeVisitedPlaceEventDao()
         val dayDao = FakeVisitedCountryDayDao()
-        val store = RoomVisitedHistoryStore(placeDao, dayDao, ImmediateTransactionRunner)
+        val store = RoomVisitedHistoryStore(placeDao, eventDao, dayDao, ImmediateTransactionRunner)
 
         store.recordObservation(
             observation(
@@ -118,8 +124,9 @@ class RoomVisitedHistoryStoreTest {
     @Test
     fun `later observed day replaces inferred day and rebuilds following gap`() = runTest {
         val placeDao = FakeVisitedPlaceDao()
+        val eventDao = FakeVisitedPlaceEventDao()
         val dayDao = FakeVisitedCountryDayDao()
-        val store = RoomVisitedHistoryStore(placeDao, dayDao, ImmediateTransactionRunner)
+        val store = RoomVisitedHistoryStore(placeDao, eventDao, dayDao, ImmediateTransactionRunner)
 
         store.recordObservation(
             observation(
@@ -159,6 +166,110 @@ class RoomVisitedHistoryStoreTest {
             5 to "FR",
         ).inOrder()
         assertThat(days.map(VisitedCountryDay::isInferred)).containsExactly(false, true, false, true, false).inOrder()
+    }
+
+    @Test
+    fun `same place same day observations merge into one event`() = runTest {
+        val store = RoomVisitedHistoryStore(
+            FakeVisitedPlaceDao(),
+            FakeVisitedPlaceEventDao(),
+            FakeVisitedCountryDayDao(),
+            ImmediateTransactionRunner,
+        )
+
+        store.recordObservation(
+            observation(
+                city = "Lisbon",
+                country = "Portugal",
+                countryCode = "PT",
+                source = VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
+                observedAt = Instant.parse("2026-04-01T08:00:00Z"),
+            ),
+        )
+        store.recordObservation(
+            observation(
+                city = "Lisbon",
+                country = "Portugal",
+                countryCode = "PT",
+                latitude = 38.7223,
+                longitude = -9.1393,
+                source = VisitedPlaceSource.DEVICE_LOCATION,
+                observedAt = Instant.parse("2026-04-01T18:00:00Z"),
+            ),
+        )
+
+        val events = store.visitedPlaceEvents.first()
+
+        assertThat(events).hasSize(1)
+        assertThat(events.single().source).isEqualTo(VisitedPlaceSource.DEVICE_LOCATION)
+        assertThat(events.single().firstObservedAt).isEqualTo(Instant.parse("2026-04-01T08:00:00Z"))
+        assertThat(events.single().lastObservedAt).isEqualTo(Instant.parse("2026-04-01T18:00:00Z"))
+        assertThat(events.single().latitude).isEqualTo(38.7223)
+    }
+
+    @Test
+    fun `same place different day observations stay separate and group into one stop`() = runTest {
+        val store = RoomVisitedHistoryStore(
+            FakeVisitedPlaceDao(),
+            FakeVisitedPlaceEventDao(),
+            FakeVisitedCountryDayDao(),
+            ImmediateTransactionRunner,
+        )
+
+        store.recordObservation(
+            observation(
+                city = "Tallinn",
+                country = "Estonia",
+                countryCode = "EE",
+                latitude = 59.437,
+                longitude = 24.7536,
+                source = VisitedPlaceSource.DEVICE_LOCATION,
+                observedAt = Instant.parse("2026-04-01T08:00:00Z"),
+            ),
+        )
+        store.recordObservation(
+            observation(
+                city = "Tallinn",
+                country = "Estonia",
+                countryCode = "EE",
+                latitude = 59.437,
+                longitude = 24.7536,
+                source = VisitedPlaceSource.DEVICE_LOCATION,
+                observedAt = Instant.parse("2026-04-02T08:00:00Z"),
+            ),
+        )
+
+        val events = store.visitedPlaceEvents.first()
+        val stops = events.travelStopsForYear(2026)
+
+        assertThat(events).hasSize(2)
+        assertThat(stops).hasSize(1)
+        assertThat(stops.single().dayCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `clear history removes aggregate days places and events`() = runTest {
+        val store = RoomVisitedHistoryStore(
+            FakeVisitedPlaceDao(),
+            FakeVisitedPlaceEventDao(),
+            FakeVisitedCountryDayDao(),
+            ImmediateTransactionRunner,
+        )
+
+        store.recordObservation(
+            observation(
+                city = "Riga",
+                country = "Latvia",
+                countryCode = "LV",
+                source = VisitedPlaceSource.DEVICE_LOCATION,
+                observedAt = Instant.parse("2026-04-01T08:00:00Z"),
+            ),
+        )
+        store.clearHistory()
+
+        assertThat(store.visitedPlaces.first()).isEmpty()
+        assertThat(store.visitedCountryDays.first()).isEmpty()
+        assertThat(store.visitedPlaceEvents.first()).isEmpty()
     }
 
     private fun observation(
@@ -203,6 +314,37 @@ private class FakeVisitedPlaceDao : VisitedPlaceDao {
             next += place
         }
         state.value = next.sortedByDescending { it.lastVisitedAtEpochMillis }
+    }
+
+    override suspend fun clearAll() {
+        state.value = emptyList()
+    }
+}
+
+private class FakeVisitedPlaceEventDao : VisitedPlaceEventDao {
+    private val state = MutableStateFlow<List<VisitedPlaceEventEntity>>(emptyList())
+
+    override fun observeAll(): Flow<List<VisitedPlaceEventEntity>> = state
+
+    override suspend fun getById(id: String): VisitedPlaceEventEntity? =
+        state.value.firstOrNull { it.id == id }
+
+    override suspend fun upsert(event: VisitedPlaceEventEntity) {
+        val next = state.value.toMutableList()
+        val index = next.indexOfFirst { it.id == event.id }
+        if (index >= 0) {
+            next[index] = event
+        } else {
+            next += event
+        }
+        state.value = next.sortedWith(
+            compareBy<VisitedPlaceEventEntity> { it.observedDayIso }
+                .thenBy { it.firstObservedAtEpochMillis },
+        )
+    }
+
+    override suspend fun clearAll() {
+        state.value = emptyList()
     }
 }
 

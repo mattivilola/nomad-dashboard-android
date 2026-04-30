@@ -41,6 +41,7 @@ import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
+import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceEventDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsSerializer
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
@@ -325,6 +326,7 @@ object NomadInfrastructureModule {
             .addMigrations(NomadDatabase.MIGRATION_4_5)
             .addMigrations(NomadDatabase.MIGRATION_5_6)
             .addMigrations(NomadDatabase.MIGRATION_6_7)
+            .addMigrations(NomadDatabase.MIGRATION_7_8)
             .build()
 
     @Provides
@@ -342,6 +344,9 @@ object NomadInfrastructureModule {
 
     @Provides
     fun provideVisitedPlaceDao(database: NomadDatabase): VisitedPlaceDao = database.visitedPlaceDao()
+
+    @Provides
+    fun provideVisitedPlaceEventDao(database: NomadDatabase): VisitedPlaceEventDao = database.visitedPlaceEventDao()
 
     @Provides
     fun provideVisitedCountryDayDao(database: NomadDatabase): VisitedCountryDayDao = database.visitedCountryDayDao()

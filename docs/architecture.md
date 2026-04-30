@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-04-23
+Last updated: 2026-04-30
 
 ## Overview
 
@@ -76,7 +76,9 @@ Responsibilities:
 - DAOs and entities
 
 Purpose:
-- structured local persistence for historical and time-based data
+- structured local persistence for historical and time-based data, including
+  aggregate visited places, country-day rows, and chronological visited-place
+  events
 
 ### `core:data`
 
@@ -194,17 +196,24 @@ Visited history flow:
 1. `SettingsViewModel` persists `visitedPlacesEnabled` and
    `useCurrentLocationForVisitedPlaces`.
 2. `DashboardViewModel` and `VisitedViewModel` trigger repository refreshes.
-3. During refresh, the repository records:
-   - public-IP geolocation observations when available
-   - device-location observations when the visited-location opt-in is enabled
-     and Android permission is granted
-4. `VisitedHistoryStore` merges places in Room and rebuilds observed plus
-   inferred country-day rows.
-5. `VisitedViewModel` combines settings, visited places, and country days into
-   UI state for the visited screen.
-6. `feature:visited` derives a feature-local map presentation from the existing
-   places and country days, then renders all-time place markers plus
-   selected-year country shading from a bundled world-country GeoJSON asset.
+3. During refresh, the repository records one visited-history observation per
+   capture. If device location resolves successfully, it records the device
+   place and skips the public-IP observation for that capture. If device
+   location is unavailable or unresolved, it falls back to public-IP
+   geolocation when available.
+4. `VisitedHistoryStore` writes the observation into a chronological
+   `visited_place_events` table, merging same-place same-day observations into
+   one event and keeping same-place different-day observations as distinct
+   events.
+5. `VisitedHistoryStore` also keeps the existing aggregate `visited_places`
+   rows compatible and rebuilds observed plus inferred `visited_country_days`
+   rows.
+6. `VisitedViewModel` combines settings, aggregate places, country days, and
+   event history into UI state for the visited screen.
+7. `feature:visited` derives a feature-local map presentation from aggregate
+   places and country days for World Footprint mode, and groups consecutive
+   same-place events into selected-year travel stops for Travel Path mode.
+   The visited screen can clear all three local history tables together.
 
 Time tracking flow:
 

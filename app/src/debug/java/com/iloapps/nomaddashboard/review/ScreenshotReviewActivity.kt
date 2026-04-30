@@ -63,6 +63,7 @@ class ScreenshotReviewActivity : ComponentActivity() {
                                 hasLocationPermission = true,
                                 hasMapsApiKey = false,
                                 onRefresh = {},
+                                onClearHistory = {},
                                 onRequestLocationPermission = {},
                             )
                         }

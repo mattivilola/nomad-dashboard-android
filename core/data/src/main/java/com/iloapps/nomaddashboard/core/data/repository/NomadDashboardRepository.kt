@@ -6,6 +6,7 @@ import com.iloapps.nomaddashboard.core.model.ProviderCredentialSettings
 import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -15,9 +16,11 @@ interface NomadDashboardRepository {
     val snapshot: StateFlow<DashboardSnapshot>
     val visitedPlaces: Flow<List<VisitedPlace>>
     val visitedCountryDays: Flow<List<VisitedCountryDay>>
+    val visitedPlaceEvents: Flow<List<VisitedPlaceEvent>>
 
     suspend fun warmStart()
     suspend fun refresh()
+    suspend fun clearVisitedHistory()
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings)
     suspend fun updateProviderCredentials(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings)
     suspend fun resolveSurfSpotFromCurrentLocation(): SurfSpotConfiguration?

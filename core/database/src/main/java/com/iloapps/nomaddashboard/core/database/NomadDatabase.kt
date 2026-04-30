@@ -13,6 +13,7 @@ import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingEntryDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingInterruptionDao
 import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
+import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceEventDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
@@ -22,6 +23,7 @@ import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingEntryEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingInterruptionEntity
 import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedCountryDayEntity
+import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEventEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
 
 @Database(
@@ -31,12 +33,13 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
         LocalPriceCacheEntity::class,
         LocalInfoCacheEntity::class,
         VisitedPlaceEntity::class,
+        VisitedPlaceEventEntity::class,
         VisitedCountryDayEntity::class,
         TimeTrackingProjectEntity::class,
         TimeTrackingEntryEntity::class,
         TimeTrackingInterruptionEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(NomadDatabaseConverters::class)
@@ -46,6 +49,7 @@ abstract class NomadDatabase : RoomDatabase() {
     abstract fun localPriceCacheDao(): LocalPriceCacheDao
     abstract fun localInfoCacheDao(): LocalInfoCacheDao
     abstract fun visitedPlaceDao(): VisitedPlaceDao
+    abstract fun visitedPlaceEventDao(): VisitedPlaceEventDao
     abstract fun visitedCountryDayDao(): VisitedCountryDayDao
     abstract fun timeTrackingProjectDao(): TimeTrackingProjectDao
     abstract fun timeTrackingEntryDao(): TimeTrackingEntryDao
@@ -228,6 +232,28 @@ abstract class NomadDatabase : RoomDatabase() {
                         sectionId TEXT NOT NULL PRIMARY KEY,
                         payloadJson TEXT NOT NULL,
                         fetchedAtEpochMillis INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS visited_place_events (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        city TEXT,
+                        region TEXT,
+                        country TEXT NOT NULL,
+                        countryCode TEXT,
+                        latitude REAL,
+                        longitude REAL,
+                        source TEXT NOT NULL,
+                        firstObservedAtEpochMillis INTEGER NOT NULL,
+                        lastObservedAtEpochMillis INTEGER NOT NULL,
+                        observedDayIso TEXT NOT NULL
                     )
                     """.trimIndent(),
                 )

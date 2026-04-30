@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-23
+Last updated: 2026-04-30
 
 ## Local Setup
 
@@ -175,6 +175,17 @@ make lint
 ```
 
 Current verified result:
+- on 2026-04-30,
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests com.iloapps.nomaddashboard.core.data.visited.RoomVisitedHistoryStoreTest :feature:visited:testDebugUnitTest :feature:visited:compileDebugKotlin -Pksp.incremental=false`
+  passed after adding the visited-place event store, same-day event merge,
+  different-day event separation, travel-stop grouping, and reset coverage
+- on 2026-04-30,
+  `source scripts/android-env.sh && run_gradle :core:data:testDebugUnitTest --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh records only device visit when device resolves and ip appears to be vpn' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh falls back to ip visit when device location is unavailable' --tests 'com.iloapps.nomaddashboard.core.data.repository.DefaultNomadDashboardRepositoryTest.refresh records ip visit and updates snapshot summary' -Pksp.incremental=false`
+  passed for the visited capture source-priority regressions
+- on 2026-04-30,
+  `source scripts/android-env.sh && run_gradle :app:compileDebugKotlin :app:compileDebugJavaWithJavac -Pksp.incremental=false`
+  passed after exposing visited event history through the repository and
+  visited UI
 - on 2026-04-23,
   `source scripts/android-env.sh && run_gradle :feature:dashboard:compileDebugKotlin :feature:dashboard:compileDebugAndroidTestKotlin :app:assembleDebug -Pksp.incremental=false`
   passed after the dashboard startup warm-start/cache refactor

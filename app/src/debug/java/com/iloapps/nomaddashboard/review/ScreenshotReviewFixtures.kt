@@ -42,6 +42,7 @@ import com.iloapps.nomaddashboard.core.model.TravelAlertsSnapshot
 import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
+import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
@@ -469,6 +470,47 @@ object ScreenshotReviewFixtures {
                 VisitedCountryDay(LocalDate.of(2026, 3, 12), "France", "FR", VisitedPlaceSource.PUBLIC_IP_GEOLOCATION, false),
                 VisitedCountryDay(LocalDate.of(2026, 2, 18), "Italy", "IT", VisitedPlaceSource.DEVICE_LOCATION, false),
                 VisitedCountryDay(LocalDate.of(2026, 2, 19), "Italy", "IT", VisitedPlaceSource.DEVICE_LOCATION, false),
+            ),
+            placeEvents = listOf(
+                VisitedPlaceEvent(
+                    id = "it|bologna|2026-02-18",
+                    city = "Bologna",
+                    region = "Emilia-Romagna",
+                    country = "Italy",
+                    countryCode = "IT",
+                    latitude = 44.4949,
+                    longitude = 11.3426,
+                    source = VisitedPlaceSource.DEVICE_LOCATION,
+                    firstObservedAt = Instant.parse("2026-02-18T07:45:00Z"),
+                    lastObservedAt = Instant.parse("2026-02-19T21:10:00Z"),
+                    observedDay = LocalDate.of(2026, 2, 18),
+                ),
+                VisitedPlaceEvent(
+                    id = "fr|paris|2026-03-11",
+                    city = "Paris",
+                    region = "Ile-de-France",
+                    country = "France",
+                    countryCode = "FR",
+                    latitude = 48.8566,
+                    longitude = 2.3522,
+                    source = VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
+                    firstObservedAt = Instant.parse("2026-03-11T09:30:00Z"),
+                    lastObservedAt = Instant.parse("2026-03-12T20:40:00Z"),
+                    observedDay = LocalDate.of(2026, 3, 11),
+                ),
+                VisitedPlaceEvent(
+                    id = "es|tarifa|2026-04-01",
+                    city = "Tarifa",
+                    region = "Andalusia",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.0132,
+                    longitude = -5.6069,
+                    source = VisitedPlaceSource.DEVICE_LOCATION,
+                    firstObservedAt = Instant.parse("2026-04-01T08:15:00Z"),
+                    lastObservedAt = Instant.parse("2026-04-06T18:20:00Z"),
+                    observedDay = LocalDate.of(2026, 4, 1),
+                ),
             ),
         )
 

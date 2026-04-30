@@ -39,6 +39,53 @@ data class VisitedCountryDay(
     val isInferred: Boolean,
 )
 
+data class VisitedPlaceEvent(
+    val id: String,
+    val city: String?,
+    val region: String?,
+    val country: String,
+    val countryCode: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val source: VisitedPlaceSource,
+    val firstObservedAt: Instant,
+    val lastObservedAt: Instant,
+    val observedDay: LocalDate,
+) {
+    val placeKey: String
+        get() = visitedPlaceStorageKey(countryCode = countryCode, country = country, city = city)
+
+    val displayName: String
+        get() = listOfNotNull(city?.takeIf(String::isNotBlank), country.takeIf(String::isNotBlank))
+            .joinToString(", ")
+            .ifBlank { country }
+}
+
+data class VisitedTravelStop(
+    val id: String,
+    val sequenceNumber: Int,
+    val city: String?,
+    val region: String?,
+    val country: String,
+    val countryCode: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val sources: List<VisitedPlaceSource>,
+    val startDay: LocalDate,
+    val endDay: LocalDate,
+    val firstObservedAt: Instant,
+    val lastObservedAt: Instant,
+    val events: List<VisitedPlaceEvent>,
+) {
+    val dayCount: Int
+        get() = java.time.temporal.ChronoUnit.DAYS.between(startDay, endDay).toInt() + 1
+
+    val displayName: String
+        get() = listOfNotNull(city?.takeIf(String::isNotBlank), country.takeIf(String::isNotBlank))
+            .joinToString(", ")
+            .ifBlank { country }
+}
+
 data class VisitedPlaceSummary(
     val citiesVisited: Int,
     val countriesVisited: Int,
@@ -103,6 +150,58 @@ fun List<VisitedCountryDay>.availableYears(): List<Int> =
         .map(LocalDate::getYear)
         .toSet()
         .sortedDescending()
+
+fun List<VisitedPlaceEvent>.availableEventYears(): List<Int> =
+    map(VisitedPlaceEvent::observedDay)
+        .map(LocalDate::getYear)
+        .toSet()
+        .sortedDescending()
+
+fun List<VisitedPlaceEvent>.travelStopsForYear(year: Int): List<VisitedTravelStop> {
+    val sortedEvents = filter { it.observedDay.year == year }
+        .sortedWith(
+            compareBy<VisitedPlaceEvent> { it.observedDay }
+                .thenBy { it.firstObservedAt },
+        )
+    if (sortedEvents.isEmpty()) {
+        return emptyList()
+    }
+
+    val groups = mutableListOf<MutableList<VisitedPlaceEvent>>()
+    sortedEvents.forEach { event ->
+        val previousGroup = groups.lastOrNull()
+        val previousEvent = previousGroup?.lastOrNull()
+        if (previousEvent != null && previousEvent.placeKey == event.placeKey) {
+            previousGroup += event
+        } else {
+            groups += mutableListOf(event)
+        }
+    }
+
+    return groups.mapIndexed { index, events ->
+        val first = events.first()
+        val coordinateEvent = events.firstOrNull { it.latitude != null && it.longitude != null }
+        val preferredCoordinateEvent = events.firstOrNull {
+            it.source == VisitedPlaceSource.DEVICE_LOCATION && it.latitude != null && it.longitude != null
+        } ?: coordinateEvent
+        VisitedTravelStop(
+            id = "${first.placeKey}|${first.observedDay}|$index",
+            sequenceNumber = index + 1,
+            city = first.city,
+            region = first.region,
+            country = first.country,
+            countryCode = first.countryCode,
+            latitude = preferredCoordinateEvent?.latitude,
+            longitude = preferredCoordinateEvent?.longitude,
+            sources = events.map(VisitedPlaceEvent::source).distinct(),
+            startDay = events.minOf(VisitedPlaceEvent::observedDay),
+            endDay = events.maxOf(VisitedPlaceEvent::observedDay),
+            firstObservedAt = events.minOf(VisitedPlaceEvent::firstObservedAt),
+            lastObservedAt = events.maxOf(VisitedPlaceEvent::lastObservedAt),
+            events = events,
+        )
+    }
+}
 
 fun List<VisitedCountryDay>.yearSummary(year: Int): VisitedCountryDayYearSummary? {
     val entries = filter { it.date.year == year }

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-04-23
+Last updated: 2026-04-30
 
 ## Overall
 
@@ -147,6 +147,17 @@ Current repository state:
   proto3 previously decoded as false; the ipify fallback now uses the live JSON
   endpoint; Android device-location lookup now checks cached provider fixes
   before waiting on a slow active fix
+- visited travel path/history landed: refresh now writes a dedicated
+  chronological visited-place event store alongside aggregate saved places and
+  country-day rows, merges same-place same-day captures, keeps different-day
+  events separate, groups consecutive same-place events into travel stops for
+  display, and prefers resolved device location over public-IP geolocation for
+  visited history captures
+- visited map now has World Footprint and Travel Path modes; Travel Path shows
+  selected-year numbered stops, a route line between stops with coordinates,
+  and a chronological travel log with date ranges, source labels, and day
+  counts; the screen also exposes a local clear-history action that removes
+  aggregate places, country days, and event history
 
 ## Completed
 

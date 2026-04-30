@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-04-23
+Last updated: 2026-04-30
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -95,11 +95,13 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Visited screen route | Implemented | UI route now leads with a local-first travel overview, map-first footprint, denser country-day summaries, and clearer saved-stop rows instead of explanatory filler |
-| Visited place persistence | Implemented | Room-backed local history captures IP and optional device-location visits during refresh |
-| Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries |
+| Visited screen route | Implemented | UI route now leads with a local-first travel overview, map mode switch, map-first footprint/path display, denser country-day summaries, chronological travel log, clear-history action, and clearer saved-stop rows |
+| Visited place persistence | Implemented | Room-backed local history captures aggregate saved places plus a separate chronological visited-place event table; same-place same-day captures merge into one event while same-place different-day captures remain distinct |
+| Visited source priority | Implemented | Visited places, country days, and travel-path events prefer resolved device location; public-IP geolocation is only stored for a capture when device location is unavailable or unresolved |
+| Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries; aggregate compatibility is preserved while event history powers path display |
+| Travel path history | Implemented | Travel Path mode shows selected-year ordered stops, a route line between coordinate-backed stops, and a chronological log with date/date range, source, and stop day count |
 | Country-day export | Planned | No Android export flow yet |
-| World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries; the camera now opens around the latest relevant region while keeping the selected-year footprint in frame, and visited-country contrast is stronger; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
+| World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries in World Footprint mode; Travel Path mode renders numbered selected-year stops and route polylines; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
 
 ## Time Tracking
 

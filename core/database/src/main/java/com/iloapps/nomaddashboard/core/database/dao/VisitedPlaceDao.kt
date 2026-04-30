@@ -17,4 +17,7 @@ interface VisitedPlaceDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(place: VisitedPlaceEntity)
+
+    @Query("DELETE FROM visited_places")
+    suspend fun clearAll()
 }
