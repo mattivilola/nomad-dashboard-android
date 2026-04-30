@@ -3,6 +3,9 @@ package com.iloapps.nomaddashboard.feature.visited
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -47,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -59,6 +63,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -252,7 +258,9 @@ fun VisitedScreen(
                                 hasMapsApiKey = hasMapsApiKey,
                                 mode = selectedMode,
                                 onSelectMode = { selectedMode = it },
+                                availableYears = availableYears,
                                 selectedYear = selectedYear,
+                                onSelectYear = { selectedYear = it },
                                 mapPresentation = mapPresentation,
                                 countryShapes = countryShapes,
                                 travelStops = travelStops,
@@ -272,7 +280,9 @@ fun VisitedScreen(
                                 hasMapsApiKey = hasMapsApiKey,
                                 mode = selectedMode,
                                 onSelectMode = { selectedMode = it },
+                                availableYears = availableYears,
                                 selectedYear = selectedYear,
+                                onSelectYear = { selectedYear = it },
                                 mapPresentation = mapPresentation,
                                 countryShapes = countryShapes,
                                 travelStops = travelStops,
@@ -474,7 +484,9 @@ private fun VisitedMapCard(
     hasMapsApiKey: Boolean,
     mode: VisitedMapMode,
     onSelectMode: (VisitedMapMode) -> Unit,
+    availableYears: List<Int>,
     selectedYear: Int,
+    onSelectYear: (Int) -> Unit,
     mapPresentation: VisitedMapPresentation,
     countryShapes: List<VisitedMapCountryShape>?,
     travelStops: List<VisitedTravelStop>,
@@ -531,6 +543,23 @@ private fun VisitedMapCard(
                 onClick = { onSelectMode(VisitedMapMode.TravelPath) },
                 label = { Text("Travel Path") },
             )
+        }
+
+        if (availableYears.size > 1) {
+            FlowRow(
+                modifier = Modifier.padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                availableYears.forEach { year ->
+                    FilterChip(
+                        modifier = Modifier.testTag("visited-map-year-$year"),
+                        selected = year == selectedYear,
+                        onClick = { onSelectYear(year) },
+                        label = { Text(year.toString()) },
+                    )
+                }
+            }
         }
 
         if (hasMapsApiKey.not()) {
@@ -688,6 +717,9 @@ private fun VisitedWorldMap(
 private fun VisitedTravelPathMap(
     stops: List<VisitedTravelStop>,
 ) {
+    val markerFillColor = MaterialTheme.colorScheme.primary.toArgb()
+    val markerStrokeColor = MaterialTheme.colorScheme.surface.toArgb()
+    val markerTextColor = MaterialTheme.colorScheme.onPrimary.toArgb()
     val coordinates = stops.mapNotNull { stop ->
         stop.toCoordinate()?.let { stop to it }
     }
@@ -742,10 +774,19 @@ private fun VisitedTravelPathMap(
             )
         }
         coordinates.forEach { (stop, coordinate) ->
+            val markerIcon = remember(stop.sequenceNumber, markerFillColor, markerStrokeColor, markerTextColor) {
+                numberedMarkerIcon(
+                    number = stop.sequenceNumber,
+                    fillColor = markerFillColor,
+                    strokeColor = markerStrokeColor,
+                    textColor = markerTextColor,
+                )
+            }
             Marker(
                 state = MarkerState(position = coordinate.toLatLng()),
                 title = "${stop.sequenceNumber}. ${stop.displayName}",
                 snippet = stop.dateRangeLabel(),
+                icon = markerIcon,
             )
         }
     }
@@ -1123,6 +1164,38 @@ private fun VisitedMapBounds.toCameraPosition(): CameraPosition {
         else -> 2.2f
     }
     return CameraPosition.fromLatLngZoom(center.toLatLng(), zoom)
+}
+
+private fun numberedMarkerIcon(
+    number: Int,
+    fillColor: Int,
+    strokeColor: Int,
+    textColor: Int,
+): BitmapDescriptor {
+    val size = 96
+    val center = size / 2f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fillColor
+        style = Paint.Style.FILL
+    }
+    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.STROKE
+        strokeWidth = 8f
+    }
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = textColor
+        textAlign = Paint.Align.CENTER
+        textSize = if (number < 100) 42f else 34f
+        typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+    }
+    canvas.drawCircle(center, center, 36f, fillPaint)
+    canvas.drawCircle(center, center, 36f, strokePaint)
+    val textBaseline = center - (textPaint.descent() + textPaint.ascent()) / 2f
+    canvas.drawText(number.toString(), center, textBaseline, textPaint)
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
 }
 
 private fun VisitedMapBounds.viewportKey(source: VisitedMapViewportSource): String =

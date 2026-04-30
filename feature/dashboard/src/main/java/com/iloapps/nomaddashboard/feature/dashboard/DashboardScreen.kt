@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -2219,6 +2220,8 @@ private fun LocalInfoSectionCard(
                     title = "Location",
                     value = locationValue,
                     detail = localInfoLocationDetail(snapshot),
+                    modifier = Modifier.testTag(LocalInfoLocationRowTag),
+                    limitHeight = true,
                 )
             }
             snapshot.publicHoliday?.let { holiday ->
@@ -2279,10 +2282,18 @@ private fun LocalInfoStatusRow(
     value: String,
     detail: String?,
     warningChip: LocalInfoTravelerWarningChip? = null,
+    modifier: Modifier = Modifier,
+    limitHeight: Boolean = false,
 ) {
+    val rowModifier = if (limitHeight) {
+        modifier.height(96.dp)
+    } else {
+        modifier
+    }
     Box(
-        modifier = Modifier
+        modifier = rowModifier
             .fillMaxWidth()
+            .wrapContentHeight()
             .clip(RoundedCornerShape(22.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -3587,5 +3598,6 @@ private data class LocalInfoTravelerWarningChip(
 internal const val TravelAlertsCardTag = "travel-alerts-card"
 internal const val EmergencyCareCardTag = "emergency-care-card"
 internal const val LocalInfoCardTag = "local-info-card"
+internal const val LocalInfoLocationRowTag = "local-info-location-row"
 internal const val LocalInfoPublicHolidayWarningChipTag = "local-info-public-holiday-warning-chip"
 internal const val LocalInfoSchoolBreakWarningChipTag = "local-info-school-break-warning-chip"

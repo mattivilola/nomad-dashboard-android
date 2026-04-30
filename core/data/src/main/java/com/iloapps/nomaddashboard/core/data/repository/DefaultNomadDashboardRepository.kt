@@ -259,10 +259,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 ipTravelContextDeferred = ipTravelContextDeferred,
             )
 
-            recordVisitedObservations(
-                currentSettings = currentSettings,
-                locationContext = locationContext,
-            )
+            if (shouldDeferVisitedObservation(currentSettings, locationContext).not()) {
+                recordVisitedObservations(
+                    currentSettings = currentSettings,
+                    locationContext = locationContext,
+                )
+            }
 
             val initialSections = refreshLocationDependentSections(
                 currentSettings = currentSettings,
@@ -315,6 +317,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 initial = locationContext,
                 deviceLocationDeferred = deviceLocationDeferred,
             ) ?: run {
+                recordVisitedObservations(
+                    currentSettings = currentSettings,
+                    locationContext = locationContext,
+                )
+                val fallbackVisitedPlaces = visitedHistoryStore.visitedPlaces.first()
+                val fallbackVisitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
                 internalSnapshot.update {
                     it.copy(
                         isRefreshing = false,
@@ -324,6 +332,11 @@ class DefaultNomadDashboardRepository @Inject constructor(
                         localInfo = it.localInfo.copy(isRefreshing = false),
                         fuelPrices = it.fuelPrices.copy(isRefreshing = false),
                         emergencyCare = it.emergencyCare.copy(isRefreshing = false),
+                        visited = it.visited.copy(
+                            citiesVisited = fallbackVisitedPlaces.visitedPlaceSummary().citiesVisited,
+                            countriesVisited = fallbackVisitedPlaces.visitedPlaceSummary().countriesVisited,
+                            trackedDays = fallbackVisitedCountryDays.size,
+                        ),
                     )
                 }
                 return@supervisorScope
@@ -346,6 +359,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 currentSettings = currentSettings,
                 locationContext = promotedLocation,
             )
+            val promotedVisitedPlaces = visitedHistoryStore.visitedPlaces.first()
+            val promotedVisitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
 
             val promotedSections = refreshLocationDependentSections(
                 currentSettings = currentSettings,
@@ -379,8 +394,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 activeTimeTracking = activeTimeTracking,
                 pendingTimeTrackingCount = pendingTimeTracking.size,
                 timeTrackingReport = timeTrackingReport,
-                visitedPlaceSummary = visitedPlaces.visitedPlaceSummary(),
-                trackedDays = visitedCountryDays.size,
+                visitedPlaceSummary = promotedVisitedPlaces.visitedPlaceSummary(),
+                trackedDays = promotedVisitedCountryDays.size,
             )
         } finally {
             marineDeferred.cancel()
@@ -553,6 +568,14 @@ class DefaultNomadDashboardRepository @Inject constructor(
             runCatching { visitedHistoryStore.recordObservation(observation) }
         }
     }
+
+    private fun shouldDeferVisitedObservation(
+        currentSettings: AppSettings,
+        locationContext: ResolvedLocationContext,
+    ): Boolean =
+        currentSettings.visitedPlacesEnabled &&
+            currentSettings.useCurrentLocationForVisitedPlaces &&
+            locationContext.awaitingDevicePromotion
 
     private suspend fun refreshLocationDependentSections(
         currentSettings: AppSettings,

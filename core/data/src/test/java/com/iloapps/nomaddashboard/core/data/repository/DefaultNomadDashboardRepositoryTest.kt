@@ -165,6 +165,39 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
+    fun `refresh waits for delayed device visit before storing ip fallback`() = runTest {
+        val settings = AppSettings(
+            visitedPlacesEnabled = true,
+            publicIpGeolocationEnabled = true,
+            useCurrentLocationForVisitedPlaces = true,
+        )
+        val visitedStore = FakeVisitedHistoryStore()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            visitedHistoryStore = visitedStore,
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                value = ResolvedVisitedPlace(
+                    city = "Malaga",
+                    region = "Andalusia",
+                    country = "Spain",
+                    countryCode = "ES",
+                    latitude = 36.72,
+                    longitude = -4.42,
+                ),
+                delayMillis = 250,
+            ),
+            applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(visitedStore.observations.map(VisitedObservation::source))
+            .containsExactly(VisitedPlaceSource.DEVICE_LOCATION)
+        assertThat(visitedStore.observations.single().city).isEqualTo("Malaga")
+    }
+
+    @Test
     fun `refresh falls back to ip visit when device location is unavailable`() = runTest {
         val settings = AppSettings(
             visitedPlacesEnabled = true,

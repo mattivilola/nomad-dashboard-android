@@ -28,6 +28,7 @@ import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorRow
 import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
 import java.time.LocalDate
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -119,6 +120,42 @@ class LocalInfoSectionCardTest {
 
         composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
         composeRule.onNodeWithText("School holidays appear only when the app can match your region confidently.").assertIsDisplayed()
+    }
+
+    @Test
+    fun locationOnlyStateKeepsLocationPanelCompact() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = dashboardUiState(
+                        enabled = true,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            locality = "Neckargemuend",
+                            region = "Baden-Wuerttemberg",
+                            countryCode = "DE",
+                            countryName = "Germany",
+                            timezone = "Europe/Berlin",
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        val locationRowNode = composeRule.onNodeWithTag(LocalInfoLocationRowTag)
+            .assertIsDisplayed()
+            .fetchSemanticsNode()
+        val locationRowHeight = with(composeRule.density) {
+            locationRowNode.size.height.toDp()
+        }
+
+        assertTrue(
+            "Expected Local Info location row to stay compact, but it was $locationRowHeight high.",
+            locationRowHeight <= 96.dp,
+        )
+        composeRule.onNodeWithText("Neckargemuend / Baden-Wuerttemberg / Germany").assertIsDisplayed()
     }
 
     @Test
