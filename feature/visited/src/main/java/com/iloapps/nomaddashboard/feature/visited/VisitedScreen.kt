@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -216,6 +217,7 @@ fun VisitedScreen(
                 placeSummary = placeSummary,
                 latestPlace = latestPlace,
                 countryDays = state.countryDays,
+                isRefreshing = state.isRefreshing,
                 hasLocationPermission = hasLocationPermission,
                 onRefresh = onRefresh,
                 onClearHistory = onClearHistory,
@@ -343,6 +345,7 @@ private fun VisitedOverviewCard(
     placeSummary: com.iloapps.nomaddashboard.core.model.VisitedPlaceSummary,
     latestPlace: VisitedPlace?,
     countryDays: List<VisitedCountryDay>,
+    isRefreshing: Boolean,
     hasLocationPermission: Boolean,
     onRefresh: () -> Unit,
     onClearHistory: () -> Unit,
@@ -425,10 +428,19 @@ private fun VisitedOverviewCard(
         ) {
             Button(
                 onClick = onRefresh,
-                enabled = settings.visitedPlacesEnabled,
+                enabled = settings.visitedPlacesEnabled && isRefreshing.not(),
             ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null)
-                Text("Capture now", modifier = Modifier.padding(start = 8.dp))
+                if (isRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                    Text("Capturing", modifier = Modifier.padding(start = 8.dp))
+                } else {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null)
+                    Text("Capture now", modifier = Modifier.padding(start = 8.dp))
+                }
             }
             OutlinedButton(
                 onClick = onClearHistory,

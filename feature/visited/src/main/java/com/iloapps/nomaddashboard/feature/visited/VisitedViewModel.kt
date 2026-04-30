@@ -20,6 +20,7 @@ data class VisitedUiState(
     val places: List<VisitedPlace> = emptyList(),
     val countryDays: List<VisitedCountryDay> = emptyList(),
     val placeEvents: List<VisitedPlaceEvent> = emptyList(),
+    val isRefreshing: Boolean = false,
 )
 
 @HiltViewModel
@@ -31,8 +32,16 @@ class VisitedViewModel @Inject constructor(
         repository.visitedPlaces,
         repository.visitedCountryDays,
         repository.visitedPlaceEvents,
-        ::VisitedUiState,
-    ).stateIn(
+        repository.snapshot,
+    ) { settings, places, countryDays, placeEvents, snapshot ->
+        VisitedUiState(
+            settings = settings,
+            places = places,
+            countryDays = countryDays,
+            placeEvents = placeEvents,
+            isRefreshing = snapshot.isRefreshing,
+        )
+    }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         VisitedUiState(),
