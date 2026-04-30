@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-04-30
+
+### Added
+- Added visited travel path and clear history functionality.
+
+### Improved
+- Enhanced visited places with deferred observation recording, map year filtering, and numbered markers.
+- Display loading state for visited places capture action.
+
 ## [0.7.4] - 2026-04-27
 
 ### Improved
