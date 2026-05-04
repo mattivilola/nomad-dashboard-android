@@ -1,1 +1,1 @@
-This update adds visited travel path and clear history functionality, visited places with deferred observation recording, map year filtering, and numbered markers, and display loading state for visited places capture action.
+This update adds refined logic for deferred visited observations.
