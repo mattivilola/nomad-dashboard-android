@@ -259,7 +259,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 ipTravelContextDeferred = ipTravelContextDeferred,
             )
 
-            if (shouldDeferVisitedObservation(currentSettings, locationContext).not()) {
+            val visitedObservationDeferred = shouldDeferVisitedObservation(currentSettings, locationContext)
+            if (visitedObservationDeferred.not()) {
                 recordVisitedObservations(
                     currentSettings = currentSettings,
                     locationContext = locationContext,
@@ -317,10 +318,12 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 initial = locationContext,
                 deviceLocationDeferred = deviceLocationDeferred,
             ) ?: run {
-                recordVisitedObservations(
-                    currentSettings = currentSettings,
-                    locationContext = locationContext,
-                )
+                if (visitedObservationDeferred) {
+                    recordVisitedObservations(
+                        currentSettings = currentSettings,
+                        locationContext = locationContext,
+                    )
+                }
                 val fallbackVisitedPlaces = visitedHistoryStore.visitedPlaces.first()
                 val fallbackVisitedCountryDays = visitedHistoryStore.visitedCountryDays.first()
                 internalSnapshot.update {

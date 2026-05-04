@@ -18,6 +18,7 @@ import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import java.time.Instant
 import java.time.LocalDate
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -27,6 +28,8 @@ class VisitedScreenTest {
 
     @Test
     fun worldFootprintRenders_and_yearSelectionUpdatesSummary_withoutMapKey() {
+        var clearHistoryClicks = 0
+
         composeTestRule.setContent {
             NomadTheme {
                 VisitedScreen(
@@ -54,12 +57,15 @@ class VisitedScreenTest {
                     hasLocationPermission = true,
                     hasMapsApiKey = false,
                     onRefresh = {},
+                    onClearHistory = { clearHistoryClicks += 1 },
                     onRequestLocationPermission = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithTag("visited_overview_card").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Clear history").performClick()
+        assertEquals(1, clearHistoryClicks)
         composeTestRule.onNodeWithTag("visited_list").performScrollToNode(hasText("World Footprint"))
 
         composeTestRule.onNodeWithTag("visited_world_footprint").assertIsDisplayed()
