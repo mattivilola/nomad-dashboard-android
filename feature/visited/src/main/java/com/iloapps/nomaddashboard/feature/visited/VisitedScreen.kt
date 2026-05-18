@@ -351,6 +351,7 @@ private fun VisitedOverviewCard(
     onClearHistory: () -> Unit,
     onRequestLocationPermission: () -> Unit,
 ) {
+    val isCaptureInProgress = settings.visitedPlacesEnabled && isRefreshing
     val overviewBadges = buildList {
         add(
             if (settings.visitedPlacesEnabled) {
@@ -428,9 +429,9 @@ private fun VisitedOverviewCard(
         ) {
             Button(
                 onClick = onRefresh,
-                enabled = settings.visitedPlacesEnabled && isRefreshing.not(),
+                enabled = settings.visitedPlacesEnabled && isCaptureInProgress.not(),
             ) {
-                if (isRefreshing) {
+                if (isCaptureInProgress) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
@@ -1092,7 +1093,7 @@ private fun captureSubtitle(
 ): String = when {
     settings.visitedPlacesEnabled.not() -> "Visited history capture is disabled."
     settings.useCurrentLocationForVisitedPlaces && hasLocationPermission.not() -> "Device capture is enabled but Android location permission is still needed."
-    settings.useCurrentLocationForVisitedPlaces -> "Refresh will record both IP and device-derived travel observations when available."
+    settings.useCurrentLocationForVisitedPlaces -> "Refresh prefers device-derived travel observations; IP is recorded only when device location is unavailable."
     settings.publicIpGeolocationEnabled -> "Refresh currently records IP-based travel observations."
     else -> "Enable an IP or device location source so refresh has travel context to save."
 }
