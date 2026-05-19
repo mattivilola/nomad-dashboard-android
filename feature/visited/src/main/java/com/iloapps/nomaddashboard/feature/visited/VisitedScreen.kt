@@ -1093,7 +1093,8 @@ private fun captureSubtitle(
 ): String = when {
     settings.visitedPlacesEnabled.not() -> "Visited history capture is disabled."
     settings.useCurrentLocationForVisitedPlaces && hasLocationPermission.not() -> "Device capture is enabled but Android location permission is still needed."
-    settings.useCurrentLocationForVisitedPlaces -> "Refresh prefers device-derived travel observations; IP is recorded only when device location is unavailable."
+    settings.useCurrentLocationForVisitedPlaces && settings.publicIpGeolocationEnabled -> "Refresh prefers device-derived travel observations; IP is recorded only when device location is unavailable."
+    settings.useCurrentLocationForVisitedPlaces -> "Refresh records device-derived travel observations when available."
     settings.publicIpGeolocationEnabled -> "Refresh currently records IP-based travel observations."
     else -> "Enable an IP or device location source so refresh has travel context to save."
 }

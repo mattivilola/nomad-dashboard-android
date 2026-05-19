@@ -1,7 +1,9 @@
 package com.iloapps.nomaddashboard.feature.visited
 
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.hasTestTag
@@ -9,8 +11,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
@@ -78,6 +80,93 @@ class VisitedScreenTest {
 
         composeTestRule.onNodeWithTag("visited_list").performScrollToNode(hasText("In 2024 you tracked 2 days."))
         composeTestRule.onAllNodesWithText("In 2024 you tracked 2 days.").assertCountEquals(1)
+    }
+
+    @Test
+    fun overviewCopyReflectsDeviceAndIpCaptureSources() {
+        composeTestRule.setContent {
+            NomadTheme {
+                VisitedScreen(
+                    state = VisitedUiState(
+                        settings = AppSettings(
+                            publicIpGeolocationEnabled = true,
+                            useCurrentLocationForVisitedPlaces = true,
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    hasMapsApiKey = false,
+                    onRefresh = {},
+                    onClearHistory = {},
+                    onRequestLocationPermission = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(
+            "Refresh prefers device-derived travel observations; IP is recorded only when device location is unavailable.",
+        ).assertIsDisplayed()
+
+        composeTestRule.setContent {
+            NomadTheme {
+                VisitedScreen(
+                    state = VisitedUiState(
+                        settings = AppSettings(
+                            publicIpGeolocationEnabled = false,
+                            useCurrentLocationForVisitedPlaces = true,
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    hasMapsApiKey = false,
+                    onRefresh = {},
+                    onClearHistory = {},
+                    onRequestLocationPermission = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(
+            "Refresh records device-derived travel observations when available.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun overviewButtonDoesNotShowCaptureSpinnerWhenVisitedCaptureIsDisabled() {
+        composeTestRule.setContent {
+            NomadTheme {
+                VisitedScreen(
+                    state = VisitedUiState(
+                        settings = AppSettings(visitedPlacesEnabled = false),
+                        isRefreshing = true,
+                    ),
+                    hasLocationPermission = true,
+                    hasMapsApiKey = false,
+                    onRefresh = {},
+                    onClearHistory = {},
+                    onRequestLocationPermission = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Capture now").assertIsDisplayed().assertIsNotEnabled()
+        composeTestRule.onAllNodesWithText("Capturing").assertCountEquals(0)
+
+        composeTestRule.setContent {
+            NomadTheme {
+                VisitedScreen(
+                    state = VisitedUiState(
+                        settings = AppSettings(visitedPlacesEnabled = true),
+                        isRefreshing = false,
+                    ),
+                    hasLocationPermission = true,
+                    hasMapsApiKey = false,
+                    onRefresh = {},
+                    onClearHistory = {},
+                    onRequestLocationPermission = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Capture now").assertIsDisplayed().assertIsEnabled()
     }
 
     private fun countryDay(
