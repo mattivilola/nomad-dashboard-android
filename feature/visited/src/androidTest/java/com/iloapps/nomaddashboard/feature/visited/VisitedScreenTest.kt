@@ -83,7 +83,7 @@ class VisitedScreenTest {
     }
 
     @Test
-    fun overviewCopyReflectsDeviceAndIpCaptureSources() {
+    fun overviewCopyReflectsDeviceWithIpFallbackCaptureSource() {
         composeTestRule.setContent {
             NomadTheme {
                 VisitedScreen(
@@ -105,7 +105,10 @@ class VisitedScreenTest {
         composeTestRule.onNodeWithText(
             "Refresh prefers device-derived travel observations; IP is recorded only when device location is unavailable.",
         ).assertIsDisplayed()
+    }
 
+    @Test
+    fun overviewCopyReflectsDeviceOnlyCaptureSource() {
         composeTestRule.setContent {
             NomadTheme {
                 VisitedScreen(
@@ -149,7 +152,10 @@ class VisitedScreenTest {
 
         composeTestRule.onNodeWithText("Capture now").assertIsDisplayed().assertIsNotEnabled()
         composeTestRule.onAllNodesWithText("Capturing").assertCountEquals(0)
+    }
 
+    @Test
+    fun overviewButtonIsEnabledWhenVisitedCaptureIsEnabledAndNotRefreshing() {
         composeTestRule.setContent {
             NomadTheme {
                 VisitedScreen(

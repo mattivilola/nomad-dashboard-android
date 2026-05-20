@@ -106,7 +106,7 @@ fun SettingsScreen(
                 }
                 SettingsToggleRow(
                     title = "Use current location for visited places",
-                    description = "Prefer device-derived visited places, with IP-based observations used only when device location is unavailable.",
+                    description = "Prefer device-derived visited places when Android location is available.",
                     checked = settings.useCurrentLocationForVisitedPlaces,
                 ) {
                     onUpdate { current -> current.copy(useCurrentLocationForVisitedPlaces = it) }
