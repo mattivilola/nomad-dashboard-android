@@ -4,9 +4,20 @@ Last updated: 2026-09-07
 
 ## Overall
 
-Performance and aligned nomad tools are implemented. The source review and delivered scope are documented in [Android performance and nomad feature review](performance-and-nomad-review-2026-09-07.md). All 134 unit tests and 37 connected UI/migration tests have passed on the Pixel_8 AVD using Android 14; lintDebug has passed. The source tree also includes cold-start/scroll Macrobenchmarks and Baseline Profile generation. Baseline Profile generation passed and produced 28,456 rules for startup/navigation/scrolling. The two performance measurement tests are intentionally skipped during profile generation; they still require a physical device. Release preparation for 0.9.0 is in progress; optimized signed artifact smoke and internal-track publication evidence will be recorded here when finished. Physical-device performance and battery improvements remain unmeasured.
+Performance and aligned nomad tools are implemented. The source review and delivered scope are documented in [Android performance and nomad feature review](performance-and-nomad-review-2026-09-07.md). All 134 unit tests and 37 connected UI/migration tests have passed on the Pixel_8 AVD using Android 14; lintDebug has passed. The source tree also includes cold-start/scroll Macrobenchmarks and Baseline Profile generation. Baseline Profile generation passed and produced 28,456 rules for startup/navigation/scrolling. The two performance measurement tests are intentionally skipped during profile generation; they still require a physical device. Version 0.9.0 (15), release commit `63bf56e`, passed signed APK/AAB generation, signature verification, and optimized APK launch/navigation/persistence checks. Google Play accepted and committed version 15 to the internal track as a draft on 2026-09-07; it still needs review/rollout in Play Console. Physical-device performance and battery improvements remain unmeasured.
 
-Current phase: `Performance and Companion implementation complete; release validation in progress`
+Current phase: `0.9.0 uploaded to Play internal as draft; ready for tester rollout`
+
+### 0.9.0 release evidence
+
+- Release preflight and signed R8/resource-shrunk APK/AAB builds passed. An optimized-only Proto DataStore startup crash was caught and fixed by preserving generated message fields before the successful rebuild/upload.
+- Signed APK smoke on the Android 14 Pixel_8 AVD exercised dashboard live weather/IP data, Settings, Visited, Tracking and Companion. Low Data settings and a saved Companion essential survived process restart; saved travel history loaded through Room. Paid provider/Maps credentials were not configured for this smoke.
+- APK: 10,539,984 bytes; SHA-256 `7b7b4238fb224837cd2c6f70eebde0907bb37d97f51f52be6369e6debf75bd04`.
+- AAB: 10,230,690 bytes; SHA-256 `a649bae00824152d16e7fc644bb2f57bc23d9c960a0bf24e79b4e919ebd6f222`. Both artifacts contain compiled Baseline Profiles.
+- Play publication completed successfully: `Updating [draft] release (com.iloapps.nomaddashboard:[15]) in track internal`, followed by a committed edit.
+- Remaining manual validation: review/roll out the internal draft, install through Play on a physical phone, and measure startup/frame/battery behavior. Native JSON backups remain platform-specific; country CSV v1 is aligned with macOS.
+
+The historical entries below describe earlier milestones; this release evidence supersedes older signed-build, unit-test and emulator blockers.
 
 Current repository state:
 - initial Android port scaffold implemented

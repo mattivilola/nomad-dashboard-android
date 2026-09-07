@@ -204,10 +204,12 @@ Implemented:
 - Play publishing helper targets now exist for internal, closed, and
   production tracks
 
-Not yet verified with real credentials:
-- signed release artifact generation
-- internal-track upload
-- version bump flow with a populated remote repository and manual push follow-up
+Verified on 2026-09-07 for 0.9.0 (15):
+- signed optimized APK/AAB generation and APK signature verification
+- internal-track upload accepted and committed as a draft
+- local minor-version bump and release tag preparation
+
+The internal draft still requires review/rollout in Play Console and a Play-installed physical-device smoke check.
 
 ## Security Rules
 
@@ -232,6 +234,6 @@ Not yet verified with real credentials:
 
 ## September 2026 performance release
 
-Version 0.9.0 is being prepared with R8/resource shrinking, a generated Baseline Profile, native Companion/travel/time export tools, and cancellation/refresh improvements. Check `docs/status.md` for completed validation and publication evidence. The baseline generator covers startup and primary navigation/scrolling; no separate Startup Profile is generated. Macrobenchmark startup and frame timing tests are available for physical-device measurement.
+Version 0.9.0 (15) was uploaded to Google Play internal testing as a draft on 2026-09-07 with R8/resource shrinking, a generated Baseline Profile, native Companion/travel/time export tools, and cancellation/refresh improvements. Check `docs/status.md` for completed validation and publication evidence. The baseline generator covers startup and primary navigation/scrolling; no separate Startup Profile is generated. Macrobenchmark startup and frame timing tests are available for physical-device measurement.
 
 If unrelated user edits keep the main checkout dirty, use a clean task-specific release worktree. Reuse local signing configuration through `NOMAD_SIGNING_ENV_FILE` and `NOMAD_APP_CONFIG_ENV_FILE`, and link the existing ignored `local.properties`; never commit credentials. Do not move a shared local branch into that worktree. `make release-minor` prepares metadata locally, then the normal preflight/build/internal publication flow applies. A draft upload still needs review/rollout in Play Console.
