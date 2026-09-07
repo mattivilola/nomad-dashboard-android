@@ -1,10 +1,12 @@
 # Status
 
-Last updated: 2026-04-30
+Last updated: 2026-09-07
 
 ## Overall
 
-Current phase: `Foundation + Core bootstrap complete`
+Performance and aligned nomad tools are implemented. The source review and delivered scope are documented in [Android performance and nomad feature review](performance-and-nomad-review-2026-09-07.md). All 134 unit tests and 37 connected UI/migration tests have passed on the Pixel_8 AVD using Android 14; lintDebug has passed. The source tree also includes cold-start/scroll Macrobenchmarks and Baseline Profile generation. Baseline Profile generation passed and produced 28,456 rules for startup/navigation/scrolling. The two performance measurement tests are intentionally skipped during profile generation; they still require a physical device. Release preparation for 0.9.0 is in progress; optimized signed artifact smoke and internal-track publication evidence will be recorded here when finished. Physical-device performance and battery improvements remain unmeasured.
+
+Current phase: `Performance and Companion implementation complete; release validation in progress`
 
 Current repository state:
 - initial Android port scaffold implemented

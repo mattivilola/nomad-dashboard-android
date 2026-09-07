@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.core.datastore
 
+import com.iloapps.nomaddashboard.core.model.ResourceMode
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.AppearanceMode
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
@@ -30,6 +31,7 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
     val useDefaultTrackingWindow = autoStartMinutes == 0 && autoStopMinutes == 0
 
     return AppSettings(
+        resourceMode = ResourceMode.entries.firstOrNull { it.name == resourceMode } ?: ResourceMode.AUTO,
         appearanceMode = AppearanceMode.entries.firstOrNull { it.name == appearanceMode } ?: AppearanceMode.SYSTEM,
         dashboardCardOrder = order,
         dashboardCardWidthModes = widths,
@@ -64,6 +66,7 @@ fun AppSettingsProto.toExternalModel(): AppSettings {
 fun AppSettings.toProto(): AppSettingsProto =
     AppSettingsProto.newBuilder()
         .setAppearanceMode(appearanceMode.name)
+        .setResourceMode(resourceMode.name)
         .addAllDashboardCardOrder(dashboardCardOrder.map { it.name })
         .putAllDashboardCardWidthModes(dashboardCardWidthModes.mapKeys { it.key.name }.mapValues { it.value.name })
         .setPublicIpGeolocationEnabled(publicIpGeolocationEnabled)

@@ -12,4 +12,8 @@ data class FuelSearchRequest(
 
 interface FuelPriceProvider {
     suspend fun prices(request: FuelSearchRequest, credentials: FuelProviderCredentials): FuelPriceSnapshot
+
+    /** Explicit user refresh hook; implementations may bypass their short-lived local cache. */
+    suspend fun refreshPrices(request: FuelSearchRequest, credentials: FuelProviderCredentials): FuelPriceSnapshot =
+        prices(request, credentials)
 }

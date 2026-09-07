@@ -17,6 +17,8 @@ internal suspend fun <T> retryTransient(
     repeat(maxAttempts) { attempt ->
         try {
             return block()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             lastError = error
             if (attempt == maxAttempts - 1 || error.isTransientRetryable().not()) {

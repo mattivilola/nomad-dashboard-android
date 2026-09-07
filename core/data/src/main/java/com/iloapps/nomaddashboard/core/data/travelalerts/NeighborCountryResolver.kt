@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.travelalerts
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.InputStream
@@ -41,7 +43,7 @@ class BundledNeighborCountryResolver private constructor(
 }
 
 private fun parseBorderMap(loader: () -> InputStream): Map<String, List<String>> =
-    runCatching {
+    runCatchingCancellable {
         loader().use { input ->
             Json { ignoreUnknownKeys = true }
                 .decodeFromString<List<CountryBorderRecord>>(input.readBytes().decodeToString())

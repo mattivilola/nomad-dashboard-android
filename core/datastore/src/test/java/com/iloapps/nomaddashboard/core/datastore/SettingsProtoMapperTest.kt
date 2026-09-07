@@ -10,6 +10,15 @@ import org.junit.Test
 
 class SettingsProtoMapperTest {
     @Test
+    fun `resource policy defaults and preferences survive migration`() {
+        assertThat(AppSettingsProto.getDefaultInstance().toExternalModel().resourceMode)
+            .isEqualTo(com.iloapps.nomaddashboard.core.model.ResourceMode.AUTO)
+        com.iloapps.nomaddashboard.core.model.ResourceMode.entries.forEach { mode ->
+            assertThat(AppSettings(resourceMode = mode).toProto().toExternalModel().resourceMode).isEqualTo(mode)
+        }
+    }
+
+    @Test
     fun `round trips app settings through proto`() {
         val settings = AppSettings(
             appearanceMode = AppearanceMode.DARK,

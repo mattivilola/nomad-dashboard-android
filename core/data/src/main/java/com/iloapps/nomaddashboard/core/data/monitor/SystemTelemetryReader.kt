@@ -16,8 +16,7 @@ import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
 import com.iloapps.nomaddashboard.core.model.PowerSnapshot
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -38,7 +37,18 @@ class SystemTelemetryReader @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : TelemetryReader {
     @SuppressLint("MissingPermission")
-    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> = withContext(ioDispatcher) {
+    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
+        readConnectivity(previousTrafficSample = previousTrafficSample, includeActiveLatencyProbe = true)
+
+    @SuppressLint("MissingPermission")
+    override suspend fun passiveConnectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
+        readConnectivity(previousTrafficSample = previousTrafficSample, includeActiveLatencyProbe = false)
+
+    @SuppressLint("MissingPermission")
+    private suspend fun readConnectivity(
+        previousTrafficSample: TrafficSample?,
+        includeActiveLatencyProbe: Boolean,
+    ): Pair<ConnectivitySnapshot, TrafficSample> = withContext(ioDispatcher) {
         val connectivityManager = context.getSystemService<ConnectivityManager>()
         val wifiManager = context.applicationContext.getSystemService<WifiManager>()
         val activeNetwork = connectivityManager?.activeNetwork
@@ -65,17 +75,22 @@ class SystemTelemetryReader @Inject constructor(
             null
         }
 
-        val latencyMs = probeLatency("1.1.1.1", 443)
-        val fallbackLatency = probeLatency("8.8.8.8", 443)
-        val resolvedLatency = latencyMs ?: fallbackLatency
+        val isValidated = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        val resolvedLatency = if (includeActiveLatencyProbe) {
+            resolveLatencyForValidatedNetwork(isValidated) { host, port ->
+                probeLatency(host, port)
+            }
+        } else {
+            null
+        }
 
         ConnectivitySnapshot(
             internetState = when {
                 capabilities == null -> "Offline"
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> "Online"
+                isValidated -> "Online"
                 else -> "Captive/Checking"
             },
-            isOnline = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
+            isOnline = isValidated,
             latencyMs = resolvedLatency,
             jitterMs = resolvedLatency?.div(10.0),
             downloadMbps = downloadMbps,
@@ -171,19 +186,34 @@ class SystemTelemetryReader @Inject constructor(
         )
     }
 
-    private suspend fun probeLatency(host: String, port: Int): Double? = coroutineScope {
-        val attempt = async(ioDispatcher) {
-            runCatching {
-                val start = System.nanoTime()
-                Socket().use { socket ->
-                    socket.connect(InetSocketAddress(host, port), 1500)
-                }
-                (System.nanoTime() - start) / 1_000_000.0
-            }.getOrNull()
+    private suspend fun probeLatency(host: String, port: Int): Double? =
+        try {
+            val start = System.nanoTime()
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), 1500)
+            }
+            (System.nanoTime() - start) / 1_000_000.0
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            null
         }
-        attempt.await()
-    }
 }
+
+internal suspend fun resolveLatencyForValidatedNetwork(
+    isValidated: Boolean,
+    probe: suspend (host: String, port: Int) -> Double?,
+): Double? {
+    if (!isValidated) {
+        return null
+    }
+    return probe(PrimaryLatencyHost, LatencyPort)
+        ?: probe(FallbackLatencyHost, LatencyPort)
+}
+
+private const val PrimaryLatencyHost = "1.1.1.1"
+private const val FallbackLatencyHost = "8.8.8.8"
+private const val LatencyPort = 443
 
 private fun Int?.takeSupportedBatteryCurrent(): Int? =
     this?.takeUnless { it == Int.MIN_VALUE }

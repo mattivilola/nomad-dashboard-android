@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.localinfo
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelRequest
 import com.iloapps.nomaddashboard.core.database.dao.LocalInfoCacheDao
@@ -166,6 +168,8 @@ class DefaultLocalInfoProvider @Inject constructor(
     ): HolidayLookupResult {
         val holidays = try {
             publicHolidaysFor(countryCode = countryCode, today = today)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             return if (error.isUnsupported()) {
                 HolidayLookupResult(
@@ -206,6 +210,8 @@ class DefaultLocalInfoProvider @Inject constructor(
     ): SchoolHolidayLookupResult {
         val subdivisions = try {
             subdivisionsFor(countryCode)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             return if (error.isUnsupported()) {
                 SchoolHolidayLookupResult(
@@ -245,6 +251,8 @@ class DefaultLocalInfoProvider @Inject constructor(
                 subdivisionCode = matchedSubdivision.code,
                 today = today,
             )
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             return if (error.isUnsupported()) {
                 SchoolHolidayLookupResult(
@@ -276,7 +284,7 @@ class DefaultLocalInfoProvider @Inject constructor(
         countryName: String?,
         hudUserApiToken: String?,
     ): LocalPriceLevelSnapshot =
-        runCatching {
+        runCatchingCancellable {
             localPriceLevelProvider.prices(
                 request = LocalPriceLevelRequest(
                     latitude = request.latitude,
@@ -462,6 +470,8 @@ class DefaultLocalInfoProvider @Inject constructor(
                     ),
                 )
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             if (cached != null) {
                 json.decodeFromString(serializer, cached.payloadJson)
@@ -629,7 +639,7 @@ class DefaultLocalInfoProvider @Inject constructor(
         this is HttpException && code() == 404
 
     private fun safeZoneId(raw: String): ZoneId =
-        runCatching { ZoneId.of(raw) }
+        runCatchingCancellable { ZoneId.of(raw) }
             .getOrElse { ZoneOffset.UTC }
 
     private fun String?.normalizedCountryCode(): String? =
@@ -653,7 +663,7 @@ class DefaultLocalInfoProvider @Inject constructor(
     }
 
     private fun String.parseDateOrNull(): LocalDate? =
-        runCatching { LocalDate.parse(this) }.getOrNull()
+        runCatchingCancellable { LocalDate.parse(this) }.getOrNull()
 
     private data class MatchedSubdivision(
         val code: String,

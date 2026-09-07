@@ -1,6 +1,6 @@
 # Release Workflow
 
-Last updated: 2026-04-20
+Last updated: 2026-09-07
 
 ## Release Strategy
 
@@ -195,6 +195,9 @@ Implemented:
 - release build configured to request native symbol-table extraction for Play
   Console crash reporting where dependency-provided native debug metadata is
   available
+- release build enables R8 code optimization and resource shrinking; the
+  optimized artifact must be exercised through the app's Room, Hilt, Maps, and
+  provider flows before distribution
 - Play publishing now defaults to `draft` release status so first internal
   uploads can succeed on a draft Play app, with an env override for later
   `completed` uploads
@@ -225,3 +228,10 @@ Not yet verified with real credentials:
 - user-supplied provider credentials, including the ReliefWeb app name, must be
   entered in-app after install and stored only in encrypted device-local
   storage
+
+
+## September 2026 performance release
+
+Version 0.9.0 is being prepared with R8/resource shrinking, a generated Baseline Profile, native Companion/travel/time export tools, and cancellation/refresh improvements. Check `docs/status.md` for completed validation and publication evidence. The baseline generator covers startup and primary navigation/scrolling; no separate Startup Profile is generated. Macrobenchmark startup and frame timing tests are available for physical-device measurement.
+
+If unrelated user edits keep the main checkout dirty, use a clean task-specific release worktree. Reuse local signing configuration through `NOMAD_SIGNING_ENV_FILE` and `NOMAD_APP_CONFIG_ENV_FILE`, and link the existing ignored `local.properties`; never commit credentials. Do not move a shared local branch into that worktree. `make release-minor` prepares metadata locally, then the normal preflight/build/internal publication flow applies. A draft upload still needs review/rollout in Play Console.

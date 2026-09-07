@@ -171,6 +171,8 @@ private object ImmediateTimeTrackingTransactionRunner : TimeTrackingTransactionR
 private class FakeTimeTrackingProjectDao : TimeTrackingProjectDao {
     private val state = MutableStateFlow<List<TimeTrackingProjectEntity>>(emptyList())
 
+    override suspend fun getAll(): List<TimeTrackingProjectEntity> = state.value
+
     override fun observeAll(): Flow<List<TimeTrackingProjectEntity>> = state
 
     override suspend fun getById(id: String): TimeTrackingProjectEntity? =

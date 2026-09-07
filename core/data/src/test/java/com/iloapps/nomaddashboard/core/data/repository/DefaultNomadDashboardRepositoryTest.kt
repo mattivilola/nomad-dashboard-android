@@ -699,7 +699,7 @@ class DefaultNomadDashboardRepositoryTest {
     }
 
     @Test
-    fun `refresh retains connectivity history and defaults missing throughput to zero`() = runTest {
+    fun `refresh retains connectivity history without inventing missing throughput`() = runTest {
         val repository = repository(
             settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
             fuelPriceProvider = FakeFuelPriceProvider(),
@@ -734,8 +734,8 @@ class DefaultNomadDashboardRepositoryTest {
 
         val connectivity = repository.snapshot.first { it.lastRefresh != null }.connectivity
 
-        assertThat(connectivity.downloadHistoryMbps.map { it.value }).containsExactly(0.0, 86.4).inOrder()
-        assertThat(connectivity.uploadHistoryMbps.map { it.value }).containsExactly(0.0, 18.2).inOrder()
+        assertThat(connectivity.downloadHistoryMbps.map { it.value }).containsExactly(86.4).inOrder()
+        assertThat(connectivity.uploadHistoryMbps.map { it.value }).containsExactly(18.2).inOrder()
         assertThat(connectivity.latencyHistoryMs.map { it.value }).containsExactly(34.0, 41.0).inOrder()
     }
 
@@ -1085,7 +1085,7 @@ class DefaultNomadDashboardRepositoryTest {
                 {
                   "fields": {
                     "title": "Transit disruption advisory",
-                    "date": {"created": "2026-04-07T09:00:00Z"},
+                    "date": {"created": "${java.time.Instant.now()}"},
                     "primary_country": {"shortname": "France"},
                     "source": [{"shortname": "ReliefWeb"}],
                     "url_alias": "/report/france/transit"
@@ -1108,7 +1108,9 @@ class DefaultNomadDashboardRepositoryTest {
         refreshRepository(repository)
         responseState.value = "__INVALID_JSON__"
 
-        refreshRepository(repository)
+        val forced = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.TRAVEL_ALERTS) }
+        advanceUntilIdle()
+        forced.await()
 
         val securityState = repository.snapshot.first { it.lastRefresh != null }
             .travelAlerts
@@ -1266,6 +1268,131 @@ class DefaultNomadDashboardRepositoryTest {
             .isEqualTo(StartupLocationBootstrapPhase.FALLING_BACK_TO_IP_LOCATION)
     }
 
+    @Test
+    fun `ready cards publish while fuel is suspended`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val fuel = object : FuelPriceProvider {
+            override suspend fun prices(request: FuelSearchRequest, credentials: FuelProviderCredentials): FuelPriceSnapshot {
+                gate.await()
+                return FuelPriceSnapshot(status = FuelPriceStatus.NO_STATIONS_FOUND, fetchedAt = Instant.now())
+            }
+        }
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(fuelPricesEnabled = true).toProto())),
+            fuelPriceProvider = fuel, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        val refresh = async { repository.refresh() }
+        runCurrent()
+        assertThat(repository.snapshot.value.power.batteryPercent).isEqualTo(80)
+        assertThat(repository.snapshot.value.weather.fetchedAt).isNotNull()
+        assertThat(repository.snapshot.value.isRefreshing).isTrue()
+        assertThat(refresh.isCompleted).isFalse()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        refresh.await()
+        assertThat(repository.snapshot.value.isRefreshing).isFalse()
+    }
+
+    @Test
+    fun `device result publishes without waiting for stalled public ip`() = runTest {
+        val service = object : FreeIpApiService {
+            override suspend fun lookupMe(): FreeIpApiResponse = kotlinx.coroutines.awaitCancellation()
+            override suspend fun lookup(ipAddress: String): FreeIpApiResponse = error("No fallback after cancellation")
+        }
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), freeIpApiService = service,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(
+                ResolvedVisitedPlace("Malaga", "Andalusia", "Spain", "ES", 36.72, -4.42), delayMillis = 800),
+            applicationScope = backgroundScope,
+        )
+        val refresh = async { repository.refresh() }
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertThat(repository.snapshot.value.weather.fetchedAt).isNotNull()
+        assertThat(repository.snapshot.value.travelContext.deviceCountryCode).isEqualTo("ES")
+        assertThat(refresh.isCompleted).isTrue()
+        refresh.await()
+    }
+
+    @Test
+    fun `cancelled refresh releases coalesced callers and permits retry`() = runTest {
+        var hold = true
+        val fuel = object : FuelPriceProvider {
+            override suspend fun prices(request: FuelSearchRequest, credentials: FuelProviderCredentials): FuelPriceSnapshot {
+                if (hold) kotlinx.coroutines.awaitCancellation()
+                return FuelPriceSnapshot(status = FuelPriceStatus.NO_STATIONS_FOUND, fetchedAt = Instant.now())
+            }
+        }
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(fuelPricesEnabled = true).toProto())),
+            fuelPriceProvider = fuel, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        val first = async { repository.refresh() }
+        runCurrent()
+        val coalesced = async { repository.refresh() }
+        runCurrent()
+        first.cancel()
+        runCurrent()
+        assertThat(first.isCancelled).isTrue()
+        assertThat(coalesced.isCancelled).isTrue()
+        assertThat(repository.snapshot.value.isRefreshing).isFalse()
+        hold = false
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.fuelPrices.fetchedAt).isNotNull()
+    }
+
+    @Test
+    fun `low data defers fuel until explicit card refresh`() = runTest {
+        val fuel = FakeFuelPriceProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(fuelPricesEnabled = true,
+                resourceMode = com.iloapps.nomaddashboard.core.model.ResourceMode.LOW_DATA).toProto())),
+            fuelPriceProvider = fuel, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        assertThat(fuel.requests).isEmpty()
+        assertThat(repository.snapshot.value.lowImpactMode).isTrue()
+        val refresh = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.FUEL_PRICES) }
+        advanceUntilIdle()
+        refresh.await()
+        assertThat(fuel.requests).hasSize(1)
+    }
+
+    @Test
+    fun `refresh inside section ttl reuses successful fuel result`() = runTest {
+        val fuel = FakeFuelPriceProvider(FuelPriceSnapshot(status = FuelPriceStatus.NO_STATIONS_FOUND, fetchedAt = Instant.now()))
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(fuelPricesEnabled = true).toProto())),
+            fuelPriceProvider = fuel, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        refreshRepository(repository)
+        assertThat(fuel.requests).hasSize(1)
+    }
+
+    @Test
+    fun `failed ip refresh never records cached country as a fresh visit`() = runTest {
+        val service = SequenceFreeIpApiService(listOf(
+            Result.success(FreeIpApiResponse(ipAddress = "1.2.3.4", countryName = "Finland", countryCode = "FI", cityName = "Helsinki")),
+            Result.failure(java.io.IOException("offline")),
+        ))
+        val history = FakeVisitedHistoryStore()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), freeIpApiService = service, visitedHistoryStore = history,
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        refreshRepository(repository)
+        assertThat(history.observations).hasSize(1)
+    }
+
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
@@ -1314,6 +1441,7 @@ class DefaultNomadDashboardRepositoryTest {
             neighborCountryResolver = neighborCountryResolver,
             json = TestJson,
             applicationScope = applicationScope,
+            ioDispatcher = applicationScope.coroutineContext[kotlin.coroutines.ContinuationInterceptor] as kotlinx.coroutines.CoroutineDispatcher,
         )
 
     private fun smartravellerProvider(
@@ -1477,7 +1605,11 @@ private class FakeTelemetryReader(
     private var connectivityIndex = 0
     private var powerIndex = 0
 
-    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> {
+    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
+        connectivitySnapshots.getOrElse((connectivityIndex - 1).coerceAtLeast(0)) { connectivitySnapshots.last() } to
+            TrafficSample(0, 0, connectivityIndex.toLong())
+
+    override suspend fun passiveConnectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> {
         val snapshot = connectivitySnapshots.getOrElse(connectivityIndex) { connectivitySnapshots.last() }
         connectivityIndex += 1
         return snapshot to TrafficSample(

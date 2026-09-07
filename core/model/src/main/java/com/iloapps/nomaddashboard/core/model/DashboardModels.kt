@@ -198,7 +198,19 @@ data class VisitedSummary(
     val sourceSummary: String = "IP + Device",
 )
 
+data class SectionRefreshState(
+    val lastSuccessAt: Instant? = null,
+    val locationKey: String = "",
+    val locationLabel: String = "",
+    val isRefreshing: Boolean = false,
+    val message: String? = null,
+)
+
 data class DashboardSnapshot(
+    val localSignalsAt: Instant? = null,
+    val sectionStates: Map<DashboardCardId, SectionRefreshState> = emptyMap(),
+    val lowImpactMode: Boolean = false,
+    val resourcePolicyLabel: String = "Normal data use",
     val lastRefresh: Instant? = null,
     val isRefreshing: Boolean = false,
     val overallSummary: SummaryTile = SummaryTile("Overall", "Waiting", "Collecting dashboard signals"),

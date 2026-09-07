@@ -19,7 +19,9 @@ interface NomadDashboardRepository {
     val visitedPlaceEvents: Flow<List<VisitedPlaceEvent>>
 
     suspend fun warmStart()
+    suspend fun refreshLocalSignals() {}
     suspend fun refresh()
+    suspend fun refreshCard(card: com.iloapps.nomaddashboard.core.model.DashboardCardId) { refresh() }
     suspend fun clearVisitedHistory()
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings)
     suspend fun updateProviderCredentials(transform: (ProviderCredentialSettings) -> ProviderCredentialSettings)

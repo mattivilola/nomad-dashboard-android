@@ -2,6 +2,7 @@ package com.iloapps.nomaddashboard.core.database
 
 import androidx.room.TypeConverter
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDayProvenance
 
 class NomadDatabaseConverters {
     @TypeConverter
@@ -26,4 +27,12 @@ class NomadDatabaseConverters {
                     VisitedPlaceSource.entries.firstOrNull { it.name == normalized }
                 }
             }
+
+    @TypeConverter
+    fun fromVisitedCountryDayProvenance(value: VisitedCountryDayProvenance): String = value.name
+
+    @TypeConverter
+    fun toVisitedCountryDayProvenance(value: String): VisitedCountryDayProvenance =
+        VisitedCountryDayProvenance.entries.firstOrNull { it.name == value }
+            ?: VisitedCountryDayProvenance.OBSERVED
 }

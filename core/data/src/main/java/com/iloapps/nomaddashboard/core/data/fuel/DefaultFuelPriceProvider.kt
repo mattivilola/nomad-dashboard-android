@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.core.data.fuel
 
+import com.iloapps.nomaddashboard.core.common.IoDispatcher
 import com.iloapps.nomaddashboard.core.model.FuelPriceSnapshot
 import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
@@ -16,6 +17,10 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -36,13 +41,53 @@ class DefaultFuelPriceProvider @Inject constructor(
     private val franceFuelPriceService: FranceFuelPriceService,
     private val italyFuelPriceService: ItalyFuelPriceService,
     private val tankerkoenigService: TankerkoenigService,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : FuelPriceProvider {
+    private val resultCache =
+        ExpiringRequestCache<FuelResultCacheKey, FuelPriceSnapshot>(maxEntries = MaxResultCacheEntries)
+    private val spainCatalogCache = ExpiringRequestCache<Unit, FuelCatalog>(maxEntries = 1)
+    private val italyCatalogCache = ExpiringRequestCache<Unit, FuelCatalog>(maxEntries = 1)
+
     override suspend fun prices(
         request: FuelSearchRequest,
         credentials: FuelProviderCredentials,
-    ): FuelPriceSnapshot {
+    ): FuelPriceSnapshot = withContext(ioDispatcher) {
         val countryCode = request.countryCode.uppercase(Locale.US)
-        return when (countryCode) {
+        if (countryCode !in SupportedCountryCodes) {
+            return@withContext unsupportedSnapshot(request)
+        }
+
+        val cacheKey = FuelResultCacheKey(
+            countryCode = countryCode,
+            latitudeRegion = request.latitude.roundedRegion(),
+            longitudeRegion = request.longitude.roundedRegion(),
+            credentialsFingerprint = credentials.cacheFingerprintFor(countryCode),
+        )
+        resultCache.getOrLoad(
+            key = cacheKey,
+            ttlMillis = resultTtlMillis(countryCode),
+        ) {
+            loadPrices(request = request, credentials = credentials, countryCode = countryCode)
+        }
+    }
+
+    override suspend fun refreshPrices(
+        request: FuelSearchRequest,
+        credentials: FuelProviderCredentials,
+    ): FuelPriceSnapshot {
+        resultCache.clear()
+        when (request.countryCode.uppercase(Locale.US)) {
+            "ES" -> spainCatalogCache.clear()
+            "IT" -> italyCatalogCache.clear()
+        }
+        return prices(request, credentials)
+    }
+
+    private suspend fun loadPrices(
+        request: FuelSearchRequest,
+        credentials: FuelProviderCredentials,
+        countryCode: String,
+    ): FuelPriceSnapshot = when (countryCode) {
             "ES" -> runSource(request, sourceName = "Spanish Ministry Fuel Prices") {
                 spainSnapshot(request)
             }
@@ -59,52 +104,56 @@ class DefaultFuelPriceProvider @Inject constructor(
             "DE" -> germanySnapshot(request, credentials)
             else -> unsupportedSnapshot(request)
         }
-    }
 
     private suspend fun spainSnapshot(request: FuelSearchRequest): FuelPriceSnapshot {
-        val response = spainFuelPriceService.stations()
-        val fetchedAt = parseDateTime(response.fetchedAt)
-        val candidates = response.stations.mapNotNull { station ->
-            val latitude = station.latitude.toFlexibleCoordinate() ?: return@mapNotNull null
-            val longitude = station.longitude.toFlexibleCoordinate() ?: return@mapNotNull null
+        val catalog = spainCatalogCache.getOrLoad(key = Unit, ttlMillis = SpainCatalogTtlMillis) {
+            val response = spainFuelPriceService.stations()
+            val fetchedAt = parseDateTime(response.fetchedAt)
+            FuelCatalog(
+                candidates = response.stations.mapNotNull { station ->
+                    val latitude = station.latitude.toFlexibleCoordinate() ?: return@mapNotNull null
+                    val longitude = station.longitude.toFlexibleCoordinate() ?: return@mapNotNull null
 
-            val prices = buildMap {
-                firstAvailablePrice(
-                    station.dieselPrice.toFlexibleDouble(),
-                    station.premiumDieselPrice.toFlexibleDouble(),
-                )?.let { put(FuelType.DIESEL, it) }
-                firstAvailablePrice(
-                    station.gasoline95E5Price.toFlexibleDouble(),
-                    station.gasoline95E10Price.toFlexibleDouble(),
-                    station.gasoline98E5Price.toFlexibleDouble(),
-                    station.gasoline98E10Price.toFlexibleDouble(),
-                )?.let { put(FuelType.GASOLINE, it) }
-            }
+                    val prices = buildMap {
+                        firstAvailablePrice(
+                            station.dieselPrice.toFlexibleDouble(),
+                            station.premiumDieselPrice.toFlexibleDouble(),
+                        )?.let { put(FuelType.DIESEL, it) }
+                        firstAvailablePrice(
+                            station.gasoline95E5Price.toFlexibleDouble(),
+                            station.gasoline95E10Price.toFlexibleDouble(),
+                            station.gasoline98E5Price.toFlexibleDouble(),
+                            station.gasoline98E10Price.toFlexibleDouble(),
+                        )?.let { put(FuelType.GASOLINE, it) }
+                    }
 
-            if (prices.isEmpty()) {
-                return@mapNotNull null
-            }
+                    if (prices.isEmpty()) {
+                        return@mapNotNull null
+                    }
 
-            FuelStationCandidate(
-                identifier = station.identifier.normalizedText() ?: "${latitude},${longitude}",
-                stationName = station.stationName.normalizedText()
-                    ?: station.address.normalizedText()
-                    ?: "Station",
-                address = station.address.normalizedText(),
-                locality = station.municipality.normalizedText() ?: station.locality.normalizedText(),
-                latitude = latitude,
-                longitude = longitude,
-                updatedAt = fetchedAt,
-                isSelfService = null,
-                prices = prices,
+                    FuelStationCandidate(
+                        identifier = station.identifier.normalizedText() ?: "${latitude},${longitude}",
+                        stationName = station.stationName.normalizedText()
+                            ?: station.address.normalizedText()
+                            ?: "Station",
+                        address = station.address.normalizedText(),
+                        locality = station.municipality.normalizedText() ?: station.locality.normalizedText(),
+                        latitude = latitude,
+                        longitude = longitude,
+                        updatedAt = fetchedAt,
+                        isSelfService = null,
+                        prices = prices,
+                    )
+                },
+                fetchedAt = fetchedAt ?: Instant.now(),
             )
         }
 
         return bestSnapshot(
             request = request,
             sourceName = "Spanish Ministry Fuel Prices",
-            candidates = candidates,
-            fetchedAt = fetchedAt ?: Instant.now(),
+            candidates = catalog.candidates,
+            fetchedAt = catalog.fetchedAt,
         )
     }
 
@@ -168,53 +217,61 @@ class DefaultFuelPriceProvider @Inject constructor(
     }
 
     private suspend fun italySnapshot(request: FuelSearchRequest): FuelPriceSnapshot {
-        val stationsText = italyFuelPriceService.stationCatalog().use { it.string() }
-        val pricesText = italyFuelPriceService.dailyPrices().use { it.string() }
+        val catalog = italyCatalogCache.getOrLoad(key = Unit, ttlMillis = ItalyCatalogTtlMillis) {
+            val stationsText = italyFuelPriceService.stationCatalog().use { it.string() }
+            val pricesText = italyFuelPriceService.dailyPrices().use { it.string() }
 
-        val stationRows = CsvTable.parse(stationsText)
-        val priceRows = CsvTable.parse(pricesText)
+            val stationRows = CsvTable.parse(stationsText)
+            val priceRows = CsvTable.parse(pricesText)
 
-        val stations = stationRows.mapNotNull { row ->
-            val identifier = row.string("idimpianto") ?: return@mapNotNull null
-            val latitude = row.coordinate("latitudine") ?: return@mapNotNull null
-            val longitude = row.coordinate("longitudine") ?: return@mapNotNull null
+            val stations = stationRows.mapNotNull { row ->
+                val identifier = row.string("idimpianto") ?: return@mapNotNull null
+                val latitude = row.coordinate("latitudine") ?: return@mapNotNull null
+                val longitude = row.coordinate("longitudine") ?: return@mapNotNull null
 
-            identifier to FuelStationCandidate(
-                identifier = identifier,
-                stationName = row.string("bandiera", "nomeimpianto") ?: "Station",
-                address = row.string("indirizzo"),
-                locality = row.string("comune"),
-                latitude = latitude,
-                longitude = longitude,
-                updatedAt = null,
-                isSelfService = null,
-                prices = emptyMap(),
-            )
-        }.toMap().toMutableMap()
+                identifier to FuelStationCandidate(
+                    identifier = identifier,
+                    stationName = row.string("bandiera", "nomeimpianto") ?: "Station",
+                    address = row.string("indirizzo"),
+                    locality = row.string("comune"),
+                    latitude = latitude,
+                    longitude = longitude,
+                    updatedAt = null,
+                    isSelfService = null,
+                    prices = emptyMap(),
+                )
+            }.toMap().toMutableMap()
 
-        priceRows.forEach { row ->
-            val identifier = row.string("idimpianto") ?: return@forEach
-            val existing = stations[identifier] ?: return@forEach
-            val fuelType = fuelTypeForItaly(row.string("desccarburante") ?: return@forEach) ?: return@forEach
-            val price = row.double("prezzo") ?: return@forEach
-            val updatedAt = parseDateTime(row.string("dtcomu"))
-            val isSelfService = row.bool("isself")
+            priceRows.forEach { row ->
+                val identifier = row.string("idimpianto") ?: return@forEach
+                val existing = stations[identifier] ?: return@forEach
+                val fuelType = fuelTypeForItaly(row.string("desccarburante") ?: return@forEach)
+                    ?: return@forEach
+                val price = row.double("prezzo") ?: return@forEach
+                val updatedAt = parseDateTime(row.string("dtcomu"))
+                val isSelfService = row.bool("isself")
 
-            val mergedPrices = existing.prices.toMutableMap()
-            mergedPrices[fuelType] = min(mergedPrices[fuelType] ?: price, price)
+                val mergedPrices = existing.prices.toMutableMap()
+                mergedPrices[fuelType] = min(mergedPrices[fuelType] ?: price, price)
 
-            stations[identifier] = existing.copy(
-                updatedAt = latestInstant(existing.updatedAt, updatedAt),
-                isSelfService = isSelfService ?: existing.isSelfService,
-                prices = mergedPrices,
+                stations[identifier] = existing.copy(
+                    updatedAt = latestInstant(existing.updatedAt, updatedAt),
+                    isSelfService = isSelfService ?: existing.isSelfService,
+                    prices = mergedPrices,
+                )
+            }
+
+            FuelCatalog(
+                candidates = stations.values.filter { it.prices.isNotEmpty() },
+                fetchedAt = Instant.now(),
             )
         }
 
         return bestSnapshot(
             request = request,
             sourceName = "MIMIT Fuel Prices",
-            candidates = stations.values.filter { it.prices.isNotEmpty() },
-            fetchedAt = Instant.now(),
+            candidates = catalog.candidates,
+            fetchedAt = catalog.fetchedAt,
             note = "Italian prices come from the daily 8:00 update.",
         )
     }
@@ -310,7 +367,11 @@ class DefaultFuelPriceProvider @Inject constructor(
         note: String? = null,
         block: suspend () -> FuelPriceSnapshot,
     ): FuelPriceSnapshot =
-        runCatching { block() }.getOrElse {
+        try {
+            block()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
             FuelPriceSnapshot(
                 status = FuelPriceStatus.UNAVAILABLE,
                 sourceName = sourceName,
@@ -361,6 +422,18 @@ private data class FuelStationCandidate(
     val updatedAt: Instant?,
     val isSelfService: Boolean?,
     val prices: Map<FuelType, Double>,
+)
+
+private data class FuelCatalog(
+    val candidates: List<FuelStationCandidate>,
+    val fetchedAt: Instant,
+)
+
+private data class FuelResultCacheKey(
+    val countryCode: String,
+    val latitudeRegion: String,
+    val longitudeRegion: String,
+    val credentialsFingerprint: Int?,
 )
 
 private data class ScoredFuelStationCandidate(
@@ -462,6 +535,17 @@ private fun tileCenters(latitude: Double, longitude: Double): List<Pair<Double, 
             latitude + latitudeDelta to longitude + longitudeDelta
         }
     }
+}
+
+private fun Double.roundedRegion(): String = String.format(Locale.US, "%.2f", this)
+
+private fun FuelProviderCredentials.cacheFingerprintFor(countryCode: String): Int? =
+    tankerkoenigApiKey.takeIf { countryCode == "DE" }?.hashCode()
+
+private fun resultTtlMillis(countryCode: String): Long = when (countryCode) {
+    "DE" -> GermanyResultTtlMillis
+    "FR" -> FranceResultTtlMillis
+    else -> CatalogResultTtlMillis
 }
 
 private fun haversineKilometers(
@@ -602,3 +686,11 @@ private fun String?.toFlexibleCoordinate(): Double? =
     normalizedText()
         ?.replace(",", ".")
         ?.toDoubleOrNull()
+
+private const val SpainCatalogTtlMillis = 15 * 60 * 1_000L
+private const val ItalyCatalogTtlMillis = 30 * 60 * 1_000L
+private const val CatalogResultTtlMillis = 5 * 60 * 1_000L
+private const val FranceResultTtlMillis = 3 * 60 * 1_000L
+private const val GermanyResultTtlMillis = 2 * 60 * 1_000L
+private const val MaxResultCacheEntries = 24
+private val SupportedCountryCodes = setOf("ES", "FR", "IT", "DE")

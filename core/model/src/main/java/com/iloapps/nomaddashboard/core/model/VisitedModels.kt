@@ -8,6 +8,21 @@ enum class VisitedPlaceSource {
     PUBLIC_IP_GEOLOCATION,
 }
 
+/** Explains how a country day entered the local travel ledger. */
+enum class VisitedCountryDayProvenance {
+    OBSERVED,
+    INFERRED,
+    MANUAL,
+}
+
+data class VisitedCountryDayOriginalObservation(
+    val country: String,
+    val countryCode: String?,
+    val source: VisitedPlaceSource,
+    val isInferred: Boolean,
+    val observedAt: Instant?,
+)
+
 data class VisitedPlace(
     val city: String?,
     val region: String?,
@@ -37,6 +52,45 @@ data class VisitedCountryDay(
     val countryCode: String?,
     val source: VisitedPlaceSource,
     val isInferred: Boolean,
+    val provenance: VisitedCountryDayProvenance = if (isInferred) {
+        VisitedCountryDayProvenance.INFERRED
+    } else {
+        VisitedCountryDayProvenance.OBSERVED
+    },
+    /** Kept when a user corrects an inferred or observed entry. */
+    val originalObservation: VisitedCountryDayOriginalObservation? = null,
+)
+
+data class TravelStayReminder(
+    val id: String,
+    val label: String,
+    val country: String?,
+    val targetDate: LocalDate,
+    val createdAt: Instant,
+    val note: String?,
+) {
+    val daysRemaining: Long
+        get() = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), targetDate)
+}
+
+data class TravelHistoryBackup(
+    val schemaVersion: Int = 1,
+    val exportedAt: Instant,
+    val places: List<VisitedPlace>,
+    val placeEvents: List<VisitedPlaceEvent>,
+    val countryDays: List<VisitedCountryDay>,
+    val stayReminders: List<TravelStayReminder>,
+)
+
+data class TravelHistoryImportPreview(
+    val schemaVersion: Int,
+    val placesToAdd: Int,
+    val placeEventsToAdd: Int,
+    val countryDaysToAdd: Int,
+    val remindersToAdd: Int,
+    val duplicateCount: Int,
+    val conflictCount: Int,
+    val warnings: List<String> = emptyList(),
 )
 
 data class VisitedPlaceEvent(

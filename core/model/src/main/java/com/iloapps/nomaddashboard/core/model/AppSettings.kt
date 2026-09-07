@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.model
 
+enum class ResourceMode { AUTO, NORMAL, LOW_DATA }
+
 enum class AppearanceMode {
     SYSTEM,
     LIGHT,
@@ -46,6 +48,7 @@ data class SurfSpotConfiguration(
 
 data class AppSettings(
     val appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
+    val resourceMode: ResourceMode = ResourceMode.AUTO,
     val dashboardCardOrder: List<DashboardCardId> = DashboardCardId.defaultOrder,
     val dashboardCardWidthModes: Map<DashboardCardId, DashboardCardWidthMode> =
         DashboardCardId.defaultOrder.associateWith { DashboardCardWidthMode.WIDE },

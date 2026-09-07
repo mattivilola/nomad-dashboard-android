@@ -3,6 +3,7 @@ import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
+    id("androidx.baselineprofile")
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.hilt)
@@ -92,8 +93,8 @@ android {
             versionNameSuffix = "-dev"
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             manifestPlaceholders["googleMapsApiKey"] = releaseMapsApiKey
             signingConfig = signingConfigs.findByName("release")
             proguardFiles(
@@ -126,6 +127,7 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+
 }
 
 play {
@@ -136,11 +138,13 @@ play {
 }
 
 dependencies {
+    baselineProfile(project(":benchmark"))
     implementation(projects.core.common)
     implementation(projects.core.data)
     implementation(projects.core.designsystem)
     implementation(projects.core.model)
     implementation(projects.feature.about)
+    implementation(projects.feature.companion)
     implementation(projects.feature.dashboard)
     implementation(projects.feature.settings)
     implementation(projects.feature.timetracking)
@@ -152,7 +156,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.androidx.test.runner)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.google.material)
     implementation(libs.hilt.android)

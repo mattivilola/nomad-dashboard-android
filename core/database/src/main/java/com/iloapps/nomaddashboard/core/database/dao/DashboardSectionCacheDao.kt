@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.core.database.dao
 
+import androidx.room.Transaction
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -13,4 +14,10 @@ interface DashboardSectionCacheDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: DashboardSectionCacheEntity)
+
+    @Transaction
+    suspend fun upsertSection(payload: DashboardSectionCacheEntity, state: DashboardSectionCacheEntity) {
+        upsert(payload)
+        upsert(state)
+    }
 }

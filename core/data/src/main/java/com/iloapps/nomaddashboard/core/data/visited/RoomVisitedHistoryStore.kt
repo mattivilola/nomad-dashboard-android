@@ -9,6 +9,8 @@ import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDayOriginalObservation
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDayProvenance
 import com.iloapps.nomaddashboard.core.model.visitedPlaceStorageKey
 import java.text.Normalizer
 import java.time.ZoneId
@@ -47,6 +49,46 @@ class RoomVisitedHistoryStore @Inject constructor(
             visitedPlaceDao.clearAll()
             visitedPlaceEventDao.clearAll()
             visitedCountryDayDao.clearAll()
+        }
+    }
+
+    override suspend fun correctCountryDay(
+        date: java.time.LocalDate,
+        country: String,
+        countryCode: String?,
+    ) {
+        val normalizedCountry = country.trim()
+        if (normalizedCountry.isBlank()) return
+        transactionRunner.run {
+            val existing = visitedCountryDayDao.loadAll()
+                .map { it.toExternalModel() }
+                .firstOrNull { it.date == date }
+            val original = existing?.let {
+                it.originalObservation ?: VisitedCountryDayOriginalObservation(
+                    country = it.country,
+                    countryCode = it.countryCode,
+                    source = it.source,
+                    isInferred = it.isInferred,
+                    observedAt = null,
+                )
+            }
+            val corrected = VisitedCountryDay(
+                date = date,
+                country = normalizedCountry,
+                countryCode = countryCode?.trim()?.uppercase()?.takeIf(String::isNotBlank),
+                source = existing?.source ?: VisitedPlaceSource.DEVICE_LOCATION,
+                isInferred = false,
+                provenance = VisitedCountryDayProvenance.MANUAL,
+                originalObservation = original,
+            )
+            val preserved = visitedCountryDayDao.loadAll()
+                .map { it.toExternalModel() }
+                .filter { it.date != date }
+                .filter { it.provenance == VisitedCountryDayProvenance.MANUAL }
+            val observed = visitedCountryDayDao.loadAll()
+                .map { it.toExternalModel() }
+                .filter { it.date != date && it.provenance == VisitedCountryDayProvenance.OBSERVED }
+            visitedCountryDayDao.replaceAll((rebuiltCountryDays(observed) + preserved + corrected).sortedBy(VisitedCountryDay::date).map { it.toEntity() })
         }
     }
 
@@ -130,9 +172,9 @@ class RoomVisitedHistoryStore @Inject constructor(
     }
 
     private suspend fun recordVisitedCountryDay(observation: VisitedObservation) {
-        val observedEntries = visitedCountryDayDao.loadAll()
-            .map { it.toExternalModel() }
-            .filter { it.isInferred.not() }
+        val existingDays = visitedCountryDayDao.loadAll().map { it.toExternalModel() }
+        val observedEntries = existingDays
+            .filter { it.provenance == VisitedCountryDayProvenance.OBSERVED }
             .sortedBy(VisitedCountryDay::date)
             .toMutableList()
 
@@ -142,7 +184,11 @@ class RoomVisitedHistoryStore @Inject constructor(
             countryCode = observation.countryCode,
             source = observation.source,
             isInferred = false,
+            provenance = VisitedCountryDayProvenance.OBSERVED,
         )
+
+        val manualEntryExists = existingDays.any { it.date == entry.date && it.provenance == VisitedCountryDayProvenance.MANUAL }
+        if (manualEntryExists) return
 
         val existingIndex = observedEntries.indexOfFirst { it.date == entry.date }
         if (existingIndex >= 0) {
@@ -158,7 +204,10 @@ class RoomVisitedHistoryStore @Inject constructor(
         }
 
         visitedCountryDayDao.replaceAll(
-            rebuiltCountryDays(observedEntries).map { it.toEntity() },
+            (
+                rebuiltCountryDays(observedEntries) +
+                    existingDays.filter { it.provenance == VisitedCountryDayProvenance.MANUAL }
+            ).distinctBy(VisitedCountryDay::date).sortedBy(VisitedCountryDay::date).map { it.toEntity() },
         )
     }
 }
@@ -178,7 +227,7 @@ private fun visitedPlaceEventStorageKey(
 
 internal fun rebuiltCountryDays(observedEntries: List<VisitedCountryDay>): List<VisitedCountryDay> {
     val sorted = observedEntries
-        .filter { it.isInferred.not() }
+        .filter { it.provenance == VisitedCountryDayProvenance.OBSERVED }
         .sortedBy(VisitedCountryDay::date)
 
     if (sorted.isEmpty()) {
@@ -225,6 +274,7 @@ private fun inferredCountryDays(
             countryCode = template.countryCode,
             source = template.source,
             isInferred = true,
+            provenance = VisitedCountryDayProvenance.INFERRED,
         )
     }
 }

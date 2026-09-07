@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.travelalerts
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import android.util.Log
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
 import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
@@ -32,13 +34,14 @@ class SmartravellerAdvisoryProvider @Inject constructor(
     suspend fun advisory(
         countryCodes: List<String>,
         primaryCountryCode: String,
+        allowBrowserFallback: Boolean = true,
     ): TravelAlertSignalSnapshot {
         val normalizedCountryCodes = countryCodes.map { it.uppercase() }.uniqued()
         logDebug(
             LOG_TAG,
             "Smartraveller advisory request primary=$primaryCountryCode coverage=${normalizedCountryCodes.joinToString(",")}",
         )
-        val destinations = loadDestinations()
+        val destinations = loadDestinations(allowBrowserFallback)
         val matches = normalizedCountryCodes.mapNotNull { countryCode ->
             val destination = bestDestinationMatch(countryCode, destinations) ?: return@mapNotNull null
             AdvisoryMatch(
@@ -195,7 +198,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
     }
 
     private fun parseDestinationDate(value: String): Instant? =
-        runCatching {
+        runCatchingCancellable {
             LocalDate.parse(
                 value.trim(),
                 DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH),
@@ -217,10 +220,10 @@ class SmartravellerAdvisoryProvider @Inject constructor(
     }
 
     private suspend fun loadDestinationDetailSummary(url: String): String? =
-        runCatching {
+        runCatchingCancellable {
             val response = service.destinationPage(url)
             if (response.isSuccessful.not()) {
-                return@runCatching null
+                return@runCatchingCancellable null
             }
             parseDestinationDetailSummary(response.body()?.string().orEmpty())
         }.getOrElse { error ->
@@ -228,8 +231,8 @@ class SmartravellerAdvisoryProvider @Inject constructor(
             null
         }
 
-    private suspend fun loadDestinations(): List<SmartravellerDestination> {
-        val directResult = runCatching {
+    private suspend fun loadDestinations(allowBrowserFallback: Boolean): List<SmartravellerDestination> {
+        val directResult = runCatchingCancellable {
             fetchDirect(
                 label = "destinations",
                 request = { service.destinations() },
@@ -240,7 +243,7 @@ class SmartravellerAdvisoryProvider @Inject constructor(
 
         logWarn(LOG_TAG, "Smartraveller direct destinations request failed, trying legacy export", directError)
 
-        val exportResult = runCatching {
+        val exportResult = runCatchingCancellable {
             fetchDirect(
                 label = "destinations-export",
                 request = { service.destinationsExport() },
@@ -251,7 +254,8 @@ class SmartravellerAdvisoryProvider @Inject constructor(
         val exportError = exportResult.exceptionOrNull()
         logWarn(LOG_TAG, "Smartraveller legacy export failed, trying WebView fallback", exportError)
 
-        return runCatching {
+        return runCatchingCancellable {
+            if (!allowBrowserFallback) throw java.io.IOException("Browser fallback deferred in Low Data mode")
             val browserHtml = browserFetcher.destinationsHtml()
             logDebug(
                 LOG_TAG,
@@ -385,11 +389,11 @@ private fun JsonObject.firstInstant(vararg keys: String): Instant? =
     }
 
 private fun logDebug(tag: String, message: String) {
-    runCatching { Log.d(tag, message) }
+    runCatchingCancellable { Log.d(tag, message) }
 }
 
 private fun logWarn(tag: String, message: String, error: Throwable? = null) {
-    runCatching {
+    runCatchingCancellable {
         if (error != null) {
             Log.w(tag, message, error)
         } else {

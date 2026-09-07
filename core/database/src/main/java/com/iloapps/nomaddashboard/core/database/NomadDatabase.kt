@@ -15,6 +15,7 @@ import com.iloapps.nomaddashboard.core.database.dao.TimeTrackingProjectDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedCountryDayDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceEventDao
 import com.iloapps.nomaddashboard.core.database.dao.VisitedPlaceDao
+import com.iloapps.nomaddashboard.core.database.dao.TravelStayReminderDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
 import com.iloapps.nomaddashboard.core.database.entity.LocalPriceCacheEntity
@@ -25,6 +26,7 @@ import com.iloapps.nomaddashboard.core.database.entity.TimeTrackingProjectEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedCountryDayEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEventEntity
 import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
+import com.iloapps.nomaddashboard.core.database.entity.TravelStayReminderEntity
 
 @Database(
     entities = [
@@ -35,11 +37,12 @@ import com.iloapps.nomaddashboard.core.database.entity.VisitedPlaceEntity
         VisitedPlaceEntity::class,
         VisitedPlaceEventEntity::class,
         VisitedCountryDayEntity::class,
+        TravelStayReminderEntity::class,
         TimeTrackingProjectEntity::class,
         TimeTrackingEntryEntity::class,
         TimeTrackingInterruptionEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 @TypeConverters(NomadDatabaseConverters::class)
@@ -51,6 +54,7 @@ abstract class NomadDatabase : RoomDatabase() {
     abstract fun visitedPlaceDao(): VisitedPlaceDao
     abstract fun visitedPlaceEventDao(): VisitedPlaceEventDao
     abstract fun visitedCountryDayDao(): VisitedCountryDayDao
+    abstract fun travelStayReminderDao(): TravelStayReminderDao
     abstract fun timeTrackingProjectDao(): TimeTrackingProjectDao
     abstract fun timeTrackingEntryDao(): TimeTrackingEntryDao
     abstract fun timeTrackingInterruptionDao(): TimeTrackingInterruptionDao
@@ -254,6 +258,30 @@ abstract class NomadDatabase : RoomDatabase() {
                         firstObservedAtEpochMillis INTEGER NOT NULL,
                         lastObservedAtEpochMillis INTEGER NOT NULL,
                         observedDayIso TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN provenance TEXT NOT NULL DEFAULT 'OBSERVED'")
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN originalCountry TEXT")
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN originalCountryCode TEXT")
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN originalSource TEXT")
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN originalIsInferred INTEGER")
+                database.execSQL("ALTER TABLE visited_country_days ADD COLUMN originalObservedAtEpochMillis INTEGER")
+                database.execSQL("UPDATE visited_country_days SET provenance = CASE WHEN isInferred = 1 THEN 'INFERRED' ELSE 'OBSERVED' END")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS travel_stay_reminders (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        label TEXT NOT NULL,
+                        country TEXT,
+                        targetDateIso TEXT NOT NULL,
+                        createdAtEpochMillis INTEGER NOT NULL,
+                        note TEXT
                     )
                     """.trimIndent(),
                 )

@@ -248,6 +248,40 @@ class RoomVisitedHistoryStoreTest {
     }
 
     @Test
+    fun `manual country day correction preserves original and is not overwritten by later observation`() = runTest {
+        val store = RoomVisitedHistoryStore(
+            FakeVisitedPlaceDao(),
+            FakeVisitedPlaceEventDao(),
+            FakeVisitedCountryDayDao(),
+            ImmediateTransactionRunner,
+        )
+        store.recordObservation(
+            observation(
+                city = "Madrid",
+                country = "Spain",
+                countryCode = "ES",
+                source = VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
+                observedAt = Instant.parse("2026-07-03T08:00:00Z"),
+            ),
+        )
+        store.correctCountryDay(LocalDate.of(2026, 7, 3), "Portugal", "PT")
+        store.recordObservation(
+            observation(
+                city = "Lisbon",
+                country = "Portugal",
+                countryCode = "PT",
+                source = VisitedPlaceSource.DEVICE_LOCATION,
+                observedAt = Instant.parse("2026-07-03T18:00:00Z"),
+            ),
+        )
+
+        val day = store.visitedCountryDays.first().single()
+        assertThat(day.countryCode).isEqualTo("PT")
+        assertThat(day.provenance.name).isEqualTo("MANUAL")
+        assertThat(day.originalObservation?.countryCode).isEqualTo("ES")
+    }
+
+    @Test
     fun `clear history removes aggregate days places and events`() = runTest {
         val store = RoomVisitedHistoryStore(
             FakeVisitedPlaceDao(),
@@ -302,6 +336,8 @@ private class FakeVisitedPlaceDao : VisitedPlaceDao {
 
     override fun observeAll(): Flow<List<VisitedPlaceEntity>> = state
 
+    override suspend fun loadAll(): List<VisitedPlaceEntity> = state.value
+
     override suspend fun getById(id: String): VisitedPlaceEntity? =
         state.value.firstOrNull { it.id == id }
 
@@ -325,6 +361,8 @@ private class FakeVisitedPlaceEventDao : VisitedPlaceEventDao {
     private val state = MutableStateFlow<List<VisitedPlaceEventEntity>>(emptyList())
 
     override fun observeAll(): Flow<List<VisitedPlaceEventEntity>> = state
+
+    override suspend fun loadAll(): List<VisitedPlaceEventEntity> = state.value
 
     override suspend fun getById(id: String): VisitedPlaceEventEntity? =
         state.value.firstOrNull { it.id == id }

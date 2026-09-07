@@ -18,6 +18,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
+import java.util.concurrent.Executors
+import kotlinx.coroutines.asCoroutineDispatcher
 
 class DefaultFuelPriceProviderTest {
     private val json = Json {
@@ -206,6 +208,56 @@ class DefaultFuelPriceProviderTest {
     }
 
     @Test
+    fun `italy catalog and result are reused within their ttl`() = runTest {
+        var catalogCalls = 0
+        var priceCalls = 0
+        val provider = provider(
+            italyFuelPriceService = object : ItalyFuelPriceService {
+                override suspend fun stationCatalog(): ResponseBody {
+                    catalogCalls += 1
+                    return italyCatalogCsv().toResponseBody()
+                }
+
+                override suspend fun dailyPrices(): ResponseBody {
+                    priceCalls += 1
+                    return italyPricesCsv().toResponseBody()
+                }
+            },
+        )
+        val request = FuelSearchRequest(41.9028, 12.4964, "IT", "Italy")
+
+        provider.prices(request, FuelProviderCredentials())
+        provider.prices(request, FuelProviderCredentials())
+
+        assertThat(catalogCalls).isEqualTo(1)
+        assertThat(priceCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `italy catalog work runs on injected io dispatcher`() = runTest {
+        val executor = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "fuel-io-test") }
+        val dispatcher = executor.asCoroutineDispatcher()
+        try {
+            val bodyThreads = mutableListOf<String>()
+            val provider = provider(
+                italyFuelPriceService = object : ItalyFuelPriceService {
+                    override suspend fun stationCatalog(): ResponseBody = recordingBody(italyCatalogCsv(), bodyThreads)
+                    override suspend fun dailyPrices(): ResponseBody = recordingBody(italyPricesCsv(), bodyThreads)
+                },
+                ioDispatcher = dispatcher,
+            )
+
+            provider.prices(FuelSearchRequest(41.9028, 12.4964, "IT", "Italy"), FuelProviderCredentials())
+
+            assertThat(bodyThreads).isNotEmpty()
+            assertThat(bodyThreads.toSet()).containsExactly("fuel-io-test")
+        } finally {
+            dispatcher.close()
+            executor.shutdown()
+        }
+    }
+
+    @Test
     fun `germany provider reports missing local Tankerkonig config`() = runTest {
         val provider = provider()
 
@@ -295,6 +347,7 @@ class DefaultFuelPriceProviderTest {
                 apiKey: String,
             ): TankerkoenigListResponse = TankerkoenigListResponse()
         },
+        ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
     ): DefaultFuelPriceProvider =
         DefaultFuelPriceProvider(
             json = json,
@@ -302,5 +355,31 @@ class DefaultFuelPriceProviderTest {
             franceFuelPriceService = franceFuelPriceService,
             italyFuelPriceService = italyFuelPriceService,
             tankerkoenigService = tankerkoenigService,
+            ioDispatcher = ioDispatcher,
         )
+
+    private fun italyCatalogCsv(): String =
+        """
+        idImpianto|Bandiera|Nome Impianto|Indirizzo|Comune|Latitudine|Longitudine
+        10|Q8|Roma Centro|Via Roma 1|Roma|41.9028|12.4964
+        """.trimIndent()
+
+    private fun italyPricesCsv(): String =
+        """
+        idImpianto|descCarburante|prezzo|isSelf|dtComu
+        10|Gasolio|1.799|1|06/04/2026 08:00:00
+        10|Benzina|1.899|1|06/04/2026 08:00:00
+        """.trimIndent()
+
+    private fun recordingBody(content: String, threads: MutableList<String>): ResponseBody =
+        object : ResponseBody() {
+            override fun contentLength(): Long = content.length.toLong()
+
+            override fun contentType() = null
+
+            override fun source(): okio.BufferedSource {
+                threads += Thread.currentThread().name
+                return okio.Buffer().writeUtf8(content)
+            }
+        }
 }

@@ -3,6 +3,8 @@ package com.iloapps.nomaddashboard.core.database.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDayOriginalObservation
+import com.iloapps.nomaddashboard.core.model.VisitedCountryDayProvenance
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import java.time.LocalDate
 
@@ -13,6 +15,12 @@ data class VisitedCountryDayEntity(
     val countryCode: String?,
     val source: VisitedPlaceSource,
     val isInferred: Boolean,
+    val provenance: VisitedCountryDayProvenance = if (isInferred) VisitedCountryDayProvenance.INFERRED else VisitedCountryDayProvenance.OBSERVED,
+    val originalCountry: String? = null,
+    val originalCountryCode: String? = null,
+    val originalSource: VisitedPlaceSource? = null,
+    val originalIsInferred: Boolean? = null,
+    val originalObservedAtEpochMillis: Long? = null,
 )
 
 fun VisitedCountryDayEntity.toExternalModel(): VisitedCountryDay =
@@ -22,6 +30,16 @@ fun VisitedCountryDayEntity.toExternalModel(): VisitedCountryDay =
         countryCode = countryCode,
         source = source,
         isInferred = isInferred,
+        provenance = provenance,
+        originalObservation = originalCountry?.let {
+            VisitedCountryDayOriginalObservation(
+                country = it,
+                countryCode = originalCountryCode,
+                source = originalSource ?: source,
+                isInferred = originalIsInferred ?: false,
+                observedAt = originalObservedAtEpochMillis?.let(java.time.Instant::ofEpochMilli),
+            )
+        },
     )
 
 fun VisitedCountryDay.toEntity(): VisitedCountryDayEntity =
@@ -31,4 +49,10 @@ fun VisitedCountryDay.toEntity(): VisitedCountryDayEntity =
         countryCode = countryCode,
         source = source,
         isInferred = isInferred,
+        provenance = provenance,
+        originalCountry = originalObservation?.country,
+        originalCountryCode = originalObservation?.countryCode,
+        originalSource = originalObservation?.source,
+        originalIsInferred = originalObservation?.isInferred,
+        originalObservedAtEpochMillis = originalObservation?.observedAt?.toEpochMilli(),
     )

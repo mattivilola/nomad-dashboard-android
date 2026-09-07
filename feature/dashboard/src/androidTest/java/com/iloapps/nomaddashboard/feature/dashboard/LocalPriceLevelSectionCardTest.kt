@@ -82,7 +82,7 @@ class LocalInfoSectionCardTest {
         composeRule.onNodeWithTag(LocalInfoCardTag).assertIsDisplayed()
         composeRule.onNodeWithText("Tarifa / Andalusia / Spain").assertIsDisplayed()
         composeRule.onNodeWithText("Next: Labour Day").assertIsDisplayed()
-        composeRule.onNodeWithText("On break").assertIsDisplayed()
+        composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Meal Out").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat").performScrollTo().assertIsDisplayed()
     }

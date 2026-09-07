@@ -21,6 +21,12 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
+import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
+import com.iloapps.nomaddashboard.feature.companion.CompanionRoute
+import com.iloapps.nomaddashboard.feature.companion.CompanionRuntime
+import com.iloapps.nomaddashboard.feature.companion.CompanionDashboardOverview
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -45,11 +51,18 @@ import com.iloapps.nomaddashboard.feature.visited.VisitedRoute
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var timeTrackingRepository: TimeTrackingRepository
+
+    @Inject
+    lateinit var dashboardRepository: NomadDashboardRepository
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,11 +75,20 @@ class MainActivity : ComponentActivity() {
                 TimeTrackingForegroundService.start(this@MainActivity)
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    dashboardRepository.refreshLocalSignals()
+                    delay(if (dashboardRepository.snapshot.value.lowImpactMode) 60_000 else 30_000)
+                }
+            }
+        }
         enableEdgeToEdge()
         setContent {
             NomadTheme {
                 val windowSizeClass = calculateWindowSizeClass(this)
-                NomadApp(windowSizeClass.widthSizeClass)
+                val snapshot by dashboardRepository.snapshot.collectAsStateWithLifecycle()
+                NomadApp(windowSizeClass.widthSizeClass, snapshot)
             }
         }
     }
@@ -85,7 +107,8 @@ private enum class TopDestination(
 }
 
 @Composable
-private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
+private fun NomadApp(widthSizeClass: WindowWidthSizeClass, snapshot: DashboardSnapshot) {
+    CompanionRuntime(snapshot)
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -140,6 +163,7 @@ private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
                         .fillMaxSize()
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     navController = navController,
+                    snapshot = snapshot,
                 )
             }
         } else {
@@ -149,6 +173,7 @@ private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
                     .padding(horizontal = 16.dp)
                     .padding(paddingValues),
                 navController = navController,
+                snapshot = snapshot,
             )
         }
     }
@@ -158,11 +183,15 @@ private fun NomadApp(widthSizeClass: WindowWidthSizeClass) {
 private fun AppNavHost(
     modifier: Modifier,
     navController: androidx.navigation.NavHostController,
+    snapshot: DashboardSnapshot,
 ) {
     val context = LocalContext.current
     NavHost(navController = navController, startDestination = TopDestination.Dashboard.route, modifier = modifier) {
         composable(TopDestination.Dashboard.route) {
             DashboardRoute(
+                companionOverview = { CompanionDashboardOverview(snapshot, onOpenCompanion = {
+                    navController.navigate("companion") { launchSingleTop = true }
+                }) },
                 onStartForegroundTracking = { TimeTrackingForegroundService.start(context) },
                 onStopForegroundTracking = { TimeTrackingForegroundService.stop(context) },
                 onOpenSettings = {
@@ -173,6 +202,7 @@ private fun AppNavHost(
                 },
             )
         }
+        composable("companion") { CompanionRoute(snapshot, onBack = { navController.popBackStack() }) }
         composable(TopDestination.Settings.route) { SettingsRoute() }
         composable(TopDestination.Visited.route) { VisitedRoute() }
         composable(TopDestination.TimeTracking.route) {

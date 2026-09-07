@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-04-30
+Last updated: 2026-09-07
 
 ## Overview
 
@@ -38,6 +38,7 @@ Responsibilities:
 - dashboard snapshot models
 - structured travel-alert domain vocabulary
 - visited/time tracking domain vocabulary
+- Companion offline-essentials, workplace-diary, and timezone-planning models
 
 Purpose:
 - keep shared contracts stable across feature modules
@@ -95,6 +96,8 @@ Responsibilities:
 - travel-alert provider orchestration and country-coverage resolution
 - warm-start dashboard section cache hydration for location-dependent cards
 - shared transient retry policy for startup-dependent remote fetches
+- Companion repository and versioned local backup codec
+- travel-history and time-tracking export/import managers
 - orchestration of local and remote data
 
 Key files:
@@ -113,6 +116,7 @@ Current routes:
 - settings
 - visited
 - time tracking
+- Companion workspace
 - about
 
 ## Data Flow
@@ -214,6 +218,11 @@ Visited history flow:
    places and country days for World Footprint mode, and groups consecutive
    same-place events into selected-year travel stops for Travel Path mode.
    The visited screen can clear all three local history tables together.
+8. `TravelHistoryManager` provides the macOS v1-compatible country-day CSV
+   for sharing plus a native JSON backup that includes aggregate places,
+   events, country days, and stay reminders. JSON is platform-specific rather
+   than a cross-platform interchange promise; imports are previewed and merged
+   without overwriting conflicting local records.
 
 Time tracking flow:
 
@@ -245,6 +254,27 @@ Time tracking flow:
 9. `TimeTrackingForegroundService` reloads the active unallocated entry from
    persistence and rebuilds the persistent notification after app relaunch or
    service recreation, but not after device reboot.
+10. `TimeTrackingBackupManager` takes a Room-consistent snapshot for CSV and
+    JSON export. JSON imports are byte- and record-bounded, validated before
+    use, and recheck conflicts inside the import transaction; active capture
+    and credentials are excluded.
+
+Companion flow:
+
+1. `CompanionRuntime` receives the dashboard's already-observed local signals
+   while the app lifecycle is foregrounded. It does not start a service or
+   background work.
+2. It may post a low-priority, permission-gated notification for a sustained
+   connectivity, VPN, or charging transition when the user has enabled quiet
+   notifications and the cooldown and quiet-hour policy allow it.
+3. `CompanionViewModel` owns offline essentials, timezone planners, and an
+   explicitly opt-in workplace diary. A diary row is saved only after the user
+   supplies a label and chooses **Save current observation**; the app never
+   infers a workplace from stationary time, cafés, or other place detection.
+4. `CompanionStorage` serializes the nonsecret Companion document atomically
+   in the app's `noBackupFilesDir`. Its versioned JSON backup uses preview and
+   additive merge semantics, keeping local conflicting rows and recording a
+   conflict note.
 
 Local Info flow:
 
@@ -356,6 +386,10 @@ Local price level flow:
 - Room-backed time-tracking entries with project linkage and a single active
   entry invariant
 - Room-backed local price level cache entries with a `6 hour` minimum TTL
+- Room-backed chronological visited-place events, country-day provenance, and
+  travel-stay reminders through schema version 9 and the `8 -> 9` migration
+- nonsecret Companion data in an atomically written JSON document under
+  `noBackupFilesDir`; it is excluded from Android backup
 
 ## Current External Integrations
 
@@ -382,6 +416,13 @@ Implemented now:
 - foreground-only manual refresh model
 - foreground service for active time tracking with a persistent notification and
   app-relaunch recovery
+- Companion transition alerts are foreground-only, lifecycle-gated, and opt-in;
+  they do not create a service or background location work
+
+Release and benchmark configuration:
+- release builds enable R8 minification and resource shrinking
+- the `benchmark` module contains Macrobenchmark startup/scroll scenarios and
+  Baseline Profile collection source for a connected-device run
 
 Planned:
 - WorkManager for allowed periodic refresh work
@@ -416,3 +457,5 @@ Android differs from macOS in several areas:
 
 The architecture intentionally isolates those differences in `core:data` and
 `core:network` rather than in UI modules.
+
+World-map polygon conversion is remembered by relevant country geometry. World-map rendering is capped at 300 saved-place pins with a visible limit notice; the complete saved-place list remains available.

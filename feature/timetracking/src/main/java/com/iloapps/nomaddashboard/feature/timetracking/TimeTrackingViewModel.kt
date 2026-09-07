@@ -9,6 +9,9 @@ import com.iloapps.nomaddashboard.core.data.timetracking.ReportInterruptionResul
 import com.iloapps.nomaddashboard.core.data.timetracking.StartTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.StopTrackingResult
 import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingBackupManager
+import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingImportPreview
+import android.net.Uri
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot
@@ -35,6 +38,8 @@ data class TimeTrackingUiState(
     val report: TimeTrackingReportSnapshot = TimeTrackingReportSnapshot(),
     val draftProjectName: String = "",
     val message: String? = null,
+    val importPreview: TimeTrackingImportPreview? = null,
+    val importError: String? = null,
 )
 
 sealed interface TimeTrackingEffect {
@@ -63,12 +68,16 @@ private data class TrackingSnapshot(
 class TimeTrackingViewModel @Inject constructor(
     private val dashboardRepository: NomadDashboardRepository,
     private val timeTrackingRepository: TimeTrackingRepository,
+    private val backupManager: TimeTrackingBackupManager,
 ) : ViewModel() {
     private val draftProjectName = MutableStateFlow("")
     private val message = MutableStateFlow<String?>(null)
     private val _effects = MutableSharedFlow<TimeTrackingEffect>()
+    private val _shareContent = MutableSharedFlow<TimeTrackingShareContent>(extraBufferCapacity = 1)
+    private val importUi = MutableStateFlow(TimeTrackingImportUi())
 
     val effects = _effects.asSharedFlow()
+    val shareContent = _shareContent.asSharedFlow()
 
     private val inputs = combine(
         draftProjectName,
@@ -102,7 +111,8 @@ class TimeTrackingViewModel @Inject constructor(
     val uiState: StateFlow<TimeTrackingUiState> = combine(
         trackingSnapshot,
         inputs,
-    ) { snapshot, inputs ->
+        importUi,
+    ) { snapshot, inputs, importUi ->
         TimeTrackingUiState(
             settings = snapshot.settings,
             projects = snapshot.projects,
@@ -112,6 +122,8 @@ class TimeTrackingViewModel @Inject constructor(
             report = snapshot.report,
             draftProjectName = inputs.draftProjectName,
             message = inputs.message,
+            importPreview = importUi.preview,
+            importError = importUi.error,
         )
     }.stateIn(
         viewModelScope,
@@ -129,6 +141,12 @@ class TimeTrackingViewModel @Inject constructor(
         draftProjectName.value = value
         message.value = null
     }
+
+    fun shareCsv() { viewModelScope.launch { _shareContent.tryEmit(TimeTrackingShareContent("Nomad time CSV", backupManager.exportCsv(), "text/csv")) } }
+    fun shareBackup() { viewModelScope.launch { _shareContent.tryEmit(TimeTrackingShareContent("Nomad time backup", backupManager.exportBackup(), "application/json")) } }
+    fun previewBackup(uri: Uri) { viewModelScope.launch { runCatching { backupManager.previewImport(uri) }.onSuccess { importUi.value = TimeTrackingImportUi(preview = it) }.onFailure { importUi.value = TimeTrackingImportUi(error = it.message ?: "The backup could not be read.") } } }
+    fun importBackup(uri: Uri) { viewModelScope.launch { runCatching { backupManager.importFrom(uri) }.onSuccess { preview -> importUi.value = if (preview.conflictCount == 0) TimeTrackingImportUi() else TimeTrackingImportUi(preview = preview) }.onFailure { importUi.value = TimeTrackingImportUi(error = it.message ?: "The backup could not be imported.") } } }
+    fun saveBackup(uri: Uri) { viewModelScope.launch { runCatching { backupManager.saveBackup(uri) }.onFailure { importUi.value = TimeTrackingImportUi(error = it.message ?: "The backup could not be saved.") } } }
 
     fun createProject() {
         viewModelScope.launch {
@@ -231,5 +249,8 @@ class TimeTrackingViewModel @Inject constructor(
         else -> "Ready"
     }
 }
+
+data class TimeTrackingShareContent(val title: String, val text: String, val mimeType: String)
+private data class TimeTrackingImportUi(val preview: TimeTrackingImportPreview? = null, val error: String? = null)
 
 private fun Int.pluralSuffix(): String = if (this == 1) "" else "s"

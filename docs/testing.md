@@ -691,3 +691,21 @@ Planned next:
 - physical-device notification smoke verification for the time-tracking foreground service
 - physical-device smoke verification of the new interruption button, flash, and
   cooldown-color behavior
+
+
+## Responsiveness and portable-data verification (September 2026)
+
+Use one Gradle build lane; concurrent KSP/Hilt compilations against this checkout can collide. The unit suite includes held-provider publication, bounded device/IP bootstrap, cancelled/coalesced refresh recovery, Low Data/manual fuel refresh, catalog reuse and IO-dispatcher checks, imported backup validation/conflicts, manual travel provenance, and DST overlap calculations. Database instrumentation validates the 8-to-9 migration through Room and preserves observed/inferred rows. The Companion smoke verifies entry and offline tool surfaces.
+
+Run `NOMAD_ANDROID_AVD=Pixel_8 make test` when that is the installed AVD (the helper default remains Pixel_5_API_31). For a serial lane, the equivalent helper-environment invocation is:
+
+```sh
+source scripts/android-env.sh
+run_gradle testDebugUnitTest connectedDebugAndroidTest --no-parallel --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.notClass=com.iloapps.nomaddashboard.ScreenshotReviewTest
+```
+
+Generate the app Baseline Profile with `run_gradle :app:generateBaselineProfile`; generation can use an API 33+ emulator. Run `run_gradle :benchmark:connectedCheck` on a physical device for meaningful startup/scroll measurements. Do not report emulator benchmark timings as phone performance or battery evidence. Exercise the optimized signed APK before publishing; shrinking changes require startup/navigation/storage/serialization checks.
+
+The app instrumentation runner is now compiled from `app/src/androidTest`, and the app no longer declares the AndroidX test runner as a production dependency. The old main-source path is retained as a comment-only migration marker under the repository no-file-deletion rule. This prevents test helper activities from losing AndroidX classes through app/test dependency deduplication.
+
+Reference: [Android Baseline Profile generation](https://developer.android.com/topic/performance/baselineprofiles/create-baselineprofile) and [Macrobenchmark](https://developer.android.com/topic/performance/benchmarking/macrobenchmark-overview).

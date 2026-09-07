@@ -2,6 +2,8 @@ package com.iloapps.nomaddashboard.feature.visited
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -36,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -89,6 +92,8 @@ import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.model.VisitedTravelStop
+import com.iloapps.nomaddashboard.core.model.TravelHistoryImportPreview
+import com.iloapps.nomaddashboard.core.model.TravelStayReminder
 import com.iloapps.nomaddashboard.core.model.availableEventYears
 import com.iloapps.nomaddashboard.core.model.availableYears
 import com.iloapps.nomaddashboard.core.model.monthlySummaries
@@ -97,6 +102,7 @@ import com.iloapps.nomaddashboard.core.model.visitedPlaceSummary
 import com.iloapps.nomaddashboard.core.model.yearSummary
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.flow.collect
 
 private enum class VisitedMapMode {
     WorldFootprint,
@@ -119,6 +125,29 @@ fun VisitedRoute(
         hasLocationPermission = context.hasVisitedLocationPermission()
         if (hasLocationPermission) {
             currentRefresh()
+        }
+    }
+    var selectedBackupUri by remember { mutableStateOf<Uri?>(null) }
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        selectedBackupUri = uri
+        uri?.let(viewModel::previewImport)
+    }
+    val backupSaveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let(viewModel::saveBackup)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.shareContent.collect { content ->
+            context.startActivity(
+                Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TITLE, content.title)
+                        putExtra(Intent.EXTRA_TEXT, content.text)
+                    },
+                    "Share ${content.title}",
+                ),
+            )
         }
     }
 
@@ -152,6 +181,15 @@ fun VisitedRoute(
                 ),
             )
         },
+        onShareCountryDays = viewModel::shareCountryDays,
+        onShareBackup = viewModel::shareBackup,
+        onSaveBackup = { backupSaveLauncher.launch("nomad-travel-backup-v1.json") },
+        onSelectBackup = { backupLauncher.launch(arrayOf("application/json", "text/plain")) },
+        onConfirmImport = { selectedBackupUri?.let(viewModel::importBackup) },
+        onAddStayReminder = viewModel::addStayReminder,
+        onDeleteStayReminder = viewModel::deleteStayReminder,
+        onCorrectCountryDay = viewModel::correctCountryDay,
+        onRestoreOriginalCountryDay = viewModel::restoreOriginalCountryDay,
     )
 }
 
@@ -164,6 +202,15 @@ fun VisitedScreen(
     onRefresh: () -> Unit,
     onClearHistory: () -> Unit,
     onRequestLocationPermission: () -> Unit,
+    onShareCountryDays: (Int?, Boolean) -> Unit = { _, _ -> },
+    onShareBackup: () -> Unit = {},
+    onSaveBackup: () -> Unit = {},
+    onSelectBackup: () -> Unit = {},
+    onConfirmImport: () -> Unit = {},
+    onAddStayReminder: (String, String?, LocalDate, String?) -> Unit = { _, _, _, _ -> },
+    onDeleteStayReminder: (String) -> Unit = {},
+    onCorrectCountryDay: (LocalDate, String, String?) -> Unit = { _, _, _ -> },
+    onRestoreOriginalCountryDay: (LocalDate) -> Unit = {},
 ) {
     val placeSummary = state.places.visitedPlaceSummary()
     val latestPlace = remember(state.places) {
@@ -222,6 +269,24 @@ fun VisitedScreen(
                 onRefresh = onRefresh,
                 onClearHistory = onClearHistory,
                 onRequestLocationPermission = onRequestLocationPermission,
+            )
+        }
+
+        item {
+            TravelToolsCard(
+                selectedYear = selectedYear,
+                reminders = state.reminders,
+                importPreview = state.importPreview,
+                error = state.travelActionError,
+                onShareCountryDays = onShareCountryDays,
+                onShareBackup = onShareBackup,
+                onSaveBackup = onSaveBackup,
+                onSelectBackup = onSelectBackup,
+                onConfirmImport = onConfirmImport,
+                onAddStayReminder = onAddStayReminder,
+                onDeleteStayReminder = onDeleteStayReminder,
+                onCorrectCountryDay = onCorrectCountryDay,
+                onRestoreOriginalCountryDay = onRestoreOriginalCountryDay,
             )
         }
 
@@ -301,12 +366,17 @@ fun VisitedScreen(
                 }
             }
 
-            items(monthlySummaries, key = { it.id }) { summary ->
-                MonthSummaryCard(summary = summary)
+            monthlySummaries.forEach { summary ->
+                item(key = "month-${summary.id}") {
+                    MonthSummaryCard(summary = summary)
+                }
+                items(summary.days, key = { day -> "country-day-${day.date}" }) { day ->
+                    CountryDayHistoryRow(day = day)
+                }
             }
 
             if (state.placeEvents.isNotEmpty()) {
-                item {
+                item(key = "travel-log-header") {
                     TravelLogCard(
                         availableYears = eventYears,
                         selectedYear = selectedYear,
@@ -314,21 +384,22 @@ fun VisitedScreen(
                         stops = travelStops,
                     )
                 }
+                items(travelStops, key = VisitedTravelStop::id) { stop ->
+                    TravelStopRow(stop = stop)
+                }
             }
 
-            item {
+            item(key = "saved-places-header") {
                 NomadCard {
                     NomadSectionClusterHeader(
                         title = "Saved Places",
                         subtitle = "${state.places.size} saved entries ordered by most recent visit.",
                         badges = listOf("${state.places.size} stops" to NomadBadgeTone.Info),
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        state.places.forEach { place ->
-                            SavedPlaceRow(place = place)
-                        }
-                    }
                 }
+            }
+            items(state.places, key = VisitedPlace::id) { place ->
+                SavedPlaceRow(place = place)
             }
 
             item {
@@ -460,6 +531,111 @@ private fun VisitedOverviewCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TravelToolsCard(
+    selectedYear: Int,
+    reminders: List<TravelStayReminder>,
+    importPreview: TravelHistoryImportPreview?,
+    error: String?,
+    onShareCountryDays: (Int?, Boolean) -> Unit,
+    onShareBackup: () -> Unit,
+    onSaveBackup: () -> Unit,
+    onSelectBackup: () -> Unit,
+    onConfirmImport: () -> Unit,
+    onAddStayReminder: (String, String?, LocalDate, String?) -> Unit,
+    onDeleteStayReminder: (String) -> Unit,
+    onCorrectCountryDay: (LocalDate, String, String?) -> Unit,
+    onRestoreOriginalCountryDay: (LocalDate) -> Unit,
+) {
+    var label by rememberSaveable { mutableStateOf("") }
+    var country by rememberSaveable { mutableStateOf("") }
+    var date by rememberSaveable { mutableStateOf(LocalDate.now().plusDays(30).toString()) }
+    var note by rememberSaveable { mutableStateOf("") }
+    var correctionDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var correctionCountry by rememberSaveable { mutableStateOf("") }
+    var correctionCode by rememberSaveable { mutableStateOf("") }
+    val targetDate = remember(date) { runCatching { LocalDate.parse(date) }.getOrNull() }
+    NomadCard(modifier = Modifier.testTag("visited_travel_tools")) {
+        NomadSectionClusterHeader(
+            title = "Travel record tools",
+            subtitle = "Exports and backups stay on this device until you choose a share destination.",
+            badges = listOf("Local-first" to NomadBadgeTone.Info),
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(onClick = { onShareCountryDays(selectedYear, false) }) { Text("Share summary") }
+            OutlinedButton(onClick = { onShareCountryDays(selectedYear, true) }) { Text("Share CSV") }
+            OutlinedButton(onClick = onShareBackup) { Text("Share backup") }
+            OutlinedButton(onClick = onSaveBackup) { Text("Save backup file") }
+            OutlinedButton(onClick = onSelectBackup) { Text("Choose backup") }
+        }
+        importPreview?.let { preview ->
+            Text(
+                "Preview: ${preview.countryDaysToAdd} days, ${preview.placesToAdd} places, ${preview.placeEventsToAdd} events and ${preview.remindersToAdd} reminders to add. ${preview.duplicateCount} duplicates, ${preview.conflictCount} conflicts.",
+                modifier = Modifier.padding(top = 12.dp),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            preview.warnings.forEach { warning ->
+                Text(warning, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+            Button(
+                modifier = Modifier.padding(top = 8.dp),
+                enabled = preview.conflictCount == 0,
+                onClick = onConfirmImport,
+            ) { Text("Import previewed backup") }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        Text("Correct a country day", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text("A correction is marked manual and retains the original observed or inferred entry for export.", style = MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(value = correctionDate, onValueChange = { correctionDate = it }, label = { Text("Date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = correctionCountry, onValueChange = { correctionCountry = it }, label = { Text("Correct country") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = correctionCode, onValueChange = { correctionCode = it }, label = { Text("Country code (optional)") }, modifier = Modifier.fillMaxWidth())
+        val parsedCorrectionDate = remember(correctionDate) { runCatching { LocalDate.parse(correctionDate) }.getOrNull() }
+        Button(
+            enabled = parsedCorrectionDate != null && correctionCountry.isNotBlank(),
+            onClick = { parsedCorrectionDate?.let { onCorrectCountryDay(it, correctionCountry, correctionCode) } },
+        ) { Text("Save correction") }
+        OutlinedButton(
+            enabled = parsedCorrectionDate != null,
+            onClick = { parsedCorrectionDate?.let(onRestoreOriginalCountryDay) },
+        ) { Text("Restore original observation") }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        Text("Stay reminder", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        OutlinedTextField(value = label, onValueChange = { label = it }, label = { Text("Label") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = country, onValueChange = { country = it }, label = { Text("Country (optional)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Target date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth(), isError = date.isNotBlank() && targetDate == null)
+        OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Personal note (optional)") }, modifier = Modifier.fillMaxWidth())
+        Button(
+            modifier = Modifier.padding(top = 8.dp),
+            enabled = label.isNotBlank() && targetDate != null,
+            onClick = {
+                targetDate?.let { onAddStayReminder(label, country, it, note) }
+                label = ""; country = ""; note = ""
+            },
+        ) { Text("Save reminder") }
+        reminders.forEach { reminder ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(reminder.label, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${reminder.country ?: "Any country"} · ${reminder.targetDate} · ${reminder.daysRemaining} days remaining",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                OutlinedButton(onClick = { onDeleteStayReminder(reminder.id) }) { Text("Remove") }
+            }
+        }
+    }
+}
+
 @Composable
 private fun VisitedOverviewMetric(
     label: String,
@@ -584,6 +760,9 @@ private fun VisitedMapCard(
         } else if (mode == VisitedMapMode.TravelPath) {
             VisitedTravelPathMap(stops = travelStops)
         } else {
+            if (mapPresentation.markers.size > 300) {
+                Text("Showing up to 300 saved-place pins. All places remain available in the list.")
+            }
             VisitedWorldMap(
                 countryShapes = countryShapes.orEmpty(),
                 mapPresentation = mapPresentation,
@@ -648,6 +827,15 @@ private fun VisitedWorldMap(
     highlightedStyle: VisitedMapCountryStyle,
     unvisitedStyle: VisitedMapCountryStyle,
 ) {
+    val relevantCountryShapes = remember(countryShapes, mapPresentation.highlightedCountryCodes) {
+        countryShapes.filter { it.countryCode in mapPresentation.highlightedCountryCodes }
+    }
+    val polygonGeometry = remember(relevantCountryShapes) {
+        relevantCountryShapes.flatMap { country -> country.polygons.map { polygon ->
+            polygon.outerRing.toLatLngs() to polygon.holes.map { it.toLatLngs() }
+        } }
+    }
+    val visibleMarkers = remember(mapPresentation.markers) { mapPresentation.markers.take(300) }
     val viewportKey = remember(mapPresentation.viewport) {
         mapPresentation.viewport.bounds.viewportKey(mapPresentation.viewport.source)
     }
@@ -696,28 +884,21 @@ private fun VisitedWorldMap(
             ),
             onMapLoaded = { mapLoaded = true },
         ) {
-            countryShapes.forEach { country ->
-                val style = if (mapPresentation.highlightedCountryCodes.contains(country.countryCode)) {
-                    highlightedStyle
-                } else {
-                    unvisitedStyle
-                }
-
-                country.polygons.forEach { polygon ->
+            polygonGeometry.forEach { (outline, holes) ->
                     Polygon(
-                        points = polygon.outerRing.map(VisitedMapCoordinate::toLatLng),
-                        holes = polygon.holes.map { hole -> hole.map(VisitedMapCoordinate::toLatLng) },
-                        fillColor = style.fillColor,
-                        strokeColor = style.strokeColor,
-                        strokeWidth = style.strokeWidth,
+                        points = outline,
+                        holes = holes,
+                        fillColor = highlightedStyle.fillColor,
+                        strokeColor = highlightedStyle.strokeColor,
+                        strokeWidth = highlightedStyle.strokeWidth,
                         clickable = false,
                     )
-                }
             }
 
-            mapPresentation.markers.forEach { marker ->
+            visibleMarkers.forEach { marker ->
+                val markerState = remember(marker.id) { MarkerState(position = marker.coordinate.toLatLng()) }
                 Marker(
-                    state = MarkerState(position = marker.coordinate.toLatLng()),
+                    state = markerState,
                     title = marker.title,
                     snippet = marker.subtitle,
                 )
@@ -796,7 +977,7 @@ private fun VisitedTravelPathMap(
                 )
             }
             Marker(
-                state = MarkerState(position = coordinate.toLatLng()),
+                state = remember(stop.id) { MarkerState(position = coordinate.toLatLng()) },
                 title = "${stop.sequenceNumber}. ${stop.displayName}",
                 snippet = stop.dateRangeLabel(),
                 icon = markerIcon,
@@ -840,11 +1021,6 @@ private fun TravelLogCard(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            stops.forEach { stop ->
-                TravelStopRow(stop = stop)
-            }
-        }
     }
 }
 
@@ -977,19 +1153,21 @@ private fun MonthSummaryCard(summary: VisitedCountryDayMonthSummary) {
                 )
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            summary.days.forEach { day ->
-                Text(
-                    text = "${day.date.dayOfMonth.toString().padStart(2, '0')} · ${day.country} · ${if (day.isInferred) "Inferred" else day.source.label()}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                )
-            }
-        }
     }
+}
+
+@Composable
+private fun CountryDayHistoryRow(day: VisitedCountryDay) {
+    Text(
+        text = "${day.date.formatDayLabel()} · ${day.country} · ${day.provenance.name.lowercase().replaceFirstChar(Char::uppercase)}",
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+    )
 }
 
 @Composable
@@ -1153,6 +1331,8 @@ private fun Context.hasConfiguredMapsApiKey(): Boolean {
 }
 
 private fun VisitedMapCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
+
+private fun List<VisitedMapCoordinate>.toLatLngs(): List<LatLng> = map(VisitedMapCoordinate::toLatLng)
 
 private fun VisitedMapPresentation.toCameraPosition(): CameraPosition {
     val target = focusCoordinate ?: viewport.bounds.center

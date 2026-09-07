@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-04-30
+Last updated: 2026-09-07
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -23,6 +23,7 @@ This document tracks Android parity against the macOS app at the feature level.
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Implemented | Route now shares the same product language as the rest of the app, with clearer overview, active-state, and recent-session sections |
 | Adaptive phone/tablet navigation | Implemented | Bottom bar on compact, rail on wider layouts |
+| Companion workspace | Implemented | Dashboard Work Readiness opens local offline essentials, an explicit workplace diary, timezone planners, quiet foreground-only alerts, and versioned backup tools |
 | Nomad visual identity | Implemented | Warm sand / teal / coral card-based UI |
 | Compact dashboard UX parity pass | Implemented | Default dashboard order now starts with weather and travel alerts; the phone dashboard removes duplicate top navigation, replaces the vague overall tile with weather-led overview tiles, and shows active refresh feedback |
 | Shared product UI foundation | Implemented | Design system now includes stronger status badges, metric blocks, chart shells, and product top-bar/header patterns reused across screens |
@@ -100,7 +101,8 @@ This document tracks Android parity against the macOS app at the feature level.
 | Visited source priority | Implemented | Visited places, country days, and travel-path events prefer resolved device location; public-IP geolocation is only stored for a capture when device location is unavailable or unresolved |
 | Country-day aggregation | Implemented | Same-day device precedence plus inferred gap filling with yearly/monthly summaries; aggregate compatibility is preserved while event history powers path display |
 | Travel path history | Implemented | Travel Path mode shows selected-year ordered stops, a route line between coordinate-backed stops, and a chronological log with date/date range, source, and stop day count |
-| Country-day export | Planned | No Android export flow yet |
+| Country-day export | Implemented | Shares a macOS v1-compatible CSV with country-day provenance and capture-source columns, plus a readable summary; Android JSON is a native travel-ledger backup rather than a cross-platform format promise |
+| Travel-ledger JSON backup | Implemented | User-initiated share, document save, preview, and additive import cover places, chronological events, country days, and stay reminders; conflicts do not overwrite local rows |
 | World map rendering | Implemented | Google Maps Compose renders all-time saved-place pins plus selected-year country shading from bundled world-country boundaries in World Footprint mode; Travel Path mode renders numbered selected-year stops and route polylines; configure a local app-level Maps SDK key via `local.properties`, Gradle properties, or environment variables |
 
 ## Time Tracking
@@ -110,12 +112,23 @@ This document tracks Android parity against the macOS app at the feature level.
 | Time tracking screen route | Implemented | Route now leads with a live unallocated buffer, clear running/paused state, quick-allocation chips, and compact project management instead of project-first session start |
 | Project list and settings | Implemented | Add-only local project list with inline creation; the built-in `Other` lane is always available for quick allocation |
 | Ledger persistence | Implemented | Room-backed projects and entries with a single active session invariant |
-| Foreground-service runtime | Implemented | Persistent special-use notification runs while the unallocated buffer is actively capturing and resumes after app relaunch or service recreation |
+| Foreground-service runtime | Implemented | Persistent special-use notification with the system chronometer runs while the unallocated buffer is actively capturing and resumes after app relaunch or service recreation |
 | Allocation workflow | Implemented | Time is captured into a persistent unallocated buffer first, then assigned from dashboard or tracking-screen quick actions into a chosen project or `Other` |
 | Automatic daily tracking window | Implemented | Settings now define a same-day auto-capture window, defaulting to `07:00-19:00`; outside it, manual play/pause still works |
 | Interruption tracking | Implemented | Dashboard and tracking screens now expose a dedicated interruption action with a same-day counter, red flash, and a `23 minute` cooldown fade back toward the default warm tone |
 | Focus-loss reporting | Implemented | Local reports now estimate `interruptions x 23 minutes`, show same-day totals, and break allocated work down by project with estimated focused time |
-| Reporting/export | Bootstrap | In-app interruption and focus reporting is live, but external export is still not implemented |
+| Reporting/export | Implemented | User-initiated Sharesheet actions provide a credential-free plain-text focus report, completed-entry CSV, and versioned JSON backup; imports preview additions/conflicts and never import an active capture |
+
+## Companion
+
+| Feature | Android status | Notes |
+| --- | --- | --- |
+| Offline essentials | Implemented | User-created addresses, contacts, notes, and allowed Maps/geo links remain in the local Companion document |
+| Workplace diary | Implemented | Disabled by default. A row is stored only after the user enables the diary, provides a place label, and taps **Save current observation**; it never automatically identifies stationary locations or cafés as workplaces |
+| Workplace data minimization | Implemented | Connection names and location-derived Maps links each require their own opt-in; saved labels remain editable and IP-derived map links are marked approximate |
+| Timezone planner | Implemented | Local IANA-zone overlap calculation accounts for DST transitions without provider calls |
+| Quiet contextual notifications | Implemented | Permission-gated, low-priority alerts react only to sustained foreground-observed connection, VPN, or charging transitions and honour configured quiet hours and cooldown |
+| Companion backup | Implemented | Versioned JSON export, bounded import preview, and additive merge retain local conflicts and exclude credentials and dashboard history |
 
 ## Build, Release, And Distribution
 
@@ -128,3 +141,5 @@ This document tracks Android parity against the macOS app at the feature level.
 | Signed AAB/APK script flow | Implemented | Requires local signing env only; shipped app credentials are not read from local env files |
 | Google Play internal publish script | Implemented | Requires local Play service account |
 | Release version bump helper | Implemented | `prepare-release.sh` now bumps tracked version metadata, prepends `CHANGELOG.md`, writes Play release notes, and creates a local release commit plus tag without auto-pushing |
+| Release shrinking | Implemented | Release builds enable R8 minification and Android resource shrinking; Retrofit annotation metadata and serialization-generated serializers are retained by the release rules |
+| Benchmark and Baseline Profile source | Implemented | The connected-device benchmark module contains cold-start and dashboard-scroll Macrobenchmark scenarios plus Baseline Profile collection source; no measurement result is recorded here |

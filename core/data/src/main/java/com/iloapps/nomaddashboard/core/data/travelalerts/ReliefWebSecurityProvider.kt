@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.travelalerts
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import com.iloapps.nomaddashboard.core.model.TravelAlertKind
 import com.iloapps.nomaddashboard.core.model.TravelAlertSeverity
 import com.iloapps.nomaddashboard.core.model.TravelAlertSignalSnapshot
@@ -137,6 +139,8 @@ class ReliefWebSecurityProvider @Inject constructor(
     internal fun parseReports(rawBody: String): List<SecurityReportPayload> {
         val rootObject = try {
             json.parseToJsonElement(rawBody) as? JsonObject
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
             throw ReliefWebProviderError.InvalidPayload("Response body was not valid JSON.")
         } ?: throw ReliefWebProviderError.InvalidPayload("Top-level response was not a JSON object.")
@@ -168,7 +172,7 @@ class ReliefWebSecurityProvider @Inject constructor(
     }
 
     internal fun parseErrorMessage(rawBody: String): String? {
-        val rootObject = runCatching { json.parseToJsonElement(rawBody) as? JsonObject }.getOrNull() ?: return null
+        val rootObject = runCatchingCancellable { json.parseToJsonElement(rawBody) as? JsonObject }.getOrNull() ?: return null
         val message = ((rootObject["error"] as? JsonObject)?.primitive("message")).orEmpty().trim()
         return message.ifBlank { null }
     }
@@ -200,4 +204,4 @@ private fun JsonObject.primitive(key: String): String? =
     (this[key] as? JsonPrimitive)?.content?.takeIf { value -> value.isNotBlank() }
 
 internal fun parseTravelAlertInstant(value: String): Instant? =
-    runCatching { Instant.parse(value) }.getOrNull()
+    runCatchingCancellable { Instant.parse(value) }.getOrNull()

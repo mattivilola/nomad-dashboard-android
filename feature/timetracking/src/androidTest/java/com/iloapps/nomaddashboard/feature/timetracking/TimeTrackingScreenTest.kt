@@ -12,6 +12,10 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Instant
 import java.util.UUID
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import org.junit.Rule
 import org.junit.Test
 
@@ -58,9 +62,15 @@ class TimeTrackingScreenTest {
             }
         }
 
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("timetracking_capture_card"))
         composeRule.onNodeWithTag("timetracking_capture_card").assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("timetracking_interruption_card"))
         composeRule.onNodeWithTag("timetracking_interruption_card").assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasTestTag("timetracking_share_report"))
+        composeRule.onNodeWithTag("timetracking_share_report").assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Capture Running"))
         composeRule.onNodeWithText("Capture Running").assertIsDisplayed()
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText("Quick Allocate"))
         composeRule.onNodeWithText("Quick Allocate").assertIsDisplayed()
     }
 }

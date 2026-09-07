@@ -105,6 +105,10 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    fun refreshCard(card: com.iloapps.nomaddashboard.core.model.DashboardCardId) {
+        viewModelScope.launch { repository.refreshCard(card) }
+    }
+
     fun startTracking() {
         viewModelScope.launch {
             when (timeTrackingRepository.startTracking()) {
@@ -118,7 +122,6 @@ class DashboardViewModel @Inject constructor(
                     _effects.emit(DashboardEffect.StartTrackingService)
                 }
             }
-            repository.refresh()
         }
     }
 
@@ -134,7 +137,6 @@ class DashboardViewModel @Inject constructor(
                     _effects.emit(DashboardEffect.StopTrackingService)
                 }
             }
-            repository.refresh()
         }
     }
 
@@ -161,7 +163,6 @@ class DashboardViewModel @Inject constructor(
                     timeTrackingMessage.value = "That project is no longer available."
                 }
             }
-            repository.refresh()
         }
     }
 
@@ -177,7 +178,6 @@ class DashboardViewModel @Inject constructor(
                     timeTrackingMessage.value = "Turn on time tracking before reporting interruptions."
                 }
             }
-            repository.refresh()
         }
     }
 

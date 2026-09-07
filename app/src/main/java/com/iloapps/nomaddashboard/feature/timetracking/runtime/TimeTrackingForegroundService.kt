@@ -20,17 +20,12 @@ import com.iloapps.nomaddashboard.core.data.timetracking.TimeTrackingRepository
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.isUnallocated
 import dagger.hilt.android.AndroidEntryPoint
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
@@ -43,7 +38,6 @@ class TimeTrackingForegroundService : Service() {
     private lateinit var commandHandler: TimeTrackingServiceCommandHandler
 
     private var isForeground = false
-    private var updateJob: Job? = null
     private var activeCollectionJob: Job? = null
 
     override fun onCreate() {
@@ -84,7 +78,6 @@ class TimeTrackingForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        updateJob?.cancel()
         activeCollectionJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
@@ -107,7 +100,6 @@ class TimeTrackingForegroundService : Service() {
         val notification = TimeTrackingNotificationFormatter.notification(
             context = this,
             session = session,
-            now = Instant.now(),
         )
 
         if (isForeground.not()) {
@@ -117,29 +109,9 @@ class TimeTrackingForegroundService : Service() {
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
 
-        updateJob?.cancel()
-        updateJob = serviceScope.launch {
-            while (true) {
-                delay(1_000)
-                if (hasNotificationPermission(this@TimeTrackingForegroundService).not()) {
-                    stopForegroundService()
-                    break
-                }
-                notificationManager.notify(
-                    NOTIFICATION_ID,
-                    TimeTrackingNotificationFormatter.notification(
-                        context = this@TimeTrackingForegroundService,
-                        session = session,
-                        now = Instant.now(),
-                    ),
-                )
-            }
-        }
     }
 
     private fun stopForegroundService() {
-        updateJob?.cancel()
-        updateJob = null
         if (isForeground) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             notificationManager.cancel(NOTIFICATION_ID)
@@ -234,12 +206,14 @@ internal object TimeTrackingNotificationFormatter {
     fun notification(
         context: Context,
         session: TimeTrackingRecord,
-        now: Instant,
     ): android.app.Notification =
         NotificationCompat.Builder(context, TimeTrackingForegroundService.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(title(session))
-            .setContentText(body(session, now))
+            .setContentText(body(session))
+            .setWhen(session.entry.startAt.toEpochMilli())
+            .setShowWhen(true)
+            .setUsesChronometer(true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(TimeTrackingForegroundService.contentIntent(context))
@@ -255,21 +229,7 @@ internal object TimeTrackingNotificationFormatter {
 
     internal fun body(
         session: TimeTrackingRecord,
-        now: Instant,
-    ): String {
-        val startedAt = DateTimeFormatter.ofPattern("HH:mm")
-            .format(session.entry.startAt.atZone(ZoneId.systemDefault()))
-        val elapsed = Duration.between(session.entry.startAt, now)
-        return "Started $startedAt · ${formatDuration(elapsed)} elapsed"
-    }
-
-    private fun formatDuration(duration: Duration): String {
-        val totalSeconds = duration.seconds.coerceAtLeast(0)
-        val hours = totalSeconds / 3_600
-        val minutes = (totalSeconds % 3_600) / 60
-        val seconds = totalSeconds % 60
-        return "%02d:%02d:%02d".format(hours, minutes, seconds)
-    }
+    ): String = "Elapsed time is shown in this notification."
 }
 
 internal enum class TimeTrackingServiceCommand {

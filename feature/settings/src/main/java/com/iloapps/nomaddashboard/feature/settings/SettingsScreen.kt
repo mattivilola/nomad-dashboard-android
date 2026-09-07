@@ -39,6 +39,7 @@ import com.iloapps.nomaddashboard.core.designsystem.component.NomadMetricBlock
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadSectionClusterHeader
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadStatusBadge
 import com.iloapps.nomaddashboard.core.designsystem.component.NomadTopBar
+import com.iloapps.nomaddashboard.core.model.ResourceMode
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.DashboardCardWidthMode
@@ -89,6 +90,24 @@ fun SettingsScreen(
                     NomadMetricBlock("Sources", enabledSourceCount(settings).toString(), "active capture and provider surfaces")
                     NomadMetricBlock("Cards", settings.dashboardCardOrder.size.toString(), "dashboard modules available")
                 }
+            }
+        }
+
+        item {
+            SettingsGroupCard(
+                title = "Data And Battery",
+                subtitle = "Auto reduces optional downloads on metered, roaming or constrained connections and under battery or thermal pressure. Saved cards remain available.",
+            ) {
+                ResourceMode.entries.forEach { mode ->
+                    TextButton(onClick = { onUpdate { it.copy(resourceMode = mode) } }) {
+                        Text((if (settings.resourceMode == mode) "✓ " else "") + when (mode) {
+                            ResourceMode.AUTO -> "Auto (recommended)"
+                            ResourceMode.NORMAL -> "Normal"
+                            ResourceMode.LOW_DATA -> "Low Data"
+                        })
+                    }
+                }
+                Text("Low Data defers fuel catalog downloads. Use a card's Refresh action when you need an update.", style = MaterialTheme.typography.bodySmall)
             }
         }
 

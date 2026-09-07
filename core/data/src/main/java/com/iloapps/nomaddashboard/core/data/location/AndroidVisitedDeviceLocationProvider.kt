@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.location
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import android.annotation.SuppressLint
 import android.Manifest
 import android.content.Context
@@ -70,7 +72,7 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
         }.distinct()
 
         providers.firstNotNullOfOrNull { provider ->
-            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+            runCatchingCancellable { locationManager.getLastKnownLocation(provider) }.getOrNull()
         }?.let { return it }
 
         return providers.firstNotNullOfOrNull { provider ->
@@ -87,7 +89,7 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
             val cancellationSignal = CancellationSignal()
             continuation.invokeOnCancellation { cancellationSignal.cancel() }
 
-            runCatching {
+            runCatchingCancellable {
                 locationManager.getCurrentLocation(
                     provider,
                     cancellationSignal,
@@ -113,7 +115,7 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
         val geocoder = Geocoder(context, Locale.getDefault())
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             suspendCancellableCoroutine { continuation ->
-                runCatching {
+                runCatchingCancellable {
                     geocoder.getFromLocation(location.latitude, location.longitude, 1) { results ->
                         if (continuation.isActive) {
                             continuation.resume(results.firstOrNull())
@@ -128,7 +130,7 @@ class AndroidVisitedDeviceLocationProvider @Inject constructor(
         } else {
             withContext(ioDispatcher) {
                 @Suppress("DEPRECATION")
-                runCatching {
+                runCatchingCancellable {
                     geocoder.getFromLocation(location.latitude, location.longitude, 1)?.firstOrNull()
                 }.getOrNull()
             }

@@ -108,4 +108,27 @@ class VisitedModelsTest {
         ).inOrder()
         assertThat(monthly.first().days.map { it.date.dayOfMonth }).containsExactly(4, 5).inOrder()
     }
+
+    @Test
+    fun `manual correction retains original observation provenance`() {
+        val day = VisitedCountryDay(
+            date = LocalDate.of(2026, 7, 3),
+            country = "Portugal",
+            countryCode = "PT",
+            source = VisitedPlaceSource.DEVICE_LOCATION,
+            isInferred = false,
+            provenance = VisitedCountryDayProvenance.MANUAL,
+            originalObservation = VisitedCountryDayOriginalObservation(
+                country = "Spain",
+                countryCode = "ES",
+                source = VisitedPlaceSource.PUBLIC_IP_GEOLOCATION,
+                isInferred = true,
+                observedAt = Instant.parse("2026-07-03T09:00:00Z"),
+            ),
+        )
+
+        assertThat(day.provenance).isEqualTo(VisitedCountryDayProvenance.MANUAL)
+        assertThat(day.originalObservation?.countryCode).isEqualTo("ES")
+        assertThat(day.originalObservation?.isInferred).isTrue()
+    }
 }

@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.travelalerts
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
@@ -70,6 +72,7 @@ class AndroidWebViewSmartravellerBrowserFetcher @Inject constructor(
         }
 
         mainHandler.post {
+            if (completed.get() || !continuation.isActive) return@post
             val target = WebView(context)
             webView = target
             mainHandler.postDelayed(timeoutRunnable, BrowserFetchTimeoutMillis)
@@ -148,7 +151,7 @@ class AndroidWebViewSmartravellerBrowserFetcher @Inject constructor(
         if (value.isNullOrBlank() || value == "null") {
             return null
         }
-        return runCatching {
+        return runCatchingCancellable {
             JSONObject("""{"html":$value}""").getString("html")
         }.getOrNull()
     }

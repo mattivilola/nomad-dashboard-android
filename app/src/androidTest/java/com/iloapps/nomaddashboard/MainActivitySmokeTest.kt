@@ -5,6 +5,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import org.junit.Rule
 import org.junit.Test
 
@@ -32,7 +35,8 @@ class MainActivitySmokeTest {
         composeTestRule.onNodeWithTag("nav-timetracking").performClick()
 
         composeTestRule.onNodeWithText("Project time tracking is off").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Enable project time tracking in Settings to unlock local project capture, foreground tracking, and the persistent notification.").assertIsDisplayed()
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Enable time tracking in Settings to start continuous local capture and dashboard allocation."))
+        composeTestRule.onNodeWithText("Enable time tracking in Settings to start continuous local capture and dashboard allocation.").assertIsDisplayed()
     }
 
     private fun assertDashboardVisible() {

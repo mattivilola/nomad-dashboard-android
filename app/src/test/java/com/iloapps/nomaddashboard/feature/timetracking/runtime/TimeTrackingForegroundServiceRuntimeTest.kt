@@ -12,7 +12,6 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingOtherProjectId
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProject
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import java.time.Instant
-import java.util.TimeZone
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -21,22 +20,12 @@ import org.junit.Test
 
 class TimeTrackingForegroundServiceRuntimeTest {
     @Test
-    fun `notification body includes local start time and elapsed duration`() {
-        val originalTimeZone = TimeZone.getDefault()
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
-        try {
-            val session = session(startAt = Instant.parse("2026-04-07T10:00:00Z"))
+    fun `notification formatter leaves elapsed time to the system chronometer`() {
+        val session = session(startAt = Instant.parse("2026-04-07T10:00:00Z"))
 
-            assertThat(TimeTrackingNotificationFormatter.title(session)).isEqualTo("Unallocated timer running")
-            assertThat(
-                TimeTrackingNotificationFormatter.body(
-                    session = session,
-                    now = Instant.parse("2026-04-07T10:05:30Z"),
-                ),
-            ).isEqualTo("Started 10:00 · 00:05:30 elapsed")
-        } finally {
-            TimeZone.setDefault(originalTimeZone)
-        }
+        assertThat(TimeTrackingNotificationFormatter.title(session)).isEqualTo("Unallocated timer running")
+        assertThat(TimeTrackingNotificationFormatter.body(session))
+            .isEqualTo("Elapsed time is shown in this notification.")
     }
 
     @Test

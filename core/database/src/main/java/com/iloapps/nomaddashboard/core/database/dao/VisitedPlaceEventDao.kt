@@ -12,6 +12,9 @@ interface VisitedPlaceEventDao {
     @Query("SELECT * FROM visited_place_events ORDER BY observedDayIso ASC, firstObservedAtEpochMillis ASC")
     fun observeAll(): Flow<List<VisitedPlaceEventEntity>>
 
+    @Query("SELECT * FROM visited_place_events ORDER BY observedDayIso ASC, firstObservedAtEpochMillis ASC")
+    suspend fun loadAll(): List<VisitedPlaceEventEntity>
+
     @Query("SELECT * FROM visited_place_events WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): VisitedPlaceEventEntity?
 

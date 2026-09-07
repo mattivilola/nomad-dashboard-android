@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.core.database.dao
 
+import androidx.room.Transaction
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -20,6 +21,12 @@ interface MetricPointDao {
 
     @Insert
     suspend fun insert(point: MetricPointEntity): Long
+
+    @Transaction
+    suspend fun recordBatch(points: List<MetricPointEntity>, keepCount: Int) {
+        points.forEach { insert(it) }
+        points.map { it.kind }.distinct().forEach { trimToLatest(it, keepCount) }
+    }
 
     @Query(
         """

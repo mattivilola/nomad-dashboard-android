@@ -1,4 +1,6 @@
 plugins {
+    id("com.android.test") version "8.7.3" apply false
+    id("androidx.baselineprofile") version "1.3.3" apply false
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
     alias(libs.plugins.compose.compiler) apply false

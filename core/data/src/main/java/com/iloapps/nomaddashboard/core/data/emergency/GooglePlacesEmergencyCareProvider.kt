@@ -1,5 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.emergency
 
+import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+
 import android.content.Context
 import android.content.pm.PackageManager
 import com.google.android.gms.common.api.ApiException
@@ -146,7 +148,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
             }
 
             val client = synchronized(clientLock) {
-                placesClient ?: runCatching {
+                placesClient ?: runCatchingCancellable {
                     if (Places.isInitialized().not()) {
                         Places.initializeWithNewPlacesApiEnabled(context.applicationContext, apiKey)
                     }
@@ -188,7 +190,9 @@ class GooglePlacesNearbySearchClient @Inject constructor(
                         )
                     },
                 )
-            } catch (error: Throwable) {
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
                 when {
                     error.isLikelyConfigurationIssue() -> PlacesNearbySearchOutcome.ConfigurationRequired(
                         "Emergency care is unavailable in this build right now.",
@@ -204,7 +208,7 @@ class GooglePlacesNearbySearchClient @Inject constructor(
 
     private fun localPlacesApiKey(): String {
         @Suppress("DEPRECATION")
-        val applicationInfo = runCatching {
+        val applicationInfo = runCatchingCancellable {
             context.packageManager.getApplicationInfo(context.packageName, LEGACY_GET_META_DATA_FLAG)
         }.getOrNull() ?: return ""
 

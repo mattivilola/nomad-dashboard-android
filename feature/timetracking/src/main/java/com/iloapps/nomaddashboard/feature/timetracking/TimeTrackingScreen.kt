@@ -2,6 +2,7 @@ package com.iloapps.nomaddashboard.feature.timetracking
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PriorityHigh
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -66,6 +68,7 @@ import com.iloapps.nomaddashboard.core.model.TimeTrackingDayReport
 import com.iloapps.nomaddashboard.core.model.TimeTrackingProjectReport
 import com.iloapps.nomaddashboard.core.model.TimeTrackingRecord
 import com.iloapps.nomaddashboard.core.model.isAutomaticallyTracked
+import com.iloapps.nomaddashboard.core.model.toShareableExport
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -85,6 +88,7 @@ fun TimeTrackingRoute(
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasNotificationPermission by remember { mutableStateOf(context.hasTrackingNotificationPermission()) }
     var interruptionPulseKey by remember { mutableStateOf(0) }
+    var selectedBackupUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -93,6 +97,11 @@ fun TimeTrackingRoute(
             viewModel.startTracking()
         }
     }
+    val openBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        selectedBackupUri = uri
+        uri?.let(viewModel::previewBackup)
+    }
+    val saveBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let(viewModel::saveBackup) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -113,6 +122,11 @@ fun TimeTrackingRoute(
             }
         }
     }
+    LaunchedEffect(Unit) {
+        viewModel.shareContent.collect { share ->
+            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(share.mimeType).putExtra(Intent.EXTRA_SUBJECT, share.title).putExtra(Intent.EXTRA_TEXT, share.text), "Share time report"))
+        }
+    }
 
     TimeTrackingScreen(
         state = state,
@@ -130,6 +144,11 @@ fun TimeTrackingRoute(
             }
         },
         onStopTracking = viewModel::stopTracking,
+        onShareCsv = viewModel::shareCsv,
+        onShareBackup = viewModel::shareBackup,
+        onChooseBackup = { openBackupLauncher.launch(arrayOf("application/json", "text/plain")) },
+        onSaveBackup = { saveBackupLauncher.launch("nomad-time-backup.json") },
+        onImportBackup = { selectedBackupUri?.let(viewModel::importBackup) },
     )
 }
 
@@ -145,11 +164,16 @@ fun TimeTrackingScreen(
     onReportInterruption: () -> Unit = {},
     onStartTracking: () -> Unit,
     onStopTracking: () -> Unit,
+    onShareCsv: () -> Unit = {},
+    onShareBackup: () -> Unit = {},
+    onChooseBackup: () -> Unit = {},
+    onSaveBackup: () -> Unit = {},
+    onImportBackup: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val isRunning = state.activeEntry != null
-    val now = rememberTickerInstant(enabled = true)
-    val bufferedDuration = bufferedDuration(state = state, now = now)
+    val closedBufferedDuration = closedBufferedDuration(state)
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = modifier,
@@ -173,7 +197,11 @@ fun TimeTrackingScreen(
                     maxItemsInEachRow = 2,
                 ) {
                     NomadMetricBlock("Projects", state.projects.size.toString(), "quick allocation lanes")
-                    NomadMetricBlock("Buffer", formatDuration(bufferedDuration), bufferSummary(state))
+                    TimeTrackingBufferMetric(
+                        closedDuration = closedBufferedDuration,
+                        activeEntry = state.activeEntry,
+                        summary = bufferSummary(state),
+                    )
                     NomadMetricBlock("Mode", if (isRunning) trackingModeLabel(state) else "Paused", "capture state")
                     NomadMetricBlock("Recent", state.recentEntries.size.toString(), "allocated sessions")
                     NomadMetricBlock("Interruptions", state.report.interruptionsToday.toString(), "reported today")
@@ -208,7 +236,8 @@ fun TimeTrackingScreen(
                     ),
                 )
                 TimeBufferHero(
-                    duration = bufferedDuration,
+                    closedDuration = closedBufferedDuration,
+                    activeEntry = state.activeEntry,
                     caption = when {
                         isRunning -> "Started ${state.activeEntry?.entry?.startAt?.formatClock().orEmpty()} · ${trackingModeLabel(state)} capture"
                         state.pendingEntries.isNotEmpty() -> "${state.pendingEntries.size} closed segment${state.pendingEntries.size.pluralSuffix()} waiting"
@@ -228,6 +257,18 @@ fun TimeTrackingScreen(
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onShareCsv) { Text("Share CSV") }
+                    Button(onClick = onShareBackup) { Text("Share backup") }
+                    Button(onClick = onSaveBackup) { Text("Save backup") }
+                    Button(onClick = onChooseBackup) { Text("Choose backup") }
+                }
+                state.importPreview?.let { preview ->
+                    Text("Backup preview: ${preview.projectsToAdd} projects, ${preview.entriesToAdd} entries, ${preview.interruptionsToAdd} interruptions; ${preview.duplicateCount} duplicates, ${preview.conflictCount} conflicts.")
+                    preview.warnings.forEach { Text(it, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)) }
+                    Button(enabled = preview.conflictCount == 0, onClick = onImportBackup) { Text("Import previewed backup") }
+                }
+                state.importError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 state.message?.let { message ->
                     Text(
                         text = message,
@@ -251,7 +292,6 @@ fun TimeTrackingScreen(
                 InterruptionActionButton(
                     dayCount = state.report.interruptionsToday,
                     lastInterruptionAt = state.report.lastInterruptionAt,
-                    now = now,
                     pulseKey = interruptionPulseKey,
                     compact = false,
                     onClick = onReportInterruption,
@@ -289,7 +329,7 @@ fun TimeTrackingScreen(
                             FilterChip(
                                 selected = false,
                                 onClick = { onAllocateTrackedTime(project.id) },
-                                enabled = bufferedDuration.seconds > 0,
+                                enabled = isRunning || closedBufferedDuration.seconds > 0,
                                 label = {
                                     Text(
                                         text = compactProjectLabel(project.name),
@@ -302,7 +342,7 @@ fun TimeTrackingScreen(
                     }
                 }
                 Text(
-                    text = if (bufferedDuration.seconds > 0) {
+                    text = if (isRunning || closedBufferedDuration.seconds > 0) {
                         "Allocation converts every waiting segment into one chosen project and then restarts capture when appropriate."
                     } else {
                         "The buffer is empty right now."
@@ -323,6 +363,13 @@ fun TimeTrackingScreen(
                         "Each day shows total interruptions, estimated lost focus, and project-level impact."
                     },
                 )
+                Button(
+                    onClick = { context.shareTimeTrackingReport(state.report) },
+                    modifier = Modifier.testTag("timetracking_share_report"),
+                ) {
+                    Icon(Icons.Rounded.Send, contentDescription = null)
+                    Text("Share report", modifier = Modifier.padding(start = 8.dp))
+                }
                 if (state.report.dayReports.isEmpty()) {
                     Text(
                         text = "No interruption or allocation history yet.",
@@ -406,12 +453,15 @@ fun TimeTrackingScreen(
 private fun InterruptionActionButton(
     dayCount: Int,
     lastInterruptionAt: Instant?,
-    now: Instant,
     pulseKey: Int,
     compact: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val now = rememberTickerInstant(
+        enabled = lastInterruptionAt != null,
+        refreshIntervalMillis = 60_000,
+    )
     val shape = MaterialTheme.shapes.large
     val containerColor = interruptionButtonColor(
         lastInterruptionAt = lastInterruptionAt,
@@ -495,9 +545,12 @@ private fun InterruptionActionButton(
 
 @Composable
 private fun TimeBufferHero(
-    duration: Duration,
+    closedDuration: Duration,
+    activeEntry: TimeTrackingRecord?,
     caption: String,
 ) {
+    val now = rememberTickerInstant(enabled = activeEntry != null)
+    val duration = closedDuration + activeEntry?.let { Duration.between(it.entry.startAt, now) }.orZero()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -518,6 +571,17 @@ private fun TimeBufferHero(
             )
         }
     }
+}
+
+@Composable
+private fun TimeTrackingBufferMetric(
+    closedDuration: Duration,
+    activeEntry: TimeTrackingRecord?,
+    summary: String,
+) {
+    val now = rememberTickerInstant(enabled = activeEntry != null)
+    val duration = closedDuration + activeEntry?.let { Duration.between(it.entry.startAt, now) }.orZero()
+    NomadMetricBlock("Buffer", formatDuration(duration), summary)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -664,13 +728,16 @@ private fun StatusCard(
 }
 
 @Composable
-private fun rememberTickerInstant(enabled: Boolean): Instant {
+private fun rememberTickerInstant(
+    enabled: Boolean,
+    refreshIntervalMillis: Long = 1_000,
+): Instant {
     var now by remember(enabled) { mutableStateOf(Instant.now()) }
 
     LaunchedEffect(enabled) {
         now = Instant.now()
         while (enabled) {
-            delay(1_000)
+            delay(refreshIntervalMillis)
             now = Instant.now()
         }
     }
@@ -678,18 +745,27 @@ private fun rememberTickerInstant(enabled: Boolean): Instant {
     return now
 }
 
-private fun bufferedDuration(
-    state: TimeTrackingUiState,
-    now: Instant,
-): Duration {
-    val closedDuration = state.pendingEntries.fold(Duration.ZERO) { total, record ->
+private fun closedBufferedDuration(state: TimeTrackingUiState): Duration =
+    state.pendingEntries.fold(Duration.ZERO) { total, record ->
         val endAt = record.entry.endAt ?: return@fold total
         total + Duration.between(record.entry.startAt, endAt)
     }
-    val activeDuration = state.activeEntry?.let { active ->
-        Duration.between(active.entry.startAt, now)
-    } ?: Duration.ZERO
-    return closedDuration + activeDuration
+
+private fun Duration?.orZero(): Duration = this ?: Duration.ZERO
+
+private fun Context.shareTimeTrackingReport(
+    report: com.iloapps.nomaddashboard.core.model.TimeTrackingReportSnapshot,
+) {
+    val export = report.toShareableExport()
+    startActivity(
+        Intent.createChooser(
+            Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, export.subject)
+                .putExtra(Intent.EXTRA_TEXT, export.text),
+            "Share time report",
+        ),
+    )
 }
 
 private fun trackingStatusLabel(state: TimeTrackingUiState): String = when {

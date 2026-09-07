@@ -62,6 +62,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -152,6 +153,7 @@ fun DashboardRoute(
     onStopForegroundTracking: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
+    companionOverview: @Composable () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -203,6 +205,8 @@ fun DashboardRoute(
     DashboardScreen(
         state = uiState,
         onRefresh = viewModel::refresh,
+        onRefreshCard = viewModel::refreshCard,
+        companionOverview = companionOverview,
         hasLocationPermission = hasLocationPermission,
         hasNotificationPermission = hasNotificationPermission,
         interruptionPulseKey = interruptionPulseKey,
@@ -243,6 +247,8 @@ fun DashboardScreen(
     onAllocateTrackedTime: (java.util.UUID) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onRefreshCard: (DashboardCardId) -> Unit = {},
+    companionOverview: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -293,6 +299,11 @@ fun DashboardScreen(
                         }
                     },
                 )
+                Text(
+                    text = (if (!state.snapshot.connectivity.isOnline) "Offline · " else "") + state.snapshot.resourcePolicyLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (headerLocationRows.isNotEmpty()) {
                     DashboardHeaderLocationInlineRow(rows = headerLocationRows)
                 }
@@ -302,6 +313,7 @@ fun DashboardScreen(
         item {
             DashboardSummaryStrip(snapshot = state.snapshot)
         }
+        item(key = "companion_overview") { companionOverview() }
 
         if (hasLocationPermission.not()) {
             item {
@@ -314,6 +326,11 @@ fun DashboardScreen(
         }
 
         items(state.settings.dashboardCardOrder, key = { it.name }) { cardId ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (cardId in listOf(DashboardCardId.WEATHER, DashboardCardId.TRAVEL_ALERTS, DashboardCardId.FUEL_PRICES,
+                        DashboardCardId.LOCAL_INFO, DashboardCardId.EMERGENCY_CARE, DashboardCardId.TRAVEL_CONTEXT)) {
+                    DashboardCardRefreshRow(cardId, state.snapshot.sectionStates[cardId], onRefreshCard)
+                }
             when (cardId) {
                 DashboardCardId.WEATHER -> WeatherSectionCard(
                     snapshot = state.snapshot.weather,
@@ -380,7 +397,7 @@ fun DashboardScreen(
 
                 DashboardCardId.TIME_TRACKING -> TimeTrackingSectionCard(
                     trackingState = state.timeTracking,
-                    detail = state.snapshot.timeTracking.detail,
+                    detail = if (state.timeTracking.activeEntry != null) "Capturing into your local buffer" else if (state.timeTracking.pendingEntries.isNotEmpty()) "Paused · time is ready to allocate" else "Ready to capture time locally",
                     hasNotificationPermission = hasNotificationPermission,
                     autoWindowLabel = "${state.settings.projectTimeTrackingAutoStartMinutes.formatClockMinutes()}-${state.settings.projectTimeTrackingAutoStopMinutes.formatClockMinutes()}",
                     interruptionPulseKey = interruptionPulseKey,
@@ -405,6 +422,29 @@ fun DashboardScreen(
                     },
                 )
             }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardCardRefreshRow(
+    card: DashboardCardId,
+    state: com.iloapps.nomaddashboard.core.model.SectionRefreshState?,
+    onRefresh: (DashboardCardId) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween) {
+        val timestamp = state?.lastSuccessAt?.atZone(java.time.ZoneId.systemDefault())
+            ?.format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm"))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(listOfNotNull(timestamp?.let { "Updated $it" }, state?.locationLabel?.takeIf(String::isNotBlank))
+                .joinToString(" · ").ifBlank { "No saved update" }, style = MaterialTheme.typography.labelSmall)
+            state?.message?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+        }
+        TextButton(onClick = { onRefresh(card) }, enabled = state?.isRefreshing != true,
+            modifier = Modifier.testTag("card_refresh_${card.name}")) {
+            Text(if (state?.isRefreshing == true) "Updating…" else "Refresh")
         }
     }
 }
@@ -1827,8 +1867,7 @@ private fun TimeTrackingSectionCard(
     onReportInterruption: () -> Unit,
     onAllocateTrackedTime: (java.util.UUID) -> Unit,
 ) {
-    val now = rememberDashboardTickerInstant(enabled = true)
-    val bufferedDuration = dashboardBufferedDuration(trackingState, now)
+    val bufferedDuration = dashboardBufferedDuration(trackingState, Instant.now())
     val isRunning = trackingState.activeEntry != null
 
     NomadCard(modifier = Modifier.testTag("dashboard_time_tracking_card")) {
@@ -1848,11 +1887,7 @@ private fun TimeTrackingSectionCard(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = formatElapsedDuration(bufferedDuration),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                DashboardElapsedLabel(trackingState)
                 Text(
                     text = when {
                         isRunning && trackingState.activeEntry?.entry?.isAutomaticallyTracked() == true ->
@@ -1886,7 +1921,6 @@ private fun TimeTrackingSectionCard(
             }
             DashboardInterruptionButton(
                 trackingState = trackingState,
-                now = now,
                 pulseKey = interruptionPulseKey,
                 onClick = onReportInterruption,
             )
@@ -1917,7 +1951,7 @@ private fun TimeTrackingSectionCard(
                     FilterChip(
                         selected = false,
                         onClick = { onAllocateTrackedTime(project.id) },
-                        enabled = bufferedDuration.seconds > 0,
+                        enabled = isRunning || bufferedDuration.seconds > 0,
                         label = {
                             Text(
                                 text = compactDashboardProjectLabel(project.name),
@@ -1940,12 +1974,19 @@ private fun TimeTrackingSectionCard(
 }
 
 @Composable
+private fun DashboardElapsedLabel(state: DashboardTimeTrackingUiState) {
+    val now = rememberDashboardTickerInstant(enabled = state.activeEntry != null)
+    Text(text = formatElapsedDuration(dashboardBufferedDuration(state, now)),
+        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+}
+
+@Composable
 private fun DashboardInterruptionButton(
     trackingState: DashboardTimeTrackingUiState,
-    now: Instant,
     pulseKey: Int,
     onClick: () -> Unit,
 ) {
+    val now = rememberDashboardTickerInstant(enabled = trackingState.report.lastInterruptionAt?.plusSeconds(23 * 60)?.isAfter(Instant.now()) == true)
     val shape = RoundedCornerShape(22.dp)
     val containerColor = dashboardInterruptionButtonColor(
         lastInterruptionAt = trackingState.report.lastInterruptionAt,

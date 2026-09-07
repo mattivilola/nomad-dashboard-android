@@ -101,6 +101,8 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
             meal = eurostatObservation(countryCode = countryCode, category = MealOutCategory)
             groceries = eurostatObservation(countryCode = countryCode, category = GroceriesCategory)
             overall = eurostatObservation(countryCode = countryCode, category = OverallCategory)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (_: Throwable) {
             val snapshot = LocalPriceLevelSnapshot(
                 status = LocalPriceLevelStatus.UNAVAILABLE,
@@ -228,6 +230,8 @@ class DefaultLocalPriceLevelProvider @Inject constructor(
                     detail = "Local price signals are unavailable right now.",
                 ).also { cacheSnapshot(cacheKey, it) }
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (_: Throwable) {
             LocalPriceLevelSnapshot(
                 status = LocalPriceLevelStatus.UNAVAILABLE,

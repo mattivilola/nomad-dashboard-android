@@ -20,6 +20,7 @@ rootProject.name = "nomad-dashboard-android"
 
 include(
     ":app",
+    ":benchmark",
     ":core:common",
     ":core:model",
     ":core:designsystem",
@@ -33,4 +34,5 @@ include(
     ":feature:visited",
     ":feature:timetracking",
     ":feature:about",
+    ":feature:companion",
 )

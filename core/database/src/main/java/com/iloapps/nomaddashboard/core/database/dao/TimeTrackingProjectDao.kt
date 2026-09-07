@@ -12,6 +12,9 @@ interface TimeTrackingProjectDao {
     @Query("SELECT * FROM time_tracking_projects WHERE isArchived = 0 ORDER BY name COLLATE NOCASE ASC")
     fun observeAll(): Flow<List<TimeTrackingProjectEntity>>
 
+    @Query("SELECT * FROM time_tracking_projects ORDER BY name COLLATE NOCASE ASC")
+    suspend fun getAll(): List<TimeTrackingProjectEntity>
+
     @Query("SELECT * FROM time_tracking_projects WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): TimeTrackingProjectEntity?
 
