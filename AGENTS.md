@@ -15,17 +15,14 @@ Repository guidance for coding agents working on Nomad Dashboard Android.
 
 ## Start Here
 
-Read these before making substantial changes:
+Read only the context needed for the requested change:
 
-1. `README.md`
-2. `docs/status.md`
-3. `docs/android-port-plan.md`
-4. `docs/architecture.md`
-5. `docs/features.md`
-6. `docs/testing.md`
-7. `docs/release.md` when touching signing or distribution
+- `README.md` for setup; `docs/testing.md` for relevant verification commands.
+- `docs/status.md` for active implementation scope and ownership.
+- `docs/android-port-plan.md` for porting decisions; `docs/architecture.md` for module boundaries; `docs/features.md` for affected feature contracts.
+- `docs/release.md` only when touching signing or distribution.
 
-If the task is a parallel workstream, read the relevant handoff doc first.
+For an authorized parallel workstream, read its relevant handoff before changing shared code. A small isolated edit does not require reading the full document set.
 
 ## Project Shape
 
