@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-09-07
+
+### Added
+- Offline essentials, an opt-in workplace diary, home/client timezone planning, and quiet foreground alerts.
+- Country-day corrections with preserved provenance, stay reminders, travel/time CSV exports, and versioned local backup/import tools.
+- Auto and Low Data modes with explicit per-card refresh controls.
+
+### Improved
+- Publish dashboard cards independently, reuse cached provider results, and show source location and last-success time.
+- Keep timer actions local, reduce timer redraws, and virtualize travel-history rows and bound map rendering.
+- Clarify visited-place location sources and capture guidance.
+
+### Fixed
+- Recover cleanly from cancelled refreshes and avoid recording cached IP locations as fresh travel observations.
+
+### Build & Release
+- Enable R8/resource shrinking and ship a generated startup/navigation Baseline Profile.
+- Add backup validation, migration, coroutine ordering, and connected UI coverage.
+
 ## [0.8.1] - 2026-05-04
 
 ### Improved

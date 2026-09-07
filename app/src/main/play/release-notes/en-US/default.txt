@@ -1,1 +1,5 @@
-This update adds refined logic for deferred visited observations.
+Dashboard cards now update independently and retain saved data.
+New Auto and Low Data modes reduce optional downloads.
+Add offline essentials, a workplace diary, timezone planning, and quiet alerts.
+Correct travel days, track stay reminders, export CSV reports, and save portable backups.
+Lighter timer updates and optimized release builds.
