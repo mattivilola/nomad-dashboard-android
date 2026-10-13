@@ -53,17 +53,35 @@ android_studio_jdk() {
   return 1
 }
 
+# Gradle's daemon JVM is pinned in gradle/gradle-daemon-jvm.properties. Gradle 8.9 cannot run on
+# Java 25 (Android Studio 2026.1 bundles JBR 25) and cannot download a daemon JDK itself, so a
+# matching JDK must be installed. The launcher uses the same major version for consistent output.
+daemon_java_major_version() {
+  sed -n 's/^toolchainVersion=//p' "$REPO_ROOT/gradle/gradle-daemon-jvm.properties"
+}
+
+java_major_version() {
+  "$1/bin/java" -version 2>&1 | sed -n '1s/.*version "\([0-9]*\).*/\1/p'
+}
+
 resolved_java_home() {
-  if [[ -n "${JAVA_HOME:-}" ]] && [[ -x "$JAVA_HOME/bin/java" ]]; then
-    local version
-    version="$("$JAVA_HOME/bin/java" -version 2>&1 | sed -n '1s/.*version "\(.*\)".*/\1/p')"
-    if [[ "$version" == 17* || "$version" == 21* ]]; then
-      printf '%s\n' "$JAVA_HOME"
-      return 0
-    fi
+  local required
+  required="$(daemon_java_major_version)"
+
+  if [[ -n "${JAVA_HOME:-}" ]] && [[ -x "$JAVA_HOME/bin/java" ]] && [[ "$(java_major_version "$JAVA_HOME")" == "$required" ]]; then
+    printf '%s\n' "$JAVA_HOME"
+    return 0
   fi
 
-  android_studio_jdk || fail "Could not find a Java 17+ runtime. Install Android Studio or set JAVA_HOME."
+  local studio_jdk
+  if studio_jdk="$(android_studio_jdk)" && [[ "$(java_major_version "$studio_jdk")" == "$required" ]]; then
+    printf '%s\n' "$studio_jdk"
+    return 0
+  fi
+
+  /usr/libexec/java_home -v "$required" 2>/dev/null && return 0
+
+  fail "Could not find a Java $required runtime, which the Gradle daemon requires (gradle/gradle-daemon-jvm.properties). Install one, for example: brew install openjdk@$required"
 }
 
 export_android_env() {

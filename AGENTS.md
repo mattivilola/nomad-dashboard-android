@@ -93,8 +93,11 @@ make connect-wireless
 ```
 
 Key learnings so far:
-- Use the repo helper scripts rather than raw Gradle where possible. They force
-  Android Studio's bundled JDK instead of the shell's Java 11.
+- Gradle runs its daemon on Java 21, pinned in
+  `gradle/gradle-daemon-jvm.properties`; Gradle 8.9 cannot run on the Java 25
+  that Android Studio 2026.1 bundles. A JDK 21 must be installed
+  (`brew install openjdk@21`). The repo helper scripts select it for the
+  launcher too; prefer them over raw Gradle.
 - `make test` runs unit tests first and only runs connected Android tests when
   `adb devices` shows an attached device in `device` state.
 - Wireless ADB can drop unexpectedly. Reconnect before assuming an app/runtime

@@ -13,7 +13,11 @@ make doctor
 ```
 
 The helper environment does the following:
-- resolves Android Studio bundled JDK instead of shell Java 11
+- resolves a Java 21 runtime (`JAVA_HOME`, then Android Studio's bundled JDK,
+  then `/usr/libexec/java_home -v 21`) to match the Gradle daemon JVM pinned in
+  `gradle/gradle-daemon-jvm.properties`; Gradle 8.9 cannot run on Android
+  Studio 2026.1's bundled Java 25, so a JDK 21 must be installed
+  (`brew install openjdk@21`)
 - uses repo-local Gradle state where possible
 - exposes Android SDK platform tools in PATH
 

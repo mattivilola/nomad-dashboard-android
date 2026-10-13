@@ -55,8 +55,10 @@ Avoid:
 
 ## Learnings So Far
 
-- The shell's default Java may be wrong for Android builds. Use the repo
-  helpers so the Android Studio JDK is selected automatically.
+- The Gradle daemon is pinned to Java 21 in
+  `gradle/gradle-daemon-jvm.properties` because Gradle 8.9 fails on Android
+  Studio 2026.1's bundled Java 25. Keep a JDK 21 installed and use the repo
+  helpers, which select it automatically.
 - Wireless debugging is useful for real-device testing, but disconnects are
   common and should not be mistaken for app failures.
 - Physical install failures on Xiaomi/HyperOS can come from device-side
