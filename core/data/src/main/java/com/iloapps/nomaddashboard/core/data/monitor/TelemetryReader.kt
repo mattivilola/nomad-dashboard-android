@@ -10,5 +10,14 @@ interface TelemetryReader {
     suspend fun passiveConnectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
         connectivity(previousTrafficSample)
 
+    /**
+     * Measures round-trip latency once with an active socket probe, or null when the network is not
+     * validated or the probe fails. Does not touch the throughput counters.
+     */
+    suspend fun latencyProbe(): LatencyProbeResult? =
+        connectivity(null).first.let { reading ->
+            reading.latencyMs?.let { LatencyProbeResult(latencyMs = it, host = reading.latencyProbeHost) }
+        }
+
     suspend fun power(): PowerSnapshot
 }

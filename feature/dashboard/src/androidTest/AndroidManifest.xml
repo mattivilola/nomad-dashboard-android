@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+            The Maps SDK refuses to start without the key element. This is not a real key: tiles do not
+            load, but the map view initialises, which is all the map preview tests need.
+        -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="androidtest-placeholder-not-a-real-key" />
+    </application>
+</manifest>

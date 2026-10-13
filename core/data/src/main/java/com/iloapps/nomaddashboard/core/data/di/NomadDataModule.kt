@@ -4,7 +4,19 @@ import android.content.Context
 import androidx.datastore.dataStoreFile
 import androidx.room.Room
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
+import com.iloapps.nomaddashboard.core.common.DefaultDispatcher
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
+import com.iloapps.nomaddashboard.core.data.insights.AndroidInsightsEnvironment
+import com.iloapps.nomaddashboard.core.data.insights.DashboardInsightsRepository
+import com.iloapps.nomaddashboard.core.data.insights.DefaultDashboardInsightsRepository
+import com.iloapps.nomaddashboard.core.data.insights.InsightsEnvironment
+import com.iloapps.nomaddashboard.core.data.insights.InsightsTicker
+import com.iloapps.nomaddashboard.core.data.insights.PeriodicInsightsTicker
+import com.iloapps.nomaddashboard.core.travel.headsup.HeadsUpEngine
+import com.iloapps.nomaddashboard.core.travel.rhythm.AndroidIcuLunisolarCalendars
+import com.iloapps.nomaddashboard.core.travel.rhythm.LocalRhythmCalendar
+import com.iloapps.nomaddashboard.core.data.airquality.AirQualityProvider
+import com.iloapps.nomaddashboard.core.data.airquality.OpenMeteoAirQualityProvider
 import com.iloapps.nomaddashboard.core.data.credentials.EncryptedProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
 import com.iloapps.nomaddashboard.core.data.emergency.EmergencyCareProvider
@@ -54,6 +66,7 @@ import com.iloapps.nomaddashboard.core.network.api.HudUserFmrService
 import com.iloapps.nomaddashboard.core.network.api.IpifyService
 import com.iloapps.nomaddashboard.core.network.api.NagerDateService
 import com.iloapps.nomaddashboard.core.network.api.ItalyFuelPriceService
+import com.iloapps.nomaddashboard.core.network.api.OpenMeteoAirQualityService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoService
 import com.iloapps.nomaddashboard.core.network.api.OpenMeteoMarineService
 import com.iloapps.nomaddashboard.core.network.api.OpenHolidaysService
@@ -237,6 +250,19 @@ object NomadInfrastructureModule {
 
     @Provides
     @Singleton
+    fun provideOpenMeteoAirQualityService(
+        client: OkHttpClient,
+        json: Json,
+    ): OpenMeteoAirQualityService =
+        Retrofit.Builder()
+            .baseUrl("https://air-quality-api.open-meteo.com/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(OpenMeteoAirQualityService::class.java)
+
+    @Provides
+    @Singleton
     fun provideSpainFuelPriceService(
         client: OkHttpClient,
         json: Json,
@@ -383,6 +409,20 @@ object NomadInfrastructureModule {
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
     @Provides
+    @DefaultDispatcher
+    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @Singleton
+    fun provideLocalRhythmCalendar(): LocalRhythmCalendar =
+        LocalRhythmCalendar(AndroidIcuLunisolarCalendars())
+
+    @Provides
+    @Singleton
+    fun provideHeadsUpEngine(localRhythm: LocalRhythmCalendar): HeadsUpEngine =
+        HeadsUpEngine(localRhythm)
+
+    @Provides
     @Singleton
     @ApplicationScope
     fun provideApplicationScope(
@@ -434,6 +474,29 @@ abstract class NomadRepositoryModule {
     abstract fun bindLocalInfoProvider(
         impl: DefaultLocalInfoProvider,
     ): LocalInfoProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindDashboardInsightsRepository(
+        impl: DefaultDashboardInsightsRepository,
+    ): DashboardInsightsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindInsightsEnvironment(
+        impl: AndroidInsightsEnvironment,
+    ): InsightsEnvironment
+
+    @Binds
+    abstract fun bindInsightsTicker(
+        impl: PeriodicInsightsTicker,
+    ): InsightsTicker
+
+    @Binds
+    @Singleton
+    abstract fun bindAirQualityProvider(
+        impl: OpenMeteoAirQualityProvider,
+    ): AirQualityProvider
 
     @Binds
     @Singleton

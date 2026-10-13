@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
@@ -66,7 +69,8 @@ class DashboardScreenTest {
         }
 
         composeRule.onNodeWithTag("dashboard_top_bar").assertIsDisplayed()
-        composeRule.onNodeWithTag("dashboard_summary_strip").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_glance_tiles").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_list").performScrollToNode(hasTestTag("dashboard_weather_card"))
         composeRule.onNodeWithTag("dashboard_weather_card").assertIsDisplayed()
     }
 
@@ -212,13 +216,13 @@ class DashboardScreenTest {
 
         composeRule.onNodeWithText("Checking device location...").assertIsDisplayed()
         composeRule.onNodeWithText("Checking device location before loading location-based cards...").assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_list")
+            .performScrollToNode(hasText("Checking device location before loading location-based weather."))
         composeRule.onNodeWithText("Checking device location before loading location-based weather.").assertIsDisplayed()
     }
 
     @Test
     fun showsLongHeaderLocationValuesWithoutDroppingThem() {
-        val longDeviceLocation = "A Coruna, Spain, Atlantic Coast"
-
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
@@ -238,6 +242,8 @@ class DashboardScreenTest {
             }
         }
 
-        composeRule.onNodeWithText(longDeviceLocation, useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("A Coruna", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Spain, Atlantic Coast", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("dashboard_header_location_ip").assertIsDisplayed()
     }
 }

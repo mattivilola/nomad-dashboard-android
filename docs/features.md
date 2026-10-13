@@ -1,6 +1,6 @@
 # Feature Inventory
 
-Last updated: 2026-09-07
+Last updated: 2026-10-13
 
 This document tracks Android parity against the macOS app at the feature level.
 
@@ -16,9 +16,9 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Single main dashboard screen | Implemented | Adaptive Compose route is live and the compact dashboard now uses a location-led header with the Nomad symbol mark, visible refresh progress, a weather-first three-up overview strip, metric-led detail cards without duplicate top navigation, a top-header device-versus-public-IP location comparison when either source resolves, and card-level refresh indicators while cached location-dependent content is being refreshed |
+| Single main dashboard screen | Implemented | The dashboard opens with the macOS glance overview: location-led header with a caption that shortens without cutting the IP part, refresh and overflow menu, a one-line time-tracking row with an Allocate menu, a verdict strip ("Ready to work", "Workable", "Needs attention", "Checking conditions", "You're offline") with the data-usage menu, Here/Home clocks, four tappable vital tiles (Internet, Power, VPN, Weather) that expand and scroll to their card, up to three ranked heads-up items, and Workplaces / Saved essentials links. Cards below collapse to one-line summaries, colour means status only, and turned-off cards collapse into one "Turned off: …" row with a deep link to the exact Settings group |
 | First-run location onboarding | Implemented | When Android location permission is still missing, the dashboard now shows a top-of-screen grant card before the main cards so device-aware features are discoverable on fresh installs |
-| Settings screen | Implemented | Settings now use grouped control-room sections, clearer toggle descriptions, and stronger local-first credential messaging |
+| Settings screen | Implemented | Eight pages (General, Weather & Local, Safety, Stays & Visas, Connection & Data, Work, Privacy & Location, Advanced; the Schengen counter, stay allowances and tax residence days live on Stays & Visas) as a page list on phones and list plus page side by side on wide layouts; every group carries its own short privacy footer; `settings?destination=` deep links open the page, scroll to the group and highlight it; Appearance now applies to the app theme |
 | About screen | Implemented | About now acts as a real trust and brand surface with stronger product framing, local-first privacy explanation, live app version metadata, and direct links to the website and GitHub project |
 | Visited screen route | Implemented | Route now opens with a capture/control overview card, then the world map, local history summaries, saved places, and country-day breakdowns |
 | Time tracking route | Implemented | Route now shares the same product language as the rest of the app, with clearer overview, active-state, and recent-session sections |
@@ -88,9 +88,9 @@ This document tracks Android parity against the macOS app at the feature level.
 | Local Info card | Implemented | Optional dashboard card now combines resolved location context, Nager.Date public holidays, best-effort OpenHolidays school holidays when a confident subdivision match exists, and the existing Eurostat/HUD USER price rows; startup now restores cached content first, then refreshes in place while waiting for device place resolution or IP fallback |
 | Spain/France/Italy public fuel providers | Implemented | Device-first with public-IP fallback and a fixed 50 km search radius |
 | Germany Tankerkonig support | Implemented | Requires a user-supplied Tankerkonig key saved in the app's Settings screen; the key stays encrypted on-device |
-| Emergency care card | Implemented | Dashboard card now renders loading, ready, permission-required, configuration-required, unavailable, and error states with a direct Maps handoff when a nearby hospital is resolved, restores cached content on cold launch, retries transient lookup failures automatically, and can rerun from device context after an initial IP fallback result |
+| Emergency care card | Implemented | Subtitle "Within 25 km · Emergency 112" (radius reflects any wider fallback search), up to three hospitals nearest first with neutral Public/Private chips, map preview per row, loading/permission/configuration/unavailable/error states, cached content on cold launch and automatic transient retries |
 | Nearby hospitals via Places | Implemented | Uses Google Places Nearby Search (New) with device-location first and public-IP geolocation fallback |
-| In-app map preview | Planned | Depends on Maps integration |
+| In-app map preview | Implemented | Fuel and Emergency Care rows open a bottom-sheet Google Map preview when a Maps SDK key is configured, otherwise the external maps app; Google Maps sits behind a ⋯ menu |
 
 ## Visited Places And Travel History
 
@@ -123,7 +123,7 @@ This document tracks Android parity against the macOS app at the feature level.
 
 | Feature | Android status | Notes |
 | --- | --- | --- |
-| Offline essentials | Implemented | User-created addresses, contacts, notes, and allowed Maps/geo links remain in the local Companion document |
+| Offline essentials | Implemented | User-created addresses, contacts, notes, and allowed Maps/geo links remain in the local Companion document. A selectable safety block sits above them: the emergency numbers for the current country and the user's embassy (nearest listed mission and consular line), both from datasets bundled with the app so they work offline; unverified countries show nothing |
 | Workplace diary | Implemented | Disabled by default. A row is stored only after the user enables the diary, provides a place label, and taps **Save current observation**; it never automatically identifies stationary locations or cafés as workplaces |
 | Workplace data minimization | Implemented | Connection names and location-derived Maps links each require their own opt-in; saved labels remain editable and IP-derived map links are marked approximate |
 | Timezone planner | Implemented | Local IANA-zone overlap calculation accounts for DST transitions without provider calls |
@@ -143,3 +143,33 @@ This document tracks Android parity against the macOS app at the feature level.
 | Release version bump helper | Implemented | `prepare-release.sh` now bumps tracked version metadata, prepends `CHANGELOG.md`, writes Play release notes, and creates a local release commit plus tag without auto-pushing |
 | Release shrinking | Implemented | Release builds enable R8 minification and Android resource shrinking; Retrofit annotation metadata and serialization-generated serializers are retained by the release rules |
 | Benchmark and Baseline Profile source | Implemented | The connected-device benchmark module contains cold-start and dashboard-scroll Macrobenchmark scenarios plus Baseline Profile collection source; no measurement result is recorded here |
+
+## Your Embassy and Stays & Visas cards
+
+| Feature | Android status | Notes |
+| --- | --- | --- |
+| Your Embassy card | Implemented | Per citizenship: the foreign ministry's consular line (selectable, copyable, tap to dial; "24/7 consular line" only where the ministry says so) and up to three nearest listed missions with kind, city and distance ("~4 km" when approximate; an IP-only position is always approximate). A mission row opens the maps app; its menu has Show in Maps, Open website and Copy address. Trip-registration and mission-list links, EU/Nordic fallback notice, at-home and location-needed states, dataset footer. Without a citizenship the card is turned off and, in Customize Layout, prompts for Citizenship. Everything is computed on the device from bundled data |
+| Stays & Visas card | Implemented | Current stay, per-country allowance (remaining days, leave-by, overstay), Schengen 90/180 (used, leave-by, exempt and unknown-citizenship states), tax-year days against the threshold ("not tax or legal advice") and a link to the Stays & Visas settings page. Turned off with a prompt for Visited places while visited places are off. "Review days" opens the visited map |
+
+## macOS 0.17-0.18 parity (October 2026)
+
+Ported from the macOS feature brief in `docs/macos-parity-brief-2026-10-12.md`, updated to macOS v0.18.0. Rules, thresholds and wording live in `core:travel` and match macOS.
+
+| Feature | Android status | Notes |
+| --- | --- | --- |
+| Heads-up engine | Implemented | At most three items, one per kind, ranked by severity then the travel profile's tie-break order; re-evaluated every 60 s. Kinds: travel advisory, regional security, strong wind, rain soon, UV, air quality, public holiday, local rhythm, cheapest fuel, daylight (Road trip & RV only), stay allowance, Schengen limit, tax residence days. Data cap and weather alert never fire on Android (no Data Guard, no weather-alert provider) |
+| Travel profiles | Implemented | Nomad and Road trip & RV set the recommended card order and heads-up ranking; switch from Settings › General or the dashboard overflow menu. A customised order is kept and Settings offers "Use recommended order" |
+| Compact, collapsible cards | Implemented | Every card folds to a ~40dp line (title · summary · badge · chevron) with saved state; Customize Layout (overflow menu) adds drag/move/width controls; half-width cards pair on wide layouts; one in-card action style; sparklines replace the old charts; units drawn smaller than numbers |
+| Emergency numbers | Implemented | Bundled table for 76 countries (the brief's "77" was a miscount; macOS ships 76), incl. Morocco (19 / 15 / Gendarmerie 177) and rural police (ES 062, BR 191, TH 1193); first Local Info row, Emergency Care subtitle, Saved essentials, arrival briefing |
+| Emergency Care hospitals | Implemented | Google Places within 25 km, nearest public and nearest private guaranteed, shown nearest first with neutral Public/Private chips; widens to 50 then 100 km, and runs five text searches at 100 km only if nothing was found (at most 8 Places requests, usually 1); in-app map preview with Google Maps behind a ⋯ menu |
+| Your Embassy | Implemented | See the Your Embassy card row above; bundled Wikidata missions (10,181) and 28 verified consular lines |
+| Daylight | Implemented | Sunrise/sunset/civil twilight computed on the device (NOAA/Meeus); Weather card line in every profile; before-dark heads-up in Road trip & RV |
+| Stays and visa days | Implemented | Schengen 90/180 (29 members as of Oct 2026), per-country stay allowance, tax-year days; Stays & Visas card and settings page |
+| Arrival briefing | Implemented | One-time "Welcome to …" card for up to three days after a border crossing (local time vs home, emergency numbers, embassy, driving side, plugs, currency, holiday, advisory, local rhythm); "Got it" remembers the country; reopen from the overflow menu. No Data Guard tip on Android |
+| Local rhythm | Implemented | Ramadan, Eids, Lunar New Year, Holy Week, Yom Kippur, Songkran, Golden Week, Ferragosto, Nyepi, Diwali with visitor guidance, offline |
+| UV and air quality | Implemented | UV from Open-Meteo weather, WHO bands; European AQI from the Open-Meteo Air Quality API with coordinates rounded to ~11 km, only while device-location weather and air quality are on |
+| Settings structure | Implemented | Eight pages with deep links (see Settings screen row) |
+| Quick Settings tile | Implemented | "Travel status" tile whose subtitle is the macOS menu-bar status line (battery ≤ 50%, offline, optional top heads-up, latency, temperature); Android's equivalent of the menu bar text |
+| Home-screen widgets | Implemented | Glance, Safety and Daylight Glance widgets from a privacy-minimal local snapshot (no IP, coordinates or citizenship codes), "Updated" footer and 6 h stale state; taps deep-link to the related card |
+| Shortcuts and deep links | Implemented | `nomaddashboard://dashboard/<card>` and `nomaddashboard://settings/<destination>`; five launcher shortcuts mirroring the macOS App Intents (emergency number, dashboard status, nearest embassy, daylight left, switch travel profile). Spoken Siri-style answers are not ported; the shortcuts open the card that holds the answer |
+| Data Guard | Deferred | Not available on Android; the glance shows a VPN tile instead and data-cap heads-up items never fire |

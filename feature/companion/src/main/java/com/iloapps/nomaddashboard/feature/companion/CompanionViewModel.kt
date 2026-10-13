@@ -2,7 +2,9 @@ package com.iloapps.nomaddashboard.feature.companion
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.iloapps.nomaddashboard.core.common.DefaultDispatcher
 import com.iloapps.nomaddashboard.core.data.companion.CompanionRepository
+import com.iloapps.nomaddashboard.core.data.repository.NomadDashboardRepository
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.NomadCompanionData
 import com.iloapps.nomaddashboard.core.model.OfflineEssential
@@ -10,11 +12,19 @@ import com.iloapps.nomaddashboard.core.model.OfflineEssentialKind
 import com.iloapps.nomaddashboard.core.model.TimezonePlanner
 import com.iloapps.nomaddashboard.core.model.WorkReadiness
 import com.iloapps.nomaddashboard.core.model.WorkplaceVisit
+import com.iloapps.nomaddashboard.core.travel.safety.SafetyLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,9 +35,27 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class CompanionViewModel @Inject constructor(
     private val repository: CompanionRepository,
     private val clock: Clock,
+    dashboardRepository: NomadDashboardRepository,
+    @DefaultDispatcher defaultDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
+    private val safetyEssentialsBuilder = SafetyEssentialsBuilder()
     val data: StateFlow<NomadCompanionData> = repository.data.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NomadCompanionData())
     val storageError = repository.storageError
+
+    /**
+     * The emergency numbers for the current country and the user's embassy, for the top of the Offline
+     * essentials. Decided from the saved settings and the last dashboard snapshot, so it needs no network;
+     * the bundled mission dataset is read off the main thread.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val safetyEssentials: StateFlow<SafetyEssentials> = combine(
+        dashboardRepository.settings.map { it.citizenshipCountryCodes }.distinctUntilChanged(),
+        dashboardRepository.snapshot.map { SafetyLocation.of(it.travelContext, it.localInfo.countryCode) }.distinctUntilChanged(),
+    ) { citizenships, location -> citizenships to location }
+        .mapLatest { (citizenships, location) -> safetyEssentialsBuilder.build(citizenships, location) }
+        .flowOn(defaultDispatcher)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SafetyEssentials.Empty)
+
     private val mutableActionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = mutableActionError
     fun update(transform: (NomadCompanionData) -> NomadCompanionData) = launchSafely { repository.update(transform) }
@@ -62,7 +90,7 @@ class CompanionViewModel @Inject constructor(
         } else null
         repository.saveVisit(WorkplaceVisit(
             id = UUID.randomUUID().toString(), placeLabel = placeLabel.trim(), placeLabelConfirmed = confirmed, mapsUrl = mapUrl,
-            observedAtEpochMillis = now, internetState = snapshot.connectivity.internetState,
+            observedAtEpochMillis = now, internetState = snapshot.connectivity.internetState.label,
             vpnActive = snapshot.connectivity.vpnActive, latencyMs = snapshot.connectivity.latencyMs,
             powerPercent = snapshot.power.batteryPercent, charging = snapshot.power.charging,
             connectionName = snapshot.connectivity.wifiName?.takeIf { current.preferences.retainConnectionName },
@@ -80,7 +108,7 @@ class CompanionViewModel @Inject constructor(
 }
 
 fun workReadiness(snapshot: DashboardSnapshot): WorkReadiness = when {
-    snapshot.connectivity.internetState.equals("checking", true) || (snapshot.localSignalsAt ?: snapshot.lastRefresh) == null -> WorkReadiness("Work readiness unknown", "Waiting for the device's passive connection reading.", null)
+    snapshot.connectivity.isChecking || (snapshot.localSignalsAt ?: snapshot.lastRefresh) == null -> WorkReadiness("Work readiness unknown", "Waiting for the device's passive connection reading.", null)
     !snapshot.connectivity.isOnline -> WorkReadiness("Connection unavailable", "Keep local work available; this is an observed state, not a diagnosis.", false)
     snapshot.power.batteryPercent == null -> WorkReadiness("Connection available", "Power status is unavailable, so readiness remains partial.", null)
     (snapshot.power.batteryPercent ?: 100) < 15 && !snapshot.power.charging -> WorkReadiness("Connection available", "Battery is low and not charging.", false)

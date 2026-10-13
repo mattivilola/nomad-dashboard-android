@@ -36,6 +36,7 @@ dependencies {
     implementation(projects.core.datastore)
     implementation(projects.core.model)
     implementation(projects.core.network)
+    implementation(projects.core.travel)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore)

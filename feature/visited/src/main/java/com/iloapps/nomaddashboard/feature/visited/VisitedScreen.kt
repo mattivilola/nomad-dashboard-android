@@ -1,5 +1,6 @@
 package com.iloapps.nomaddashboard.feature.visited
 
+import com.iloapps.nomaddashboard.core.designsystem.component.hasConfiguredMapsApiKey
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -1320,15 +1321,6 @@ private fun Context.hasVisitedLocationPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-private fun Context.hasConfiguredMapsApiKey(): Boolean {
-    val metaData = runCatching {
-        @Suppress("DEPRECATION")
-        packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA).metaData
-    }.getOrNull()
-
-    val keyValue = metaData?.getString("com.google.android.geo.API_KEY").orEmpty().trim()
-    return keyValue.isNotBlank() && keyValue.startsWith("\${").not()
-}
 
 private fun VisitedMapCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)
 

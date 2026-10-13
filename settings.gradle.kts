@@ -29,10 +29,12 @@ include(
     ":core:database",
     ":core:datastore",
     ":core:testing",
+    ":core:travel",
     ":feature:dashboard",
     ":feature:settings",
     ":feature:visited",
     ":feature:timetracking",
     ":feature:about",
     ":feature:companion",
+    ":feature:widgets",
 )

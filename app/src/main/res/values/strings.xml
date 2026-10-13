@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nomad Dashboard</string>
-</resources>
 
+    <!-- Launcher shortcuts; the long labels are the macOS Shortcuts action names. -->
+    <string name="shortcut_emergency_short">Emergency</string>
+    <string name="shortcut_emergency_long">Emergency number here</string>
+    <string name="shortcut_status_short">Status</string>
+    <string name="shortcut_status_long">Dashboard status</string>
+    <string name="shortcut_embassy_short">Embassy</string>
+    <string name="shortcut_embassy_long">Nearest embassy</string>
+    <string name="shortcut_daylight_short">Daylight</string>
+    <string name="shortcut_daylight_long">Daylight left</string>
+    <string name="shortcut_profile_short">Profile</string>
+    <string name="shortcut_profile_long">Switch travel profile</string>
+</resources>

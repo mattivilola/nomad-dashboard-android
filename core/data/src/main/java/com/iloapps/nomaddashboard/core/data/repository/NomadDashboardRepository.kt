@@ -7,6 +7,7 @@ import com.iloapps.nomaddashboard.core.model.SurfSpotConfiguration
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
+import java.time.Duration
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -21,6 +22,13 @@ interface NomadDashboardRepository {
     suspend fun warmStart()
     suspend fun refreshLocalSignals() {}
     suspend fun refresh()
+
+    /**
+     * Measures latency once if the last reading is older than [maximumAge], for surfaces that show a
+     * verdict while the dashboard is closed. A younger reading is reused, nothing is probed while
+     * offline, and only latency, jitter and the latency history change.
+     */
+    suspend fun probeLatencyIfStale(maximumAge: Duration = Duration.ofSeconds(60)) {}
     suspend fun refreshCard(card: com.iloapps.nomaddashboard.core.model.DashboardCardId) { refresh() }
     suspend fun clearVisitedHistory()
     suspend fun updateSettings(transform: (AppSettings) -> AppSettings)

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static launcher shortcuts: the same five questions as the macOS Siri and Shortcuts answers. Each opens the
+  card (or Settings group) that shows the answer; no new UI. Launchers show the first four or five.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="emergency_number"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_emergency"
+        android:shortcutLongLabel="@string/shortcut_emergency_long"
+        android:shortcutShortLabel="@string/shortcut_emergency_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nomaddashboard://dashboard/emergencyCare"
+            android:targetClass="com.iloapps.nomaddashboard.MainActivity"
+            android:targetPackage="@string/shortcut_target_package" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="dashboard_status"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_status"
+        android:shortcutLongLabel="@string/shortcut_status_long"
+        android:shortcutShortLabel="@string/shortcut_status_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nomaddashboard://dashboard"
+            android:targetClass="com.iloapps.nomaddashboard.MainActivity"
+            android:targetPackage="@string/shortcut_target_package" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="nearest_embassy"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_embassy"
+        android:shortcutLongLabel="@string/shortcut_embassy_long"
+        android:shortcutShortLabel="@string/shortcut_embassy_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nomaddashboard://dashboard/embassy"
+            android:targetClass="com.iloapps.nomaddashboard.MainActivity"
+            android:targetPackage="@string/shortcut_target_package" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="daylight_left"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_daylight"
+        android:shortcutLongLabel="@string/shortcut_daylight_long"
+        android:shortcutShortLabel="@string/shortcut_daylight_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nomaddashboard://dashboard/weather"
+            android:targetClass="com.iloapps.nomaddashboard.MainActivity"
+            android:targetPackage="@string/shortcut_target_package" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="switch_travel_profile"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_profile"
+        android:shortcutLongLabel="@string/shortcut_profile_long"
+        android:shortcutShortLabel="@string/shortcut_profile_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nomaddashboard://settings/travelProfile"
+            android:targetClass="com.iloapps.nomaddashboard.MainActivity"
+            android:targetPackage="@string/shortcut_target_package" />
+    </shortcut>
+</shortcuts>

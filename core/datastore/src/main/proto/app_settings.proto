@@ -27,4 +27,21 @@ message AppSettingsProto {
   bool local_info_enabled = 21;
   int32 settings_schema_version = 22;
   string resource_mode = 23;
+  string travel_profile = 24;
+  repeated string dashboard_collapsed_cards = 25;
+  bool status_shows_heads_up = 26;
+  // Sensitive: local-only, never logged or sent anywhere.
+  repeated string citizenship_country_codes = 27;
+  // Absent (settings_schema_version < 2) means "use the model default" for the fields below
+  // whose default is not the proto3 zero value.
+  bool air_quality_enabled = 28;
+  // Sensitive: local-only, never logged or sent anywhere.
+  map<string, int32> stay_allowances = 29;
+  bool schengen_counter_enabled = 30;
+  bool tax_residence_days_enabled = 31;
+  int32 tax_residence_threshold_days = 32;
+  bool arrival_briefing_enabled = 33;
+  string arrival_briefing_acknowledged_country_code = 34;
+  int64 arrival_briefing_acknowledged_at_epoch_millis = 35;
+  bool has_arrival_briefing_acknowledged_at = 36;
 }

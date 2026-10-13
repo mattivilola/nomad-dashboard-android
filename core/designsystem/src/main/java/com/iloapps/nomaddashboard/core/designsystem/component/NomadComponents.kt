@@ -31,16 +31,42 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.iloapps.nomaddashboard.core.designsystem.theme.Coral
+import com.iloapps.nomaddashboard.core.designsystem.theme.NomadStatusColor
 import com.iloapps.nomaddashboard.core.designsystem.theme.Sea
+import com.iloapps.nomaddashboard.core.designsystem.theme.nomadStatusColors
 import com.iloapps.nomaddashboard.core.model.SignalLevel
 import com.iloapps.nomaddashboard.core.model.SummaryTile
 
+/**
+ * How a badge or status mark is tinted. [Good], [Caution] and [Attention] are the status tones: teal,
+ * sand and coral. They mean status only, never a metric or category. [Warning] predates them and renders
+ * like [Attention]; it stays for existing callers. [Accent] and [Info] are non-status emphasis.
+ */
 enum class NomadBadgeTone {
     Neutral,
     Good,
+    Caution,
+    Attention,
     Warning,
     Accent,
     Info,
+}
+
+/** The status colour a tone stands for. Non-status tones ([Accent], [Info]) read as neutral. */
+@Composable
+fun NomadBadgeTone.statusColor(): NomadStatusColor {
+    val colors = nomadStatusColors()
+    return when (this) {
+        NomadBadgeTone.Good -> colors.good
+        NomadBadgeTone.Caution -> colors.caution
+        NomadBadgeTone.Attention,
+        NomadBadgeTone.Warning,
+        -> colors.attention
+        NomadBadgeTone.Neutral,
+        NomadBadgeTone.Accent,
+        NomadBadgeTone.Info,
+        -> colors.neutral
+    }
 }
 
 @Composable
@@ -159,7 +185,7 @@ fun NomadSectionHeader(
 @Composable
 fun NomadSectionClusterHeader(
     title: String,
-    subtitle: String,
+    subtitle: String?,
     badges: List<Pair<String, NomadBadgeTone>> = emptyList(),
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -178,11 +204,13 @@ fun NomadSectionClusterHeader(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                )
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    )
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -368,6 +396,8 @@ private fun badgeContainerColor(tone: NomadBadgeTone): Color = when (tone) {
     NomadBadgeTone.Neutral -> MaterialTheme.colorScheme.surfaceVariant
     NomadBadgeTone.Good -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
     NomadBadgeTone.Warning -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
+    NomadBadgeTone.Caution -> nomadStatusColors().caution.tint(0.2f)
+    NomadBadgeTone.Attention -> nomadStatusColors().attention.tint(0.2f)
     NomadBadgeTone.Accent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
     NomadBadgeTone.Info -> MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
 }
@@ -381,6 +411,8 @@ private fun badgeContentColor(tone: NomadBadgeTone): Color = when (tone) {
     NomadBadgeTone.Accent,
     -> MaterialTheme.colorScheme.primary
     NomadBadgeTone.Warning -> MaterialTheme.colorScheme.secondary
+    NomadBadgeTone.Caution -> nomadStatusColors().caution.text
+    NomadBadgeTone.Attention -> nomadStatusColors().attention.text
 }
 
 private fun toneForLevel(level: SignalLevel): NomadBadgeTone = when (level) {

@@ -22,6 +22,14 @@ data class PlacesNearbySearchRequest(
     val maxResultCount: Int,
 )
 
+data class PlacesTextSearchRequest(
+    val latitude: Double,
+    val longitude: Double,
+    val radiusMeters: Double,
+    val query: String,
+    val maxResultCount: Int,
+)
+
 data class PlacesNearbySearchPlace(
     val placeId: String?,
     val name: String?,
@@ -29,6 +37,8 @@ data class PlacesNearbySearchPlace(
     val latitude: Double?,
     val longitude: Double?,
     val primaryType: String?,
+    /** The city or town from the address components; used to recognise one hospital listed under two names. */
+    val locality: String? = null,
 )
 
 sealed interface PlacesNearbySearchOutcome {
@@ -47,4 +57,7 @@ sealed interface PlacesNearbySearchOutcome {
 
 interface PlacesNearbySearchClient {
     suspend fun searchNearbyHospitals(request: PlacesNearbySearchRequest): PlacesNearbySearchOutcome
+
+    /** A broader text search (for example "urgencias") that the typed nearby search can miss. */
+    suspend fun searchHospitalsByText(request: PlacesTextSearchRequest): PlacesNearbySearchOutcome
 }

@@ -6,5 +6,8 @@ import javax.inject.Qualifier
 annotation class IoDispatcher
 
 @Qualifier
+annotation class DefaultDispatcher
+
+@Qualifier
 annotation class ApplicationScope
 

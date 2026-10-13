@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sample content for the widget picker; the live widget is drawn by SafetyWidget. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_preview_background"
+    android:contentDescription="@string/widget_preview_description"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Emergency"
+        android:textColor="@color/widget_preview_text_secondary"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        tools:ignore="HardcodedText,SmallSp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="112"
+        android:textColor="@color/widget_preview_text_primary"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="Portugal"
+        android:textColor="@color/widget_preview_text_secondary"
+        android:textSize="12sp"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Consular line"
+        android:textColor="@color/widget_preview_text_tertiary"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        tools:ignore="HardcodedText,SmallSp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:text="+00 123 456 789"
+        android:textColor="@color/widget_preview_text_primary"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Updated 12:40"
+        android:textColor="@color/widget_preview_text_tertiary"
+        android:textSize="10sp"
+        tools:ignore="HardcodedText,SmallSp" />
+</LinearLayout>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only the widget picker previews (res/layout/widget_preview_*) read these: a preview is a static
+      RemoteViews layout and cannot use the Glance colour providers. They repeat the Nomad theme tokens
+      in core:designsystem (NomadTheme.kt, NomadStatusColors.kt).
+    -->
+    <color name="widget_preview_background">#FFF4EFE3</color>
+    <color name="widget_preview_text_primary">#FF1F2A37</color>
+    <color name="widget_preview_text_secondary">#AD1F2A37</color>
+    <color name="widget_preview_text_tertiary">#801F2A37</color>
+    <color name="widget_preview_good">#FF1F6B6B</color>
+    <color name="widget_preview_caution">#FF7A5A12</color>
+</resources>

@@ -15,6 +15,9 @@ interface DashboardSectionCacheDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: DashboardSectionCacheEntity)
 
+    @Query("DELETE FROM dashboard_section_cache WHERE sectionId = :sectionId")
+    suspend fun delete(sectionId: String)
+
     @Transaction
     suspend fun upsertSection(payload: DashboardSectionCacheEntity, state: DashboardSectionCacheEntity) {
         upsert(payload)

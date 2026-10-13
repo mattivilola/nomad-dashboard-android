@@ -1,3 +1,4 @@
+import com.android.build.api.variant.ResValue
 import com.github.triplet.gradle.androidpublisher.ReleaseStatus
 import java.io.FileInputStream
 import java.util.Properties
@@ -130,6 +131,17 @@ android {
 
 }
 
+androidComponents {
+    onVariants { variant ->
+        // Static launcher shortcuts name their target package in XML, which cannot read the manifest placeholder:
+        // hand it over as a resource so the debug build's suffixed application id still resolves.
+        variant.resValues.put(
+            variant.makeResValueKey("string", "shortcut_target_package"),
+            ResValue(variant.applicationId.get(), "Package the static launcher shortcuts open"),
+        )
+    }
+}
+
 play {
     serviceAccountCredentials.set(file(env("NOMAD_PLAY_SERVICE_ACCOUNT_JSON", "Config/nonexistent-play-service-account.json")))
     track.set(env("NOMAD_PLAY_TRACK", "internal"))
@@ -143,12 +155,14 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.core.designsystem)
     implementation(projects.core.model)
+    implementation(projects.core.travel)
     implementation(projects.feature.about)
     implementation(projects.feature.companion)
     implementation(projects.feature.dashboard)
     implementation(projects.feature.settings)
     implementation(projects.feature.timetracking)
     implementation(projects.feature.visited)
+    implementation(projects.feature.widgets)
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)

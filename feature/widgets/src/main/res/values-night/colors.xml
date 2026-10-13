@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_preview_background">#FF152028</color>
+    <color name="widget_preview_text_primary">#FFF3F4F6</color>
+    <color name="widget_preview_text_secondary">#ADF3F4F6</color>
+    <color name="widget_preview_text_tertiary">#80F3F4F6</color>
+    <color name="widget_preview_good">#FF8ED0CD</color>
+    <color name="widget_preview_caution">#FFE1C16D</color>
+</resources>

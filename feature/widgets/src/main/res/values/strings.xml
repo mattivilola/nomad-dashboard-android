@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The widget picker names and descriptions; the same wording as WidgetKind in core:travel and the macOS widgets. -->
+    <string name="widget_glance_label">Glance</string>
+    <string name="widget_glance_description">Your travel verdict, where you are and the most important heads-up.</string>
+    <string name="widget_safety_label">Safety</string>
+    <string name="widget_safety_description">The emergency number where you are, and your embassy\'s consular hotline.</string>
+    <string name="widget_daylight_label">Daylight</string>
+    <string name="widget_daylight_description">When the sun sets and how much daylight is left, or when it gets light again.</string>
+
+    <string name="tile_label">Travel status</string>
+
+    <!-- Content descriptions of the widget previews. -->
+    <string name="widget_preview_description">Preview of the widget with sample content</string>
+</resources>

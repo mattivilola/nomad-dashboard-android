@@ -21,6 +21,7 @@ data class OpenMeteoCurrent(
     @SerialName("wind_speed_10m") val windSpeedKph: Double? = null,
     @SerialName("wind_gusts_10m") val windGustKph: Double? = null,
     @SerialName("wind_direction_10m") val windDirectionDegrees: Double? = null,
+    @SerialName("uv_index") val uvIndex: Double? = null,
 )
 
 @Serializable
@@ -31,6 +32,7 @@ data class OpenMeteoHourly(
     @SerialName("weather_code") val weatherCodes: List<Int?> = emptyList(),
     @SerialName("wind_speed_10m") val windSpeedsKph: List<Double?> = emptyList(),
     @SerialName("wind_direction_10m") val windDirectionDegrees: List<Double?> = emptyList(),
+    @SerialName("uv_index") val uvIndexes: List<Double?> = emptyList(),
 )
 
 @Serializable

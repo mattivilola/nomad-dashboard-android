@@ -98,12 +98,51 @@ Responsibilities:
 - shared transient retry policy for startup-dependent remote fetches
 - Companion repository and versioned local backup codec
 - travel-history and time-tracking export/import managers
+- Open-Meteo UV (weather call) and air quality (separate API, coordinates
+  rounded to one decimal before the request, only while device-location weather
+  and air quality are on)
+- latency carry-over between passive reads, `probeLatencyIfStale` (at most one
+  probe a minute) and measured jitter
+- `DashboardInsightsRepository`: one shared, 60-second re-evaluated source of
+  heads-up items, health verdict, status line and arrival detection for the
+  dashboard, the Quick Settings tile and widgets
 - orchestration of local and remote data
 
 Key files:
 - [NomadDataModule.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/main/java/com/iloapps/nomaddashboard/core/data/di/NomadDataModule.kt)
 - [DefaultNomadDashboardRepository.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/main/java/com/iloapps/nomaddashboard/core/data/repository/DefaultNomadDashboardRepository.kt)
 - [SystemTelemetryReader.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/core/data/src/main/java/com/iloapps/nomaddashboard/core/data/monitor/SystemTelemetryReader.kt)
+
+### `core:travel`
+
+Pure rules and presentation models ported from the macOS app, with no Android
+framework code except the `android.icu` calendar adapter. Everything is computed
+on the device and unit-tested on the JVM. Depends on `core:model`; `core:data`
+and the feature modules depend on it.
+
+Packages:
+- `safety`: bundled emergency numbers (76 countries), consular contacts (28),
+  Wikidata diplomatic missions (`src/main/resources/diplomatic-missions.json`,
+  synced from the macOS repo with `scripts/sync-macos-datasets.sh`), embassy
+  ranking with EU/Nordic fallback
+- `daylight`: NOAA/Meeus sunrise, sunset and civil twilight
+- `stays`: current stay, stay allowance, Schengen 90/180, tax-year days
+- `rhythm`: local-rhythm periods (Umm al-Qura and Hebrew dates via
+  `android.icu`, Lunar New Year from a verified table because ICU4J disagrees in
+  2027 and 2030)
+- `reference`: driving side, plug types and voltage, currency
+- `environment`: European AQI and WHO UV bands
+- `headsup`: the ranked heads-up engine (max 3, profile tie-break orders)
+- `health`, `glance`, `summary`, `cards`, `cardcontent`, `stayscard`,
+  `arrival`, `status`: verdict, glance overview, collapsed summaries, card
+  presentation, arrival briefing and the Quick Settings status line
+- `answers`, `widget`: quick-answer sentences, deep-link targets and the
+  privacy-minimal widget snapshot
+- `format`: shared formatters (temperature, fuel price with a separate unit,
+  durations)
+
+Rule tables and wording are kept identical to macOS; corrections should land in
+both apps.
 
 ### Feature modules
 
@@ -118,6 +157,17 @@ Current routes:
 - time tracking
 - Companion workspace
 - about
+
+`feature:widgets` is not a route: it ships the three Glance app widgets
+(Glance, Safety, Daylight), their receivers, provider XML and previews, the
+30-minute WorkManager redraw, and the "Travel status" Quick Settings
+`TileService`. Widgets render only the local `WidgetSnapshot` file that
+core:data's `WidgetSnapshotPublisher` writes to `noBackupFilesDir` from the
+insights flow (no IP, coordinates or citizenship codes); core:data reaches the
+module only through the `WidgetUpdater` interface. Deep links
+(`nomaddashboard://dashboard/<card>`, `nomaddashboard://settings/<destination>`)
+and the static launcher shortcuts are routed by `app/DeepLinkRouting.kt` into
+`DashboardScrollTarget` or `settingsRoute(destination)`.
 
 ## Data Flow
 
@@ -194,6 +244,16 @@ Settings flow:
    coordinates, and can be autofilled from the device’s current location on demand.
 6. Repository persists general settings through Proto DataStore and refreshes
    dashboard state using the updated settings plus provider credentials.
+7. Settings is organised as the eight `SettingsPage`s (General, Weather & Local,
+   Safety, Stays & Visas, Connection & Data, Work, Privacy & Location, Advanced). On a phone a
+   page list opens one page at a time; on wide layouts the list and the open page
+   sit side by side. `SettingsGroup` lists every group card in page order, and a
+   group with a `SettingsDestination` can be deep-linked with
+   `settingsRoute(destination)` (`settings?destination=<NAME>`): the page opens,
+   scrolls to the group and highlights it briefly.
+8. Companion preferences (home time zone, workplace diary opt-ins, quiet
+   notifications) are read and written by `SettingsViewModel` through
+   `CompanionRepository`, the same store the Companion screen uses.
 
 Visited history flow:
 
@@ -267,7 +327,11 @@ Companion flow:
 2. It may post a low-priority, permission-gated notification for a sustained
    connectivity, VPN, or charging transition when the user has enabled quiet
    notifications and the cooldown and quiet-hour policy allow it.
-3. `CompanionViewModel` owns offline essentials, timezone planners, and an
+3. `CompanionViewModel` also exposes `safetyEssentials`: the emergency numbers
+   for the current country and the user's embassy, decided by
+   `SafetyEssentialsBuilder` from the saved citizenship and the last snapshot
+   (`SafetyLocation`, `EmbassyOverview.essentials()`), off the main thread and
+   without network. It owns offline essentials, timezone planners, and an
    explicitly opt-in workplace diary. A diary row is saved only after the user
    supplies a label and chooses **Save current observation**; the app never
    infers a workplace from stationary time, cafés, or other place detection.

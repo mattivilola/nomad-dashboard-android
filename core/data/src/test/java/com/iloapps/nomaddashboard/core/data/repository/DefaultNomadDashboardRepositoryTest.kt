@@ -1,6 +1,7 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
 import androidx.datastore.core.DataStore
+import com.iloapps.nomaddashboard.core.data.airquality.AirQualityProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelPriceProvider
 import com.iloapps.nomaddashboard.core.data.fuel.FuelProviderCredentials
 import com.iloapps.nomaddashboard.core.data.fuel.FuelSearchRequest
@@ -23,6 +24,7 @@ import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoProvider
 import com.iloapps.nomaddashboard.core.data.localinfo.LocalInfoRequest
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelProvider
 import com.iloapps.nomaddashboard.core.data.localprice.LocalPriceLevelRequest
+import com.iloapps.nomaddashboard.core.data.monitor.LatencyProbeResult
 import com.iloapps.nomaddashboard.core.data.monitor.TelemetryReader
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
 import com.iloapps.nomaddashboard.core.data.travelalerts.BundledNeighborCountryResolver
@@ -39,8 +41,10 @@ import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.AppSettingsProto
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
 import com.iloapps.nomaddashboard.core.datastore.toProto
+import com.iloapps.nomaddashboard.core.model.AirQualitySnapshot
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
+import com.iloapps.nomaddashboard.core.model.InternetState
 import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareStatus
@@ -79,9 +83,14 @@ import com.iloapps.nomaddashboard.core.network.model.ReliefWebReportsRequest
 import com.iloapps.nomaddashboard.core.network.model.FreeIpApiResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoCurrent
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoDaily
+import com.iloapps.nomaddashboard.core.network.model.OpenMeteoHourly
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
+import java.time.Duration
+import java.time.Clock
+import java.time.ZoneOffset
 import java.time.Instant
+import java.time.ZoneId
 import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.async
@@ -708,7 +717,7 @@ class DefaultNomadDashboardRepositoryTest {
             telemetryReader = FakeTelemetryReader(
                 connectivitySnapshots = listOf(
                     ConnectivitySnapshot(
-                        internetState = "Online",
+                        internetState = InternetState.ONLINE,
                         isOnline = true,
                         latencyMs = 34.0,
                         downloadMbps = null,
@@ -716,7 +725,7 @@ class DefaultNomadDashboardRepositoryTest {
                         wifiName = "Test Wi-Fi",
                     ),
                     ConnectivitySnapshot(
-                        internetState = "Online",
+                        internetState = InternetState.ONLINE,
                         isOnline = true,
                         latencyMs = 41.0,
                         downloadMbps = 86.4,
@@ -1393,6 +1402,540 @@ class DefaultNomadDashboardRepositoryTest {
         assertThat(history.observations).hasSize(1)
     }
 
+    @Test
+    fun `refresh captures current and hourly uv and keeps the next 24 hours of hourly slots`() = runTest {
+        val now = Instant.now()
+        val firstHour = now.truncatedTo(java.time.temporal.ChronoUnit.HOURS).minusSeconds(3 * 3_600)
+        val hours = (0 until 48).map { firstHour.plusSeconds(it * 3_600L) }
+        val openMeteoService = FakeOpenMeteoService(
+            response = OpenMeteoResponse(
+                timezone = "UTC",
+                utcOffsetSeconds = 0,
+                current = OpenMeteoCurrent(temperatureCelsius = 20.0, uvIndex = 6.6),
+                hourly = OpenMeteoHourly(
+                    times = hours.map { java.time.LocalDateTime.ofInstant(it, java.time.ZoneOffset.UTC).toString() },
+                    temperatures = hours.map { 20.0 },
+                    rainChance = hours.map { 10 },
+                    weatherCodes = hours.map { 1 },
+                    windSpeedsKph = hours.map { 15.0 },
+                    windDirectionDegrees = hours.map { 270.0 },
+                    uvIndexes = hours.indices.map { if (it == 5) 8.4 else if (it == 6) null else it / 10.0 },
+                ),
+            ),
+        )
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings().toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(),
+            openMeteoService = openMeteoService,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+            applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        val request = openMeteoService.requests.first { it.current.contains("temperature_2m") }
+        assertThat(request.current.split(",")).contains("uv_index")
+        assertThat(request.hourly.split(",")).contains("uv_index")
+        val weather = repository.snapshot.first { it.lastRefresh != null }.weather
+        assertThat(weather.uvIndex).isEqualTo(7)
+        // Every hour from the current one through the next 24 h, each with its own UV.
+        val slots = weather.hourlyForecast
+        assertThat(slots.first().at).isAtLeast(now.truncatedTo(java.time.temporal.ChronoUnit.HOURS))
+        assertThat(slots.first().at).isAtMost(now.plusSeconds(3_600))
+        assertThat(slots.last().at).isAtMost(now.plusSeconds(25 * 3_600))
+        assertThat(slots.last().at).isGreaterThan(now.plusSeconds(23 * 3_600))
+        assertThat(slots.map { it.at }.zipWithNext { a, b -> b.epochSecond - a.epochSecond }.toSet()).containsExactly(3_600L)
+        val expectedUv = hours.indices.associate { hours[it] to when (it) {
+            5 -> 8
+            6 -> null
+            else -> Math.round(it / 10.0).toInt()
+        } }
+        slots.forEach { assertThat(it.uvIndex).isEqualTo(expectedUv.getValue(it.at)) }
+    }
+
+    @Test
+    fun `air quality is fetched for the device coordinate when weather location and air quality are on`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val cache = FakeDashboardSectionCacheDao()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            dashboardSectionCacheDao = cache, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(airQuality.requests).containsExactly(48.8566 to 2.3522)
+        val published = repository.snapshot.value.airQuality
+        assertThat(published?.europeanAqi).isEqualTo(42)
+        assertThat(cache.all().map { it.sectionId }).contains(DashboardSectionId.AIR_QUALITY)
+    }
+
+    @Test
+    fun `air quality is not fetched without device weather location consent`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = false).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(airQuality.requests).isEmpty()
+        assertThat(repository.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `air quality is not fetched when its own setting is off`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(useCurrentLocationForWeather = true, airQualityEnabled = false).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(airQuality.requests).isEmpty()
+        assertThat(repository.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `air quality never uses the public ip location when there is no device fix`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = true, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(airQuality.requests).isEmpty()
+        assertThat(repository.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `air quality is still fetched in low data mode`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(
+                publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true,
+                resourceMode = com.iloapps.nomaddashboard.core.model.ResourceMode.LOW_DATA).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+
+        assertThat(repository.snapshot.value.lowImpactMode).isTrue()
+        assertThat(airQuality.requests).hasSize(1)
+    }
+
+    @Test
+    fun `air quality inside its refresh interval is reused and a weather card refresh forces it`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        refreshRepository(repository)
+        refreshRepository(repository)
+        assertThat(airQuality.requests).hasSize(1)
+
+        val weatherRefresh = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.WEATHER) }
+        advanceUntilIdle()
+        weatherRefresh.await()
+        assertThat(airQuality.requests).hasSize(2)
+
+        val fuelRefresh = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.FUEL_PRICES) }
+        advanceUntilIdle()
+        fuelRefresh.await()
+        assertThat(airQuality.requests).hasSize(2)
+    }
+
+    @Test
+    fun `a failed air quality refresh keeps the last value for the same grid point`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        val first = repository.snapshot.value.airQuality
+        assertThat(first).isNotNull()
+
+        airQuality.failure = IllegalStateException("provider down")
+        val refresh = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.WEATHER) }
+        advanceUntilIdle()
+        refresh.await()
+
+        assertThat(airQuality.requests).hasSize(2)
+        assertThat(repository.snapshot.value.airQuality).isEqualTo(first)
+    }
+
+    @Test
+    fun `a failed air quality refresh never shows another location's value`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val device = MutableDeviceLocationProvider(parisPlace)
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = device, applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.airQuality).isNotNull()
+
+        device.value = ResolvedVisitedPlace("Madrid", "Madrid", "Spain", "ES", 40.4168, -3.7038)
+        airQuality.failure = IllegalStateException("provider down")
+        val refresh = async { repository.refreshCard(com.iloapps.nomaddashboard.core.model.DashboardCardId.WEATHER) }
+        advanceUntilIdle()
+        refresh.await()
+
+        assertThat(repository.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `warm start restores cached air quality only while air quality is active`() = runTest {
+        val cache = FakeDashboardSectionCacheDao()
+        val snapshot = fakeAirQualitySnapshot(48.9, 2.4)
+        cache.upsert(snapshot.toCacheEntity(TestJson))
+
+        val active = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), dashboardSectionCacheDao = cache,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        active.warmStart()
+        assertThat(active.snapshot.value.airQuality).isEqualTo(snapshot)
+
+        val inactive = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(useCurrentLocationForWeather = false).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), dashboardSectionCacheDao = cache,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null), applicationScope = backgroundScope,
+        )
+        inactive.warmStart()
+        assertThat(inactive.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `turning air quality on fetches it right away`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(
+                publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true, airQualityEnabled = false).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        assertThat(airQuality.requests).isEmpty()
+
+        val update = async { repository.updateSettings { it.copy(airQualityEnabled = true) } }
+        advanceUntilIdle()
+        update.await()
+
+        assertThat(airQuality.requests).hasSize(1)
+        assertThat(repository.snapshot.value.airQuality).isNotNull()
+    }
+
+    @Test
+    fun `turning device location weather on fetches air quality when it is enabled`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(
+                publicIpGeolocationEnabled = false, useCurrentLocationForWeather = false, airQualityEnabled = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        val update = async { repository.updateSettings { it.copy(useCurrentLocationForWeather = true) } }
+        advanceUntilIdle()
+        update.await()
+
+        assertThat(airQuality.requests).hasSize(1)
+    }
+
+    @Test
+    fun `changing unrelated settings does not refresh`() = runTest {
+        val airQuality = FakeAirQualityProvider()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(AppSettings(
+                publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = airQuality,
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+
+        repository.updateSettings { it.copy(weatherForecastExpanded = false) }
+        repository.updateSettings { it.copy(airQualityEnabled = false) }
+
+        assertThat(airQuality.requests).isEmpty()
+    }
+
+    @Test
+    fun `turning air quality off removes its cached row`() = runTest {
+        val cache = FakeDashboardSectionCacheDao()
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = FakeAirQualityProvider(),
+            dashboardSectionCacheDao = cache, visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        assertThat(cache.all().map { it.sectionId }).contains(DashboardSectionId.AIR_QUALITY)
+
+        repository.updateSettings { it.copy(useCurrentLocationForWeather = false) }
+
+        assertThat(cache.all().map { it.sectionId }).doesNotContain(DashboardSectionId.AIR_QUALITY)
+        assertThat(cache.all().map { it.sectionId }).contains(DashboardSectionId.WEATHER)
+    }
+
+    @Test
+    fun `turning air quality off clears the published value`() = runTest {
+        val repository = repository(
+            settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(
+                AppSettings(publicIpGeolocationEnabled = false, useCurrentLocationForWeather = true).toProto())),
+            fuelPriceProvider = FakeFuelPriceProvider(), airQualityProvider = FakeAirQualityProvider(),
+            visitedHistoryStore = FakeVisitedHistoryStore(),
+            visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(parisPlace), applicationScope = backgroundScope,
+        )
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.airQuality).isNotNull()
+
+        repository.updateSettings { it.copy(airQualityEnabled = false) }
+
+        assertThat(repository.snapshot.value.airQuality).isNull()
+    }
+
+    @Test
+    fun `a failed latency probe keeps a still valid reading across refreshes`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = 40.0, measuredAt = clock.instant()),
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isEqualTo(40.0)
+
+        // The next probe fails and the passive read has no latency, yet the 40 ms reading is recent.
+        reader.full = onlineWifi("Cafe", latency = null)
+        refreshRepository(repository)
+
+        val connectivity = repository.snapshot.value.connectivity
+        assertThat(connectivity.latencyMs).isEqualTo(40.0)
+        assertThat(connectivity.latencyMeasuredAt).isNotNull()
+        assertThat(connectivity.latencyHistoryMs.map { it.value }).containsExactly(40.0)
+    }
+
+    @Test
+    fun `latency is cleared when the device goes offline and when the network changes`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = 40.0, measuredAt = clock.instant()),
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isEqualTo(40.0)
+
+        reader.passive = onlineWifi("Hotel", latency = null)
+        reader.full = onlineWifi("Hotel", latency = null)
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isNull()
+        assertThat(repository.snapshot.value.connectivity.jitterMs).isNull()
+
+        reader.passive = onlineWifi("Hotel", latency = null)
+        reader.full = onlineWifi("Hotel", latency = 30.0, measuredAt = clock.instant())
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isEqualTo(30.0)
+
+        reader.passive = ConnectivitySnapshot(internetState = InternetState.OFFLINE)
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isNull()
+    }
+
+    @Test
+    fun `a latency reading older than five minutes is not carried forward`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = 40.0, measuredAt = clock.instant().minusSeconds(600)),
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+        refreshRepository(repository)
+
+        reader.full = onlineWifi("Cafe", latency = null)
+        refreshRepository(repository)
+
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isNull()
+    }
+
+    @Test
+    fun `jitter comes from successive latency readings and is unknown with one`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = 40.0, measuredAt = clock.instant()),
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.jitterMs).isNull()
+
+        clock.advance(Duration.ofSeconds(10))
+        reader.full = onlineWifi("Cafe", latency = 52.0, measuredAt = clock.instant())
+        refreshRepository(repository)
+        assertThat(repository.snapshot.value.connectivity.jitterMs).isEqualTo(12.0)
+
+        clock.advance(Duration.ofSeconds(10))
+        reader.full = onlineWifi("Cafe", latency = 46.0, measuredAt = clock.instant())
+        refreshRepository(repository)
+        // Mean of |52 - 40| and |46 - 52|.
+        assertThat(repository.snapshot.value.connectivity.jitterMs).isEqualTo(9.0)
+    }
+
+    @Test
+    fun `low data still measures latency but at most once a minute`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = 99.0),
+            probe = 35.0,
+        )
+        val repository = latencyRepository(
+            reader,
+            AppSettings(resourceMode = com.iloapps.nomaddashboard.core.model.ResourceMode.LOW_DATA),
+            backgroundScope,
+        )
+
+        refreshRepository(repository)
+        refreshRepository(repository)
+        refreshRepository(repository)
+
+        assertThat(reader.fullReads).isEqualTo(0)
+        assertThat(reader.probes).isEqualTo(1)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isEqualTo(35.0)
+    }
+
+    @Test
+    fun `probe if stale reuses a recent reading and updates only latency fields`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = null),
+            probe = 28.0,
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+        val before = repository.snapshot.value.connectivity
+
+        repository.probeLatencyIfStale()
+        repository.probeLatencyIfStale()
+
+        assertThat(reader.probes).isEqualTo(1)
+        val after = repository.snapshot.value.connectivity
+        assertThat(after.latencyMs).isEqualTo(28.0)
+        assertThat(after.latencyMeasuredAt).isNotNull()
+        assertThat(after.latencyProbeHost).isEqualTo("1.1.1.1")
+        assertThat(after.latencyHistoryMs.map { it.value }).containsExactly(28.0)
+        assertThat(
+            after.copy(
+                latencyMs = null,
+                latencyMeasuredAt = null,
+                latencyProbeHost = null,
+                latencyHistoryMs = before.latencyHistoryMs,
+                jitterMs = null,
+            ),
+        ).isEqualTo(before.copy(latencyMs = null, latencyMeasuredAt = null, latencyProbeHost = null, jitterMs = null))
+    }
+
+    @Test
+    fun `probe if stale never probes while offline`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = ConnectivitySnapshot(internetState = InternetState.OFFLINE),
+            full = ConnectivitySnapshot(internetState = InternetState.OFFLINE),
+            probe = 28.0,
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+
+        repository.probeLatencyIfStale()
+
+        assertThat(reader.probes).isEqualTo(0)
+        assertThat(repository.snapshot.value.connectivity.latencyMs).isNull()
+    }
+
+    @Test
+    fun `probe if stale measures again once the reading is older than the allowed age`() = runTest {
+        val reader = LatencyScriptedTelemetryReader(
+            passive = onlineWifi("Cafe", latency = null),
+            full = onlineWifi("Cafe", latency = null),
+            probe = 28.0,
+        )
+        val repository = latencyRepository(reader, AppSettings(), backgroundScope)
+
+        repository.probeLatencyIfStale(Duration.ZERO)
+        repository.probeLatencyIfStale(Duration.ZERO)
+
+        assertThat(reader.probes).isEqualTo(2)
+    }
+
+    /** The time the latency tests run at; it only moves when a test advances it, so readings never share a millisecond by chance. */
+    private val clock = SteppingClock(Instant.parse("2026-10-12T10:00:00Z"))
+
+    private fun latencyRepository(
+        reader: TelemetryReader,
+        settings: AppSettings,
+        scope: CoroutineScope,
+    ) = repository(
+        settingsDataSource = NomadSettingsDataSource(FakeAppSettingsDataStore(settings.toProto())),
+        fuelPriceProvider = FakeFuelPriceProvider(),
+        visitedHistoryStore = FakeVisitedHistoryStore(),
+        visitedDeviceLocationProvider = FakeVisitedDeviceLocationProvider(null),
+        telemetryReader = reader,
+        metricPointDao = FakeMetricPointDao(),
+        applicationScope = scope,
+        clock = clock,
+    )
+
+    private fun onlineWifi(name: String, latency: Double?, measuredAt: Instant? = null) = ConnectivitySnapshot(
+        internetState = InternetState.ONLINE,
+        isOnline = true,
+        latencyMs = latency,
+        latencyMeasuredAt = measuredAt,
+        wifiName = name,
+    )
+
+    private val parisPlace = ResolvedVisitedPlace(
+        city = "Paris",
+        region = "Ile-de-France",
+        country = "France",
+        countryCode = "FR",
+        latitude = 48.8566,
+        longitude = 2.3522,
+    )
+
     private fun repository(
         settingsDataSource: NomadSettingsDataSource,
         fuelPriceProvider: FuelPriceProvider,
@@ -1400,6 +1943,7 @@ class DefaultNomadDashboardRepositoryTest {
         ipifyService: IpifyService = FakeIpifyService(),
         openMeteoService: OpenMeteoService = FakeOpenMeteoService(),
         openMeteoMarineService: OpenMeteoMarineService = FakeOpenMeteoMarineService(),
+        airQualityProvider: AirQualityProvider = FakeAirQualityProvider(),
         localPriceLevelProvider: LocalPriceLevelProvider = FakeLocalPriceLevelProvider(),
         localInfoProvider: LocalInfoProvider = FakeLocalInfoProvider(),
         emergencyCareProvider: EmergencyCareProvider = FakeEmergencyCareProvider(),
@@ -1418,6 +1962,7 @@ class DefaultNomadDashboardRepositoryTest {
         neighborCountryResolver: BundledNeighborCountryResolver = BundledNeighborCountryResolver.fromRecords(
             mapOf("FI" to listOf("SE", "NO"), "DE" to listOf("PL", "FR")),
         ),
+        clock: Clock = Clock.systemUTC(),
     ): DefaultNomadDashboardRepository =
         DefaultNomadDashboardRepository(
             settingsDataSource = settingsDataSource,
@@ -1426,6 +1971,7 @@ class DefaultNomadDashboardRepositoryTest {
             ipifyService = ipifyService,
             openMeteoService = openMeteoService,
             openMeteoMarineService = openMeteoMarineService,
+            airQualityProvider = airQualityProvider,
             localPriceLevelProvider = localPriceLevelProvider,
             localInfoProvider = localInfoProvider,
             fuelPriceProvider = fuelPriceProvider,
@@ -1442,6 +1988,7 @@ class DefaultNomadDashboardRepositoryTest {
             json = TestJson,
             applicationScope = applicationScope,
             ioDispatcher = applicationScope.coroutineContext[kotlin.coroutines.ContinuationInterceptor] as kotlinx.coroutines.CoroutineDispatcher,
+            clock = clock,
         )
 
     private fun smartravellerProvider(
@@ -1587,7 +2134,7 @@ private class FakeAppSettingsDataStore(
 private class FakeTelemetryReader(
     private val connectivitySnapshots: List<ConnectivitySnapshot> = listOf(
         ConnectivitySnapshot(
-            internetState = "Online",
+            internetState = InternetState.ONLINE,
             isOnline = true,
             wifiName = "Test Wi-Fi",
         ),
@@ -1670,6 +2217,10 @@ private class FakeDashboardSectionCacheDao : DashboardSectionCacheDao {
     override suspend fun upsert(entity: DashboardSectionCacheEntity) {
         entries[entity.sectionId] = entity
     }
+
+    override suspend fun delete(sectionId: String) {
+        entries.remove(sectionId)
+    }
 }
 
 private class FakeFreeIpApiService : FreeIpApiService {
@@ -1747,6 +2298,83 @@ private class FakeOpenMeteoService(
         )
         return response
     }
+}
+
+private fun fakeAirQualitySnapshot(latitude: Double, longitude: Double) = AirQualitySnapshot(
+    latitude = latitude,
+    longitude = longitude,
+    sourceName = "Open-Meteo",
+    europeanAqi = 42,
+    mainPollutant = null,
+    pm2_5 = null,
+    pm10 = null,
+    ozone = null,
+    nitrogenDioxide = null,
+    forecastSlots = emptyList(),
+    fetchedAt = Instant.ofEpochMilli(1_700_000_000_000),
+)
+
+private class FakeAirQualityProvider : AirQualityProvider {
+    val requests = mutableListOf<Pair<Double, Double>>()
+    var failure: Throwable? = null
+
+    override suspend fun airQuality(latitude: Double, longitude: Double): AirQualitySnapshot {
+        requests += latitude to longitude
+        failure?.let { throw it }
+        val grid = com.iloapps.nomaddashboard.core.travel.environment.AirQualityGridPoint.privacyRounded(latitude, longitude)!!
+        return fakeAirQualitySnapshot(grid.latitude, grid.longitude).copy(fetchedAt = Instant.now())
+    }
+}
+
+private class MutableDeviceLocationProvider(var value: ResolvedVisitedPlace?) : VisitedDeviceLocationProvider {
+    override fun hasLocationPermission(): Boolean = true
+
+    override suspend fun currentLocation(): DeviceLocationSnapshot =
+        value?.let { place ->
+            DeviceLocationSnapshot(
+                status = DeviceLocationResolutionStatus.PLACE_RESOLVED,
+                latitude = place.latitude,
+                longitude = place.longitude,
+                city = place.city,
+                region = place.region,
+                country = place.country,
+                countryCode = place.countryCode,
+            )
+        } ?: DeviceLocationSnapshot(status = DeviceLocationResolutionStatus.NO_FIX)
+}
+
+private class SteppingClock(private var instant: Instant) : Clock() {
+    fun advance(duration: Duration) {
+        instant = instant.plus(duration)
+    }
+
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+    override fun withZone(zone: ZoneId): Clock = this
+    override fun instant(): Instant = instant
+}
+
+private class LatencyScriptedTelemetryReader(
+    var passive: ConnectivitySnapshot,
+    var full: ConnectivitySnapshot,
+    var probe: Double? = null,
+) : TelemetryReader {
+    var probes = 0
+    var fullReads = 0
+
+    override suspend fun connectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> {
+        fullReads += 1
+        return full to TrafficSample(0, 0, fullReads.toLong())
+    }
+
+    override suspend fun passiveConnectivity(previousTrafficSample: TrafficSample?): Pair<ConnectivitySnapshot, TrafficSample> =
+        passive to TrafficSample(0, 0, 0)
+
+    override suspend fun latencyProbe(): LatencyProbeResult? {
+        probes += 1
+        return probe?.let { LatencyProbeResult(it, "1.1.1.1") }
+    }
+
+    override suspend fun power(): PowerSnapshot = PowerSnapshot(batteryPercent = 80, statusLabel = "On Battery")
 }
 
 private class FakeOpenMeteoMarineService(

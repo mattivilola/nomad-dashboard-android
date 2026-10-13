@@ -116,13 +116,19 @@ private val NomadShapes = Shapes(
     large = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
 )
 
+/**
+ * The Nomad colour scheme for the light or dark theme, for surfaces that cannot run [NomadTheme] (the
+ * home screen widgets map it onto their own colour providers).
+ */
+fun nomadColorScheme(darkTheme: Boolean): ColorScheme = if (darkTheme) DarkColors else LightColors
+
 @Composable
 fun NomadTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = nomadColorScheme(darkTheme),
         typography = NomadTypography,
         shapes = NomadShapes,
         content = content,

@@ -18,11 +18,29 @@ data class SummaryTile(
     val level: SignalLevel = SignalLevel.NEUTRAL,
 )
 
+/** What the device knows about its internet connection. [label] is the text the UI shows for it. */
+enum class InternetState(val label: String) {
+    /** No reading yet. */
+    CHECKING("Checking"),
+    ONLINE("Online"),
+
+    /** A network is active but the platform has not validated internet access (captive portal, no route). */
+    CAPTIVE_OR_UNVALIDATED("Captive/Checking"),
+
+    /** No active network at all. */
+    OFFLINE("Offline"),
+}
+
 data class ConnectivitySnapshot(
-    val internetState: String = "Checking",
+    val internetState: InternetState = InternetState.CHECKING,
     val isOnline: Boolean = false,
     val latencyMs: Double? = null,
+    /** Variation between the last few latency readings; null until at least two exist. */
     val jitterMs: Double? = null,
+    /** When [latencyMs] was measured. Null for a reading whose age is unknown. */
+    val latencyMeasuredAt: Instant? = null,
+    /** The host that answered the latency probe ("1.1.1.1"); null together with [latencyMs]. */
+    val latencyProbeHost: String? = null,
     val downloadMbps: Double? = null,
     val uploadMbps: Double? = null,
     val latencyHistoryMs: List<MetricHistoryPoint> = emptyList(),
@@ -34,7 +52,31 @@ data class ConnectivitySnapshot(
     val wifiFrequencyMhz: Int? = null,
     val vpnActive: Boolean = false,
     val timeZoneId: String = "UTC",
-)
+) {
+    /** True when the device has no active network at all. */
+    val isOffline: Boolean
+        get() = internetState == InternetState.OFFLINE
+
+    /** True before the first connection reading arrived. */
+    val isChecking: Boolean
+        get() = internetState == InternetState.CHECKING
+
+    /**
+     * This snapshot without its latency and jitter when the reading is older than [MaximumLatencyAge]
+     * at [now]. A reading with no timestamp has an unknown age and is kept. The history stays.
+     */
+    fun withoutStaleLatency(now: Instant): ConnectivitySnapshot {
+        val measuredAt = latencyMeasuredAt ?: return this
+        if (latencyMs == null && jitterMs == null) return this
+        val age = Duration.between(measuredAt, now)
+        return if (age > MaximumLatencyAge) copy(latencyMs = null, jitterMs = null, latencyMeasuredAt = null, latencyProbeHost = null) else this
+    }
+
+    companion object {
+        /** A latency reading older than this says nothing about the connection now. */
+        val MaximumLatencyAge: Duration = Duration.ofMinutes(5)
+    }
+}
 
 data class MetricHistoryPoint(
     val recordedAt: Instant,
@@ -52,6 +94,12 @@ data class PowerSnapshot(
     val temperatureCelsius: Double? = null,
     val voltageVolts: Double? = null,
     val batteryPercentHistory: List<MetricHistoryPoint> = emptyList(),
+    /** Android Battery Saver, the equivalent of macOS Low Power Mode. */
+    val powerSaveMode: Boolean = false,
+    /** Estimated minutes until the battery is empty while discharging; null when unknown or charging. */
+    val minutesRemaining: Int? = null,
+    /** Estimated minutes until fully charged while charging; null when unknown or not charging. */
+    val minutesToFull: Int? = null,
 )
 
 data class TravelContextSnapshot(
@@ -102,6 +150,8 @@ data class WeatherHourlyForecastSlot(
     val windSpeedKph: Double?,
     val windDirectionDegrees: Double?,
     val weatherCode: Int? = null,
+    /** WHO UV index as a whole number; null when unavailable or cached before UV was captured. */
+    val uvIndex: Int? = null,
 )
 
 data class MarineForecastSlot(
@@ -137,6 +187,8 @@ data class WeatherSnapshot(
     val summary: String = "Weather unavailable",
     val conditionDescription: String = "Weather unavailable",
     val weatherCode: Int? = null,
+    /** WHO UV index right now as a whole number; null when unavailable or cached before UV was captured. */
+    val uvIndex: Int? = null,
     val hourlyForecast: List<WeatherHourlyForecastSlot> = emptyList(),
     val dailyForecast: List<WeatherDayForecast> = emptyList(),
     val sourceName: String = "Open-Meteo",
@@ -153,6 +205,12 @@ enum class EmergencyCareStatus {
     ERROR,
 }
 
+enum class HospitalOwnership(val displayName: String) {
+    PUBLIC("Public"),
+    PRIVATE("Private"),
+    UNKNOWN("Unknown"),
+}
+
 enum class EmergencyCareLocationSource {
     DEVICE,
     IP_GEOLOCATION,
@@ -166,6 +224,7 @@ data class EmergencyCareFacility(
     val latitude: Double,
     val longitude: Double,
     val primaryType: String? = null,
+    val ownership: HospitalOwnership = HospitalOwnership.UNKNOWN,
 )
 
 data class EmergencyCareSnapshot(
@@ -173,9 +232,10 @@ data class EmergencyCareSnapshot(
     val sourceName: String = "Google Places",
     val countryCode: String? = null,
     val countryName: String? = null,
-    val searchRadiusKilometers: Double = 10.0,
+    val searchRadiusKilometers: Double = 25.0,
     val locationSource: EmergencyCareLocationSource? = null,
-    val facility: EmergencyCareFacility? = null,
+    /** Nearby hospitals, nearest first. */
+    val facilities: List<EmergencyCareFacility> = emptyList(),
     val fetchedAt: Instant? = null,
     val detail: String = "Enable emergency care in Settings",
     val note: String? = null,
@@ -222,6 +282,7 @@ data class DashboardSnapshot(
     val startupLocation: StartupLocationBootstrapState = StartupLocationBootstrapState(),
     val weather: WeatherSnapshot = WeatherSnapshot(),
     val marine: MarineSnapshot? = null,
+    val airQuality: AirQualitySnapshot? = null,
     val travelAlerts: TravelAlertsSnapshot = TravelAlertsSnapshot(),
     val localInfo: LocalInfoSnapshot = LocalInfoSnapshot(),
     val fuelPrices: FuelPriceSnapshot = FuelPriceSnapshot(),

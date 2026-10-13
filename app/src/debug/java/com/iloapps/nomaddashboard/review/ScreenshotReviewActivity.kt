@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.iloapps.nomaddashboard.core.designsystem.theme.NomadTheme
 import com.iloapps.nomaddashboard.feature.about.AboutScreen
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardScreen
+import com.iloapps.nomaddashboard.feature.settings.SettingsActions
 import com.iloapps.nomaddashboard.feature.settings.SettingsScreen
 import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingScreen
 import com.iloapps.nomaddashboard.feature.visited.VisitedScreen
@@ -51,9 +52,8 @@ class ScreenshotReviewActivity : ComponentActivity() {
 
                         ScreenshotReviewScreen.Settings -> SettingsScreen(
                             uiState = ScreenshotReviewFixtures.settingsState(),
-                            onUpdate = { _ -> },
-                            onUpdateProviderCredentials = { _ -> },
-                            onFillSurfSpotFromCurrentLocation = {},
+                            actions = SettingsActions(),
+                            isWideLayout = false,
                             modifier = screenModifier,
                         )
 

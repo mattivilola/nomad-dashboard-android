@@ -1,7 +1,9 @@
 package com.iloapps.nomaddashboard.review
 
 import com.iloapps.nomaddashboard.core.model.AppSettings
+import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot
+import com.iloapps.nomaddashboard.core.model.InternetState
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareFacility
 import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
@@ -43,17 +45,26 @@ import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
 import com.iloapps.nomaddashboard.core.model.VisitedCountryDay
 import com.iloapps.nomaddashboard.core.model.VisitedPlace
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceEvent
+import com.iloapps.nomaddashboard.core.model.SettingsPage
 import com.iloapps.nomaddashboard.core.model.VisitedPlaceSource
 import com.iloapps.nomaddashboard.core.model.WeatherDayForecast
 import com.iloapps.nomaddashboard.core.model.WeatherHourlyForecastSlot
 import com.iloapps.nomaddashboard.core.model.WeatherSnapshot
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardUiState
 import com.iloapps.nomaddashboard.feature.dashboard.DashboardTimeTrackingUiState
+import com.iloapps.nomaddashboard.feature.settings.SettingsNavigationState
 import com.iloapps.nomaddashboard.feature.settings.SettingsUiState
 import com.iloapps.nomaddashboard.feature.timetracking.TimeTrackingUiState
 import com.iloapps.nomaddashboard.feature.visited.VisitedUiState
+import com.iloapps.nomaddashboard.core.travel.glance.GlanceOverviewBuilder
+import com.iloapps.nomaddashboard.core.travel.headsup.HeadsUpItem
+import com.iloapps.nomaddashboard.core.travel.headsup.HeadsUpKind
+import com.iloapps.nomaddashboard.core.travel.headsup.HeadsUpSeverity
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
 import java.util.UUID
 
 object ScreenshotReviewFixtures {
@@ -80,7 +91,39 @@ object ScreenshotReviewFixtures {
         name = "Nomad R&D",
     )
 
-    fun dashboardState(): DashboardUiState =
+    /** The dashboard with its glance overview: two heads-up items and the home clock in Helsinki. */
+    fun dashboardState(): DashboardUiState {
+        val base = baseDashboardState()
+        val headsUp = listOf(
+            HeadsUpItem(
+                kind = HeadsUpKind.STRONG_WIND,
+                severity = HeadsUpSeverity.CAUTION,
+                title = "Wind up to 45 km/h",
+                statusText = "Wind 45",
+                detail = "From W around 16:00",
+                relatedCard = DashboardCardId.WEATHER,
+            ),
+            HeadsUpItem(
+                kind = HeadsUpKind.PUBLIC_HOLIDAY,
+                severity = HeadsUpSeverity.INFO,
+                title = "Public holiday tomorrow",
+                statusText = "Holiday",
+                detail = "Semana Santa · shops may close",
+                relatedCard = DashboardCardId.LOCAL_INFO,
+            ),
+        )
+        val glance = GlanceOverviewBuilder(Locale.UK).build(
+            snapshot = base.snapshot,
+            settings = base.settings,
+            headsUp = headsUp,
+            homeTimeZoneId = "Europe/Helsinki",
+            now = fixtureNow,
+            zone = ZoneId.of("Europe/Madrid"),
+        )
+        return base.copy(glance = glance)
+    }
+
+    private fun baseDashboardState(): DashboardUiState =
         DashboardUiState(
             settings = fixtureSettings,
             snapshot = DashboardSnapshot(
@@ -104,7 +147,7 @@ object ScreenshotReviewFixtures {
                     level = SignalLevel.NEUTRAL,
                 ),
                 connectivity = ConnectivitySnapshot(
-                    internetState = "Online",
+                    internetState = InternetState.ONLINE,
                     isOnline = true,
                     latencyMs = 42.0,
                     jitterMs = 8.0,
@@ -363,14 +406,16 @@ object ScreenshotReviewFixtures {
                     countryCode = "ES",
                     countryName = "Spain",
                     locationSource = EmergencyCareLocationSource.DEVICE,
-                    facility = EmergencyCareFacility(
-                        placeId = "fixture-hospital",
-                        name = "Hospital Punta Europa",
-                        address = "Carretera Getares, Algeciras",
-                        distanceKilometers = 18.6,
-                        latitude = 36.1184,
-                        longitude = -5.4534,
-                        primaryType = "hospital",
+                    facilities = listOf(
+                        EmergencyCareFacility(
+                            placeId = "fixture-hospital",
+                            name = "Hospital Punta Europa",
+                            address = "Carretera Getares, Algeciras",
+                            distanceKilometers = 18.6,
+                            latitude = 36.1184,
+                            longitude = -5.4534,
+                            primaryType = "hospital",
+                        ),
                     ),
                     fetchedAt = fixtureNow,
                     detail = "Nearest hospital found within 10 km.",
@@ -402,7 +447,9 @@ object ScreenshotReviewFixtures {
                     entry = TimeTrackingEntry(
                         id = UUID.fromString("88888888-8888-8888-8888-888888888888"),
                         projectId = TimeTrackingOtherProjectId,
-                        startAt = Instant.parse("2026-04-07T08:00:00Z"),
+                        // Relative to now, as the dashboard counts the running segment up to now: the 45 min
+                        // above plus this one read "Pending 6h 58m" in screenshots.
+                        startAt = Instant.now().minus(Duration.ofMinutes(6 * 60 + 13)).minusSeconds(20),
                         endAt = null,
                     ),
                     project = TimeTrackingProject(
@@ -422,6 +469,7 @@ object ScreenshotReviewFixtures {
                 tankerkoenigApiKey = "tankerkoenig-demo-key-1234",
                 reliefWebAppName = "nomad-dashboard-android",
             ),
+            navigation = SettingsNavigationState(selectedPage = SettingsPage.GENERAL),
         )
 
     fun visitedState(): VisitedUiState =

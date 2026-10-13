@@ -3,6 +3,7 @@ package com.iloapps.nomaddashboard.core.data.repository
 import android.util.Log
 import com.iloapps.nomaddashboard.core.common.IoDispatcher
 import com.iloapps.nomaddashboard.core.common.runCatchingCancellable
+import com.iloapps.nomaddashboard.core.data.airquality.AirQualityProvider
 import com.iloapps.nomaddashboard.core.model.DashboardCardId
 import com.iloapps.nomaddashboard.core.model.SectionRefreshState
 import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.selects.select
 import java.util.concurrent.atomic.AtomicLong
+import java.time.Clock
 import java.time.Duration
 import com.iloapps.nomaddashboard.core.common.ApplicationScope
 import com.iloapps.nomaddashboard.core.data.credentials.ProviderCredentialStore
@@ -45,6 +47,7 @@ import com.iloapps.nomaddashboard.core.database.dao.DashboardSectionCacheDao
 import com.iloapps.nomaddashboard.core.database.dao.MetricPointDao
 import com.iloapps.nomaddashboard.core.database.entity.MetricPointEntity
 import com.iloapps.nomaddashboard.core.datastore.NomadSettingsDataSource
+import com.iloapps.nomaddashboard.core.model.AirQualitySnapshot
 import com.iloapps.nomaddashboard.core.model.AppSettings
 import com.iloapps.nomaddashboard.core.model.DashboardSnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
@@ -91,6 +94,8 @@ import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineHourly
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoMarineResponse
 import com.iloapps.nomaddashboard.core.network.model.OpenMeteoResponse
 import com.iloapps.nomaddashboard.core.data.monitor.TrafficSample
+import com.iloapps.nomaddashboard.core.data.monitor.latencyJitter
+import com.iloapps.nomaddashboard.core.travel.environment.AirQualityGridPoint
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -114,6 +119,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -125,6 +132,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val ipifyService: IpifyService,
     private val openMeteoService: OpenMeteoService,
     private val openMeteoMarineService: OpenMeteoMarineService,
+    private val airQualityProvider: AirQualityProvider,
     private val localPriceLevelProvider: LocalPriceLevelProvider,
     private val localInfoProvider: LocalInfoProvider,
     private val fuelPriceProvider: FuelPriceProvider,
@@ -143,6 +151,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private val applicationScope: CoroutineScope,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val resourcePolicyProvider: ResourcePolicyProvider = DefaultResourcePolicyProvider,
+    private val clock: Clock = Clock.systemUTC(),
 ) : NomadDashboardRepository {
     override val settings: Flow<AppSettings> = settingsDataSource.settings
     override val providerCredentials: Flow<ProviderCredentialSettings> = providerCredentialStore.credentials
@@ -158,10 +167,13 @@ class DefaultNomadDashboardRepository @Inject constructor(
     private var activeRefresh: CompletableDeferred<Unit>? = null
     private var activeRefreshCard: DashboardCardId? = null
     private val contextGeneration = AtomicLong()
+    private val latencyProbeMutex = Mutex()
+    private var lastLatencyAttemptAt: Instant? = null
 
     override suspend fun warmStart() = withContext(ioDispatcher) {
         migrateLegacyProviderCredentials()
         val cacheEntries = dashboardSectionCacheDao.all()
+        val airQualityActive = settings.first().isAirQualityActive
         val cachedSections = loadCachedDashboardSections(
             entries = cacheEntries,
             json = json,
@@ -176,6 +188,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 localInfo = cachedSections.localInfo ?: current.localInfo,
                 fuelPrices = cachedSections.fuelPrices ?: current.fuelPrices,
                 emergencyCare = cachedSections.emergencyCare ?: current.emergencyCare,
+                airQuality = cachedSections.airQuality.takeIf { airQualityActive } ?: current.airQuality,
             )
         }
     }
@@ -185,13 +198,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
         previousTrafficSample = traffic
         val power = telemetryReader.power()
         internalSnapshot.update { current -> current.copy(
-            localSignalsAt = Instant.now(),
-            connectivity = passive.copy(
-                latencyMs = current.connectivity.latencyMs,
-                latencyHistoryMs = current.connectivity.latencyHistoryMs,
-                downloadHistoryMbps = current.connectivity.downloadHistoryMbps,
-                uploadHistoryMbps = current.connectivity.uploadHistoryMbps,
-            ),
+            localSignalsAt = clock.instant(),
+            connectivity = passive.carryingReadingsFrom(current.connectivity, clock.instant()),
             power = power.copy(batteryPercentHistory = current.power.batteryPercentHistory),
         ) }
     }
@@ -258,16 +266,33 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val (passiveConnectivity, traffic) = telemetryReader.passiveConnectivity(priorTraffic)
         previousTrafficSample = traffic
         val power = telemetryReader.power()
-        internalSnapshot.update { it.copy(connectivity = passiveConnectivity, power = power, lastRefresh = Instant.now(), localSignalsAt = Instant.now()) }
+        internalSnapshot.update {
+            it.copy(
+                connectivity = passiveConnectivity.carryingReadingsFrom(it.connectivity, clock.instant()),
+                power = power,
+                lastRefresh = clock.instant(),
+                localSignalsAt = clock.instant(),
+            )
+        }
         publishLocalSummaries(currentSettings)
         val historyJob = launch {
             val enrichedPower = enrichPowerWithHistory(power, traffic.capturedAtMillis)
             internalSnapshot.update { it.copy(power = enrichedPower) }
-            val connectivity = if (passiveConnectivity.isOnline && !policy.lowImpact) {
-                telemetryReader.connectivity(priorTraffic).first
-            } else passiveConnectivity
-            val enriched = enrichConnectivityWithHistory(connectivity, traffic.capturedAtMillis)
+            // The passive read above already carried forward any still-valid latency.
+            val base = internalSnapshot.value.connectivity
+            var isNewLatencyReading = false
+            val measured = if (passiveConnectivity.isOnline && !policy.lowImpact) {
+                lastLatencyAttemptAt = clock.instant()
+                val fresh = telemetryReader.connectivity(priorTraffic).first.let {
+                    if (it.latencyMs != null && it.latencyMeasuredAt == null) it.copy(latencyMeasuredAt = clock.instant()) else it
+                }
+                isNewLatencyReading = fresh.latencyMs != null
+                fresh.carryingReadingsFrom(base, clock.instant())
+            } else base
+            val enriched = enrichConnectivityWithHistory(measured, traffic.capturedAtMillis, isNewLatencyReading)
             internalSnapshot.update { it.copy(connectivity = enriched) }
+            // Low Data skips the full read but still takes a latency reading, at most once a minute.
+            if (policy.lowImpact && passiveConnectivity.isOnline) probeLatencyWhenOnline(LatencyProbeInterval)
             publishLocalSummaries(currentSettings)
         }
 
@@ -280,7 +305,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             freshIpObservation = fetched != null
             val result = fetched ?: if (currentSettings.publicIpGeolocationEnabled) previousTravelContext else TravelContextSnapshot()
             val previousState = internalSnapshot.value.sectionStates[DashboardCardId.TRAVEL_CONTEXT] ?: SectionRefreshState()
-            val ipState = if (fetched != null) SectionRefreshState(Instant.now(), fetched.publicIp.orEmpty(),
+            val ipState = if (fetched != null) SectionRefreshState(clock.instant(), fetched.publicIp.orEmpty(),
                 listOfNotNull(fetched.city, fetched.country).joinToString(", ")) else previousState.copy(
                     isRefreshing = false, message = if (currentSettings.publicIpGeolocationEnabled) "Public IP location is saved or unavailable" else "Public IP lookup disabled")
             internalSnapshot.update { it.copy(sectionStates = it.sectionStates + (DashboardCardId.TRAVEL_CONTEXT to ipState)) }
@@ -301,8 +326,8 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 val old = internalSnapshot.value.marine
                 val spot = currentSettings.surfSpot
                 if (requestedCard != null || old?.spotName != spot.name || old?.fetchedAt == null ||
-                    Duration.between(old.fetchedAt, Instant.now()).toMinutes() >= 30) {
-                    val fresh = withTimeoutOrNull(12_000) { refreshMarineSnapshot(spot, Instant.now()) }
+                    Duration.between(old.fetchedAt, clock.instant()).toMinutes() >= 30) {
+                    val fresh = withTimeoutOrNull(12_000) { refreshMarineSnapshot(spot, clock.instant()) }
                     internalSnapshot.update { it.copy(marine = fresh ?: old) }
                 }
             }
@@ -312,7 +337,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             internalSnapshot.update { it.copy(travelContext = location.travelContext, startupLocation = location.startupLocation) }
             var sections = async {
                 refreshLocationDependentSections(currentSettings, credentials, internalSnapshot.value, location,
-                    Instant.now(), false, requestedCard, policy, generation, passiveConnectivity.isOnline)
+                    clock.instant(), false, requestedCard, policy, generation, passiveConnectivity.isOnline)
             }
             if (location.awaitingDevicePromotion) {
                 val promoted = awaitPromotedDeviceLocation(location, device)
@@ -325,7 +350,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
                     val promotedGeneration = generation
                     sections = async {
                         refreshLocationDependentSections(currentSettings, credentials, internalSnapshot.value, promoted,
-                            Instant.now(), false, requestedCard, policy, promotedGeneration, passiveConnectivity.isOnline)
+                            clock.instant(), false, requestedCard, policy, promotedGeneration, passiveConnectivity.isOnline)
                     }
                 }
             }
@@ -351,9 +376,9 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val pending = timeTrackingRepository.pendingEntries.first()
         val report = timeTrackingRepository.report.first()
         internalSnapshot.update { current ->
-            val summary = buildDashboardSnapshot(current.lastRefresh ?: Instant.now(), current.isRefreshing,
+            val summary = buildDashboardSnapshot(current.lastRefresh ?: clock.instant(), current.isRefreshing,
                 current.connectivity, current.power, current.travelContext, current.startupLocation, current.weather,
-                current.marine, current.travelAlerts, current.localInfo, current.fuelPrices, current.emergencyCare,
+                current.marine, current.airQuality, current.travelAlerts, current.localInfo, current.fuelPrices, current.emergencyCare,
                 currentSettings, active, pending.size, report, places.visitedPlaceSummary(), days.size)
             summary.copy(localSignalsAt = current.localSignalsAt, sectionStates = current.sectionStates, lowImpactMode = current.lowImpactMode,
                 resourcePolicyLabel = current.resourcePolicyLabel)
@@ -521,7 +546,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             return
         }
 
-        val observedAt = Instant.now()
+        val observedAt = clock.instant()
         if (currentSettings.useCurrentLocationForVisitedPlaces) {
             locationContext.currentDevicePlace?.let { place ->
                 runCatchingCancellable {
@@ -566,7 +591,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val pointKey = "$country:${latitude?.let { kotlin.math.round(it * 100) / 100 }}:${longitude?.let { kotlin.math.round(it * 100) / 100 }}"
         val label = travelContextPrimaryLocation(context) ?: "Saved location"
         if (context.containsIpContext() || context.deviceLatitude != null) {
-            dashboardSectionCacheDao.upsert(context.toCacheEntity(json, Instant.now()))
+            dashboardSectionCacheDao.upsert(context.toCacheEntity(json, clock.instant()))
         }
         val weatherDeferred = async {
             refreshSection(
@@ -577,6 +602,13 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 cache = { it.toCacheEntity(json) },
                 publish = { result -> internalSnapshot.update { it.copy(weather = result.copy(isRefreshing = false)) } },
             ) { refreshWeatherSnapshot(currentSettings, previousSnapshot.weather, locationContext.deviceLocation, context, refreshedAt, false) }
+        }
+        val airQualityDeferred = async {
+            refreshAirQuality(
+                currentSettings = currentSettings, previous = previousSnapshot.airQuality,
+                deviceLocation = locationContext.deviceLocation, requestedCard = requestedCard,
+                permits = permits, online = online, generation = generation,
+            )
         }
         val travelAlertsDeferred = async {
             refreshSection(
@@ -618,8 +650,57 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 publish = { result -> internalSnapshot.update { it.copy(emergencyCare = result.copy(isRefreshing = false)) } },
             ) { refreshEmergencyCareSnapshot(currentSettings, locationContext.deviceLocation, context, previousSnapshot.emergencyCare, false) }
         }
-        LocationDependentSections(weatherDeferred.await(), travelAlertsDeferred.await(), localInfoDeferred.await(),
-            fuelDeferred.await(), emergencyDeferred.await())
+        LocationDependentSections(weatherDeferred.await(), airQualityDeferred.await(), travelAlertsDeferred.await(),
+            localInfoDeferred.await(), fuelDeferred.await(), emergencyDeferred.await())
+    }
+
+    /**
+     * Air quality follows the weather location consent: it only runs while device-location weather is
+     * on and a device fix exists (never from the public IP location), is refreshed with weather, and
+     * keeps the last value for the same ~11 km grid point when a refresh fails.
+     */
+    private suspend fun refreshAirQuality(
+        currentSettings: AppSettings,
+        previous: AirQualitySnapshot?,
+        deviceLocation: DeviceLocationSnapshot,
+        requestedCard: DashboardCardId?,
+        permits: Semaphore,
+        online: Boolean,
+        generation: Long,
+    ): AirQualitySnapshot? {
+        if (!currentSettings.isAirQualityActive) {
+            publishAirQuality(null, generation)
+            return null
+        }
+        if (requestedCard != null && requestedCard != DashboardCardId.WEATHER) return previous
+        val latitude = deviceLocation.latitude
+        val longitude = deviceLocation.longitude
+        val grid = if (latitude != null && longitude != null) AirQualityGridPoint.privacyRounded(latitude, longitude) else null
+        if (grid == null || latitude == null || longitude == null) return previous
+        // A snapshot for another grid point must never be shown for this location.
+        val sameLocation = previous?.takeIf { it.latitude == grid.latitude && it.longitude == grid.longitude }
+        if (sameLocation == null && previous != null) publishAirQuality(null, generation)
+        val isFresh = sameLocation != null && requestedCard == null &&
+            Duration.between(sameLocation.fetchedAt, clock.instant()).let { !it.isNegative && it < AirQualityRefreshInterval }
+        if (isFresh || !online) return sameLocation
+
+        val fresh = runCatchingCancellable {
+            withTimeoutOrNull(15_000) {
+                permits.withPermit { retryTransient { airQualityProvider.airQuality(latitude, longitude) } }
+            }
+        }.onFailure { logWarn("Air quality refresh failed", it) }.getOrNull()
+        val result = fresh ?: sameLocation
+        publishAirQuality(result, generation)
+        if (fresh != null) {
+            runCatchingCancellable { fresh.toCacheEntity(json)?.let { dashboardSectionCacheDao.upsert(it) } }
+                .onFailure { logWarn("Air quality cache write failed", it) }
+        }
+        return result
+    }
+
+    private fun publishAirQuality(airQuality: AirQualitySnapshot?, generation: Long) {
+        if (contextGeneration.get() != generation) return
+        internalSnapshot.update { it.copy(airQuality = airQuality) }
     }
 
     private suspend fun <T> refreshSection(
@@ -644,7 +725,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val state = internalSnapshot.value.sectionStates[card] ?: SectionRefreshState(lastSuccessAt = previousAt)
         val force = requestedCard == card
         val stillFresh = state.locationKey == locationKey && state.lastSuccessAt?.let {
-            Duration.between(it, Instant.now()).let { age -> !age.isNegative && age.toMinutes() < ttlMinutes }
+            Duration.between(it, clock.instant()).let { age -> !age.isNegative && age.toMinutes() < ttlMinutes }
         } == true
         if (!enabled || (!force && stillFresh)) return previous
         if (!online || (deferForLowData && !force)) {
@@ -656,7 +737,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         internalSnapshot.update { it.copy(sectionStates = it.sectionStates + (card to state.copy(isRefreshing = true, message = null))) }
         try {
             val outcome = runCatchingCancellable {
-                withTimeoutOrNull(if (card == DashboardCardId.TRAVEL_ALERTS) 25_000 else 15_000) {
+                withTimeoutOrNull(if (card == DashboardCardId.TRAVEL_ALERTS || card == DashboardCardId.EMERGENCY_CARE) 25_000 else 15_000) {
                     permits.withPermit { block() }
                 }
             }
@@ -733,11 +814,11 @@ class DefaultNomadDashboardRepository @Inject constructor(
                 summary = weatherSummary(response.daily),
                 conditionDescription = weatherCodeSummary(response.current?.weatherCode),
                 weatherCode = response.current?.weatherCode,
+                uvIndex = response.current?.uvIndex?.toWholeUvIndex(),
                 hourlyForecast = response.hourly.toHourlyForecast(
                     timezone = response.timezone,
                     utcOffsetSeconds = response.utcOffsetSeconds,
                     referenceTime = refreshedAt,
-                    offsetsHours = listOf(3, 6, 12),
                 ),
                 dailyForecast = response.daily?.toForecast() ?: emptyList(),
                 fetchedAt = refreshedAt,
@@ -906,6 +987,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         startupLocation: StartupLocationBootstrapState,
         weather: WeatherSnapshot,
         marine: MarineSnapshot?,
+        airQuality: AirQualitySnapshot?,
         travelAlerts: TravelAlertsSnapshot,
         localInfo: LocalInfoSnapshot,
         fuelPrices: FuelPriceSnapshot,
@@ -934,7 +1016,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             ),
             networkSummary = SummaryTile(
                 title = "Network",
-                headline = connectivity.internetState,
+                headline = connectivity.internetState.label,
                 detail = connectivity.wifiName ?: "Collecting network quality",
                 level = if (connectivity.isOnline) SignalLevel.GOOD else SignalLevel.BAD,
             ),
@@ -956,6 +1038,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
             startupLocation = startupLocation,
             weather = weather,
             marine = marine,
+            airQuality = airQuality,
             travelAlerts = travelAlerts,
             localInfo = localInfo,
             fuelPrices = fuelPrices,
@@ -997,8 +1080,18 @@ class DefaultNomadDashboardRepository @Inject constructor(
         val current = settings.first()
         val updated = transform(current)
         settingsDataSource.update { updated }
+        if (current.isAirQualityActive && !updated.isAirQualityActive) {
+            internalSnapshot.update { it.copy(airQuality = null) }
+            runCatchingCancellable { dashboardSectionCacheDao.delete(DashboardSectionId.AIR_QUALITY) }
+                .onFailure { logWarn("Air quality cache removal failed", it) }
+        }
         if (current.projectTimeTrackingEnabled && updated.projectTimeTrackingEnabled.not()) {
             timeTrackingRepository.stopTracking()
+        }
+        if (!current.isAirQualityActive && updated.isAirQualityActive) {
+            // Air quality follows the weather refresh, so turning it on (or turning device-location
+            // weather on while it is enabled) fetches it right away instead of at the next refresh.
+            refreshCard(DashboardCardId.WEATHER)
         }
     }
 
@@ -1061,22 +1154,74 @@ class DefaultNomadDashboardRepository @Inject constructor(
         )
     }
 
+    /**
+     * Records the throughput and any newly measured latency, then reloads the histories. Jitter is
+     * derived from the recent latency readings; a carried-over reading is not recorded again.
+     */
     private suspend fun enrichConnectivityWithHistory(
         connectivity: com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot,
         recordedAtMillis: Long,
+        isNewLatencyReading: Boolean,
     ): com.iloapps.nomaddashboard.core.model.ConnectivitySnapshot {
+        val latencyMillis = connectivity.latencyMeasuredAt?.toEpochMilli() ?: recordedAtMillis
         val points = listOfNotNull(
             connectivity.downloadMbps?.let { MetricPointEntity(kind = ConnectivityDownloadMetricKind, timestampEpochMillis = recordedAtMillis, value = it) },
             connectivity.uploadMbps?.let { MetricPointEntity(kind = ConnectivityUploadMetricKind, timestampEpochMillis = recordedAtMillis, value = it) },
-            connectivity.latencyMs?.let { MetricPointEntity(kind = ConnectivityLatencyMetricKind, timestampEpochMillis = recordedAtMillis, value = it) },
+            connectivity.latencyMs?.takeIf { isNewLatencyReading }
+                ?.let { MetricPointEntity(kind = ConnectivityLatencyMetricKind, timestampEpochMillis = latencyMillis, value = it) },
         )
         metricPointDao.recordBatch(points, ConnectivityHistoryRetentionCount)
 
+        val latencyHistory = recentMetricHistory(ConnectivityLatencyMetricKind)
         return connectivity.copy(
-            latencyHistoryMs = recentMetricHistory(ConnectivityLatencyMetricKind),
+            latencyHistoryMs = latencyHistory,
             downloadHistoryMbps = recentMetricHistory(ConnectivityDownloadMetricKind),
             uploadHistoryMbps = recentMetricHistory(ConnectivityUploadMetricKind),
+            jitterMs = if (connectivity.latencyMs == null) {
+                null
+            } else {
+                connectivity.latencyMeasuredAt?.let { latencyJitter(latencyHistory, it) } ?: connectivity.jitterMs
+            },
         )
+    }
+
+    override suspend fun probeLatencyIfStale(maximumAge: Duration) = withContext(ioDispatcher) {
+        // Never probe offline (or behind a captive portal): the socket probe would only time out.
+        if (!telemetryReader.passiveConnectivity(null).first.isOnline) return@withContext
+        probeLatencyWhenOnline(maximumAge)
+    }
+
+    /**
+     * Takes one latency reading unless a younger one exists or a probe was attempted within
+     * [maximumAge], and updates only latency, jitter and the latency history.
+     */
+    private suspend fun probeLatencyWhenOnline(maximumAge: Duration) {
+        latencyProbeMutex.withLock {
+            val now = clock.instant()
+            val current = internalSnapshot.value.connectivity
+            val readingIsFresh = current.latencyMs != null &&
+                current.latencyMeasuredAt?.let { Duration.between(it, now) < maximumAge } == true
+            val attemptIsRecent = lastLatencyAttemptAt?.let { Duration.between(it, now) < maximumAge } == true
+            if (readingIsFresh || attemptIsRecent) return
+            lastLatencyAttemptAt = now
+
+            val probe = telemetryReader.latencyProbe() ?: return
+            val latency = probe.latencyMs
+            val measuredAt = clock.instant()
+            recordMetric(ConnectivityLatencyMetricKind, measuredAt.toEpochMilli(), latency)
+            val history = recentMetricHistory(ConnectivityLatencyMetricKind)
+            internalSnapshot.update {
+                it.copy(
+                    connectivity = it.connectivity.copy(
+                        latencyMs = latency,
+                        jitterMs = latencyJitter(history, measuredAt),
+                        latencyMeasuredAt = measuredAt,
+                        latencyProbeHost = probe.host,
+                        latencyHistoryMs = history,
+                    ),
+                )
+            }
+        }
     }
 
     private suspend fun enrichPowerWithHistory(
@@ -1153,7 +1298,7 @@ class DefaultNomadDashboardRepository @Inject constructor(
         providerCredentials: ProviderCredentialSettings,
         allowBrowserFallback: Boolean = true,
     ): TravelAlertsSnapshot = supervisorScope {
-        val attemptedAt = Instant.now()
+        val attemptedAt = clock.instant()
         travelAlertLogDebug(
             TravelAlertsLogTag,
             "refreshTravelAlerts primary=${primaryCountryCode ?: "none"} country=${primaryCountryName ?: "none"} coverage=${coverageCountryCodes.joinToString(",")}",
@@ -1702,7 +1847,6 @@ class DefaultNomadDashboardRepository @Inject constructor(
         timezone: String?,
         utcOffsetSeconds: Int?,
         referenceTime: Instant,
-        offsetsHours: List<Int>,
     ): List<WeatherHourlyForecastSlot> {
         if (this == null) {
             return emptyList()
@@ -1714,20 +1858,26 @@ class DefaultNomadDashboardRepository @Inject constructor(
             utcOffsetSeconds = utcOffsetSeconds,
         )
 
-        return offsetsHours.mapNotNull { hourOffset ->
-            val targetTime = referenceTime.plusSeconds(hourOffset * 3_600L)
-            val index = nearestIndex(times, targetTime) ?: return@mapNotNull null
+        // Every hour from the current one through the next 24 h: enough for the rest of today's
+        // daylight and the 6 h / 12 h look-aheads of the heads-up engine.
+        val windowStart = referenceTime.truncatedTo(ChronoUnit.HOURS)
+        val windowEnd = referenceTime.plus(HourlyForecastWindow)
+        return times.mapIndexedNotNull { index, time ->
+            if (time.isBefore(windowStart) || time.isAfter(windowEnd)) return@mapIndexedNotNull null
             WeatherHourlyForecastSlot(
-                at = times[index],
+                at = time,
                 summary = weatherCodeSummary(weatherCodes.getOrNull(index)),
                 temperatureCelsius = temperatures.getOrNull(index),
                 rainChancePercent = rainChance.getOrNull(index),
                 windSpeedKph = windSpeedsKph.getOrNull(index),
                 windDirectionDegrees = windDirectionDegrees.getOrNull(index),
                 weatherCode = weatherCodes.getOrNull(index),
+                uvIndex = uvIndexes.getOrNull(index)?.toWholeUvIndex(),
             )
         }
     }
+
+    private fun Double.toWholeUvIndex(): Int? = takeIf { it.isFinite() && it >= 0 }?.roundToInt()
 
     private fun OpenMeteoMarineResponse.toMarineSnapshot(
         surfSpot: SurfSpotConfiguration,
@@ -1904,6 +2054,9 @@ private const val PowerBatteryPercentMetricKind = "power_battery_percent"
 private const val StartupLocationBootstrapWaitMillis = 4_000L
 private const val DevicePreferredGraceMillis = 1_500L
 private const val IpLookupGraceMillis = 1_500L
+private val LatencyProbeInterval: Duration = Duration.ofSeconds(60)
+private val AirQualityRefreshInterval: Duration = Duration.ofMinutes(30)
+private val HourlyForecastWindow: Duration = Duration.ofHours(24)
 
 private data class ResolvedLocationContext(
     val deviceLocation: DeviceLocationSnapshot,
@@ -1915,6 +2068,7 @@ private data class ResolvedLocationContext(
 
 private data class LocationDependentSections(
     val weather: WeatherSnapshot,
+    val airQuality: AirQualitySnapshot?,
     val travelAlerts: TravelAlertsSnapshot,
     val localInfo: LocalInfoSnapshot,
     val fuelPrices: FuelPriceSnapshot,

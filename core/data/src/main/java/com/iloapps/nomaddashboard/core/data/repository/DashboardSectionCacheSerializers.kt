@@ -1,6 +1,9 @@
 package com.iloapps.nomaddashboard.core.data.repository
 
 import com.iloapps.nomaddashboard.core.database.entity.DashboardSectionCacheEntity
+import com.iloapps.nomaddashboard.core.model.AirQualityForecastSlot
+import com.iloapps.nomaddashboard.core.model.AirQualityPollutant
+import com.iloapps.nomaddashboard.core.model.AirQualitySnapshot
 import com.iloapps.nomaddashboard.core.model.EmergencyCareFacility
 import com.iloapps.nomaddashboard.core.model.EmergencyCareLocationSource
 import com.iloapps.nomaddashboard.core.model.EmergencyCareSnapshot
@@ -10,6 +13,7 @@ import com.iloapps.nomaddashboard.core.model.FuelPriceStatus
 import com.iloapps.nomaddashboard.core.model.FuelStationPrice
 import com.iloapps.nomaddashboard.core.model.FuelType
 import com.iloapps.nomaddashboard.core.model.HolidayPeriod
+import com.iloapps.nomaddashboard.core.model.HospitalOwnership
 import com.iloapps.nomaddashboard.core.model.HolidaySourceAttribution
 import com.iloapps.nomaddashboard.core.model.LocalHolidayPhase
 import com.iloapps.nomaddashboard.core.model.LocalHolidayStatus
@@ -46,6 +50,7 @@ internal data class CachedDashboardSections(
     val localInfo: LocalInfoSnapshot? = null,
     val fuelPrices: FuelPriceSnapshot? = null,
     val emergencyCare: EmergencyCareSnapshot? = null,
+    val airQuality: AirQualitySnapshot? = null,
     val lastRefresh: Instant? = null,
 )
 
@@ -59,6 +64,7 @@ internal fun loadCachedDashboardSections(
     var localInfo: LocalInfoSnapshot? = null
     var fuelPrices: FuelPriceSnapshot? = null
     var emergencyCare: EmergencyCareSnapshot? = null
+    var airQuality: AirQualitySnapshot? = null
     var lastRefresh: Instant? = null
 
     entries.forEach { entry ->
@@ -79,6 +85,8 @@ internal fun loadCachedDashboardSections(
                 json.decodeOrNull<FuelPriceCacheDto>(entry.payloadJson)?.toModel()?.let { fuelPrices = it }
             DashboardSectionId.EMERGENCY_CARE ->
                 json.decodeOrNull<EmergencyCareCacheDto>(entry.payloadJson)?.toModel()?.let { emergencyCare = it }
+            DashboardSectionId.AIR_QUALITY ->
+                json.decodeOrNull<AirQualityCacheDto>(entry.payloadJson)?.toModel()?.let { airQuality = it }
         }
     }
 
@@ -89,6 +97,7 @@ internal fun loadCachedDashboardSections(
         localInfo = localInfo,
         fuelPrices = fuelPrices,
         emergencyCare = emergencyCare,
+        airQuality = airQuality,
         lastRefresh = lastRefresh,
     )
 }
@@ -147,6 +156,13 @@ internal fun EmergencyCareSnapshot.toCacheEntity(json: Json): DashboardSectionCa
     )
 }
 
+internal fun AirQualitySnapshot.toCacheEntity(json: Json): DashboardSectionCacheEntity =
+    DashboardSectionCacheEntity(
+        sectionId = DashboardSectionId.AIR_QUALITY,
+        payloadJson = json.encodeToString(AirQualityCacheDto.fromModel(this)),
+        fetchedAtEpochMillis = fetchedAt.toEpochMilli(),
+    )
+
 internal object DashboardSectionId {
     const val TRAVEL_CONTEXT = "travel_context"
     const val WEATHER = "weather"
@@ -154,6 +170,7 @@ internal object DashboardSectionId {
     const val LOCAL_INFO = "local_info"
     const val FUEL_PRICES = "fuel_prices"
     const val EMERGENCY_CARE = "emergency_care"
+    const val AIR_QUALITY = "air_quality"
 }
 
 @Serializable
@@ -220,6 +237,8 @@ private data class WeatherCacheDto(
     val summary: String,
     val conditionDescription: String,
     val weatherCode: Int? = null,
+    // Optional so caches written before UV was captured still decode.
+    val uvIndex: Int? = null,
     val hourlyForecast: List<WeatherHourlyForecastSlotDto> = emptyList(),
     val dailyForecast: List<WeatherDayForecastDto> = emptyList(),
     val sourceName: String,
@@ -234,6 +253,7 @@ private data class WeatherCacheDto(
         summary = summary,
         conditionDescription = conditionDescription,
         weatherCode = weatherCode,
+        uvIndex = uvIndex,
         hourlyForecast = hourlyForecast.map(WeatherHourlyForecastSlotDto::toModel),
         dailyForecast = dailyForecast.map(WeatherDayForecastDto::toModel),
         sourceName = sourceName,
@@ -250,6 +270,7 @@ private data class WeatherCacheDto(
             summary = model.summary,
             conditionDescription = model.conditionDescription,
             weatherCode = model.weatherCode,
+            uvIndex = model.uvIndex,
             hourlyForecast = model.hourlyForecast.map(WeatherHourlyForecastSlotDto::fromModel),
             dailyForecast = model.dailyForecast.map(WeatherDayForecastDto::fromModel),
             sourceName = model.sourceName,
@@ -267,6 +288,7 @@ private data class WeatherHourlyForecastSlotDto(
     val windSpeedKph: Double? = null,
     val windDirectionDegrees: Double? = null,
     val weatherCode: Int? = null,
+    val uvIndex: Int? = null,
 ) {
     fun toModel(): WeatherHourlyForecastSlot = WeatherHourlyForecastSlot(
         at = Instant.ofEpochMilli(atEpochMillis),
@@ -276,6 +298,7 @@ private data class WeatherHourlyForecastSlotDto(
         windSpeedKph = windSpeedKph,
         windDirectionDegrees = windDirectionDegrees,
         weatherCode = weatherCode,
+        uvIndex = uvIndex,
     )
 
     companion object {
@@ -287,6 +310,7 @@ private data class WeatherHourlyForecastSlotDto(
             windSpeedKph = model.windSpeedKph,
             windDirectionDegrees = model.windDirectionDegrees,
             weatherCode = model.weatherCode,
+            uvIndex = model.uvIndex,
         )
     }
 }
@@ -725,7 +749,9 @@ private data class EmergencyCareCacheDto(
     val countryName: String? = null,
     val searchRadiusKilometers: Double,
     val locationSource: String? = null,
+    /** Read-only: caches written before several hospitals were listed hold one nearest facility. */
     val facility: EmergencyCareFacilityDto? = null,
+    val facilities: List<EmergencyCareFacilityDto> = emptyList(),
     val fetchedAtEpochMillis: Long? = null,
     val detail: String,
     val note: String? = null,
@@ -737,7 +763,7 @@ private data class EmergencyCareCacheDto(
         countryName = countryName,
         searchRadiusKilometers = searchRadiusKilometers,
         locationSource = locationSource?.let(::emergencyCareLocationSourceOrNull),
-        facility = facility?.toModel(),
+        facilities = facilities.ifEmpty { listOfNotNull(facility) }.map(EmergencyCareFacilityDto::toModel),
         fetchedAt = fetchedAtEpochMillis?.let(Instant::ofEpochMilli),
         detail = detail,
         note = note,
@@ -751,7 +777,7 @@ private data class EmergencyCareCacheDto(
             countryName = model.countryName,
             searchRadiusKilometers = model.searchRadiusKilometers,
             locationSource = model.locationSource?.name,
-            facility = model.facility?.let(EmergencyCareFacilityDto::fromModel),
+            facilities = model.facilities.map(EmergencyCareFacilityDto::fromModel),
             fetchedAtEpochMillis = model.fetchedAt?.toEpochMilli(),
             detail = model.detail,
             note = model.note,
@@ -768,6 +794,7 @@ private data class EmergencyCareFacilityDto(
     val latitude: Double,
     val longitude: Double,
     val primaryType: String? = null,
+    val ownership: String? = null,
 ) {
     fun toModel(): EmergencyCareFacility = EmergencyCareFacility(
         placeId = placeId,
@@ -777,6 +804,7 @@ private data class EmergencyCareFacilityDto(
         latitude = latitude,
         longitude = longitude,
         primaryType = primaryType,
+        ownership = ownership?.let { enumValueOfOrNull<HospitalOwnership>(it) } ?: HospitalOwnership.UNKNOWN,
     )
 
     companion object {
@@ -788,9 +816,61 @@ private data class EmergencyCareFacilityDto(
             latitude = model.latitude,
             longitude = model.longitude,
             primaryType = model.primaryType,
+            ownership = model.ownership.name,
         )
     }
 }
+
+@Serializable
+private data class AirQualityCacheDto(
+    val latitude: Double,
+    val longitude: Double,
+    val sourceName: String,
+    val europeanAqi: Int,
+    val mainPollutant: String? = null,
+    val pm2_5: Double? = null,
+    val pm10: Double? = null,
+    val ozone: Double? = null,
+    val nitrogenDioxide: Double? = null,
+    val forecastSlots: List<AirQualityForecastSlotDto> = emptyList(),
+    val fetchedAtEpochMillis: Long,
+) {
+    fun toModel(): AirQualitySnapshot = AirQualitySnapshot(
+        latitude = latitude,
+        longitude = longitude,
+        sourceName = sourceName,
+        europeanAqi = europeanAqi,
+        mainPollutant = mainPollutant?.let { enumValueOfOrNull<AirQualityPollutant>(it) },
+        pm2_5 = pm2_5,
+        pm10 = pm10,
+        ozone = ozone,
+        nitrogenDioxide = nitrogenDioxide,
+        forecastSlots = forecastSlots.map { AirQualityForecastSlot(Instant.ofEpochMilli(it.atEpochMillis), it.europeanAqi) },
+        fetchedAt = Instant.ofEpochMilli(fetchedAtEpochMillis),
+    )
+
+    companion object {
+        fun fromModel(model: AirQualitySnapshot): AirQualityCacheDto = AirQualityCacheDto(
+            latitude = model.latitude,
+            longitude = model.longitude,
+            sourceName = model.sourceName,
+            europeanAqi = model.europeanAqi,
+            mainPollutant = model.mainPollutant?.name,
+            pm2_5 = model.pm2_5,
+            pm10 = model.pm10,
+            ozone = model.ozone,
+            nitrogenDioxide = model.nitrogenDioxide,
+            forecastSlots = model.forecastSlots.map { AirQualityForecastSlotDto(it.time.toEpochMilli(), it.europeanAqi) },
+            fetchedAtEpochMillis = model.fetchedAt.toEpochMilli(),
+        )
+    }
+}
+
+@Serializable
+private data class AirQualityForecastSlotDto(
+    val atEpochMillis: Long,
+    val europeanAqi: Int? = null,
+)
 
 private inline fun <reified T> Json.decodeOrNull(value: String): T? =
     runCatching { decodeFromString<T>(value) }.getOrNull()

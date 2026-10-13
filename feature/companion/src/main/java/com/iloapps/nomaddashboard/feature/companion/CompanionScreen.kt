@@ -74,9 +74,11 @@ fun CompanionRoute(
     val data by viewModel.data.collectAsStateWithLifecycle()
     val storageError by viewModel.storageError.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
+    val safetyEssentials by viewModel.safetyEssentials.collectAsStateWithLifecycle()
     CompanionScreen(
         snapshot = snapshot,
         data = data,
+        safetyEssentials = safetyEssentials,
         onUpdate = viewModel::update,
         onAddEssential = viewModel::addEssential,
         onUpdateEssential = viewModel::updateEssential,
@@ -125,7 +127,7 @@ fun CompanionRuntime(
             val age = (currentSnapshot.localSignalsAt ?: currentSnapshot.lastRefresh)?.toEpochMilli()?.let { now - it }
             val fresh = age != null && age in 0..120_000
             val current = ForegroundCompanionSignal(
-                online = currentSnapshot.connectivity.isOnline.takeIf { fresh && !currentSnapshot.connectivity.internetState.equals("checking", true) },
+                online = currentSnapshot.connectivity.isOnline.takeIf { fresh && !currentSnapshot.connectivity.isChecking },
                 vpnActive = currentSnapshot.connectivity.vpnActive.takeIf { fresh },
                 charging = currentSnapshot.power.charging.takeIf { fresh && currentSnapshot.power.batteryPercent != null },
             )
@@ -209,6 +211,7 @@ fun CompanionScreen(
     onExport: suspend () -> String,
     onPreviewImport: suspend (String) -> CompanionImportPreview,
     onMergeImport: suspend (String) -> CompanionImportPreview,
+    safetyEssentials: SafetyEssentials = SafetyEssentials.Empty,
     storageError: String? = null,
     operationError: String? = null,
     modifier: Modifier = Modifier,
@@ -272,6 +275,7 @@ fun CompanionScreen(
         item {
             NomadCard {
                 NomadSectionHeader("Offline essentials", "Addresses, contacts, notes, and map links you choose.")
+                SafetyEssentialsBlock(safetyEssentials)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     OfflineEssentialKind.entries.forEach { kind -> TextButton(onClick = { essentialKind = kind }) { Text(kind.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase)) } }
                 }

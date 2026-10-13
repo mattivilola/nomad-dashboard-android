@@ -3,9 +3,15 @@ package com.iloapps.nomaddashboard.feature.dashboard
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -27,7 +33,12 @@ import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorKind
 import com.iloapps.nomaddashboard.core.model.LocalPriceIndicatorRow
 import com.iloapps.nomaddashboard.core.model.LocalPriceLevelSnapshot
 import com.iloapps.nomaddashboard.core.model.LocalPricePrecision
+import com.iloapps.nomaddashboard.core.travel.cardcontent.LocalInfoRows
+import com.iloapps.nomaddashboard.core.model.TravelContextSnapshot
+import java.time.Instant
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +48,8 @@ class LocalInfoSectionCardTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun readyStateShowsLocationHolidayAndPriceRows() {
+    fun readyStateShowsEmergencyNumberHolidayAndPriceRows() {
+        val labourDay = LocalDate.now().plusDays(12)
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
@@ -54,7 +66,7 @@ class LocalInfoSectionCardTest {
                                 phase = LocalHolidayPhase.NEXT,
                                 period = HolidayPeriod(
                                     name = "Labour Day",
-                                    startDate = LocalDate.parse("2026-05-01"),
+                                    startDate = labourDay,
                                 ),
                             ),
                             schoolHoliday = LocalHolidayStatus(
@@ -80,11 +92,50 @@ class LocalInfoSectionCardTest {
         }
 
         composeRule.onNodeWithTag(LocalInfoCardTag).assertIsDisplayed()
-        composeRule.onNodeWithText("Tarifa / Andalusia / Spain").assertIsDisplayed()
-        composeRule.onNodeWithText("Next: Labour Day").assertIsDisplayed()
+        composeRule.onNodeWithText("Tarifa · Andalusia, Spain · Europe/Madrid").assertIsDisplayed()
+        composeRule.onNodeWithTag(localInfoRowTag(LocalInfoRows.EMERGENCY_ID)).assertIsDisplayed()
+        composeRule.onNodeWithText("112").assertIsDisplayed()
+        composeRule.onNodeWithText("Guardia Civil 062").assertIsDisplayed()
+        composeRule.onNodeWithText("Labour Day").assertIsDisplayed()
+        val day = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(labourDay)
+        composeRule.onNodeWithText("$day · in 12 days").assertIsDisplayed()
         composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Meal Out").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Prices vs EU").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Meals \u221216% · Groceries \u22124%").performScrollTo().assertIsDisplayed()
+        composeRule.onAllNodesWithText("Meal Out").assertCountEquals(0)
         composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theEmergencyNumberRowComesFirst() {
+        composeRule.setContent {
+            NomadTheme {
+                DashboardScreen(
+                    state = dashboardUiState(
+                        enabled = true,
+                        snapshot = LocalInfoSnapshot(
+                            status = LocalInfoStatus.READY,
+                            countryCode = "JP",
+                            countryName = "Japan",
+                            publicHoliday = LocalHolidayStatus(
+                                phase = LocalHolidayPhase.NEXT,
+                                period = HolidayPeriod("Culture Day", LocalDate.now().plusDays(20)),
+                            ),
+                        ),
+                    ),
+                    hasLocationPermission = true,
+                    onRefresh = {},
+                )
+            }
+        }
+
+        val emergencyTop = composeRule.onNodeWithTag(localInfoRowTag(LocalInfoRows.EMERGENCY_ID))
+            .fetchSemanticsNode().positionInRoot.y
+        val holidayTop = composeRule.onNodeWithTag(localInfoRowTag(LocalInfoRows.PUBLIC_HOLIDAY_ID))
+            .fetchSemanticsNode().positionInRoot.y
+        assertTrue("The emergency number must lead the rows.", emergencyTop < holidayTop)
+        composeRule.onNodeWithText("110").assertIsDisplayed()
+        composeRule.onNodeWithText("Ambulance/Fire 119").assertIsDisplayed()
     }
 
     @Test
@@ -118,12 +169,14 @@ class LocalInfoSectionCardTest {
             }
         }
 
-        composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
-        composeRule.onNodeWithText("School holidays appear only when the app can match your region confidently.").assertIsDisplayed()
+        composeRule.onNodeWithText("tomorrow", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Police 17 · Ambulance 15 · Fire 18").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("School holidays appear only when the app can match your region confidently.")
+            .performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun locationOnlyStateKeepsLocationPanelCompact() {
+    fun locationOnlyStateShowsThePlaceInTheSubtitleWithoutEmptyRows() {
         composeRule.setContent {
             NomadTheme {
                 DashboardScreen(
@@ -144,18 +197,12 @@ class LocalInfoSectionCardTest {
             }
         }
 
-        val locationRowNode = composeRule.onNodeWithTag(LocalInfoLocationRowTag)
-            .assertIsDisplayed()
-            .fetchSemanticsNode()
-        val locationRowHeight = with(composeRule.density) {
-            locationRowNode.size.height.toDp()
-        }
-
-        assertTrue(
-            "Expected Local Info location row to stay compact, but it was $locationRowHeight high.",
-            locationRowHeight <= 96.dp,
-        )
-        composeRule.onNodeWithText("Neckargemuend / Baden-Wuerttemberg / Germany").assertIsDisplayed()
+        composeRule.onNodeWithText("Neckargemuend · Baden-Wuerttemberg, Germany · Europe/Berlin").assertIsDisplayed()
+        composeRule.onNodeWithTag(localInfoRowTag(LocalInfoRows.EMERGENCY_ID)).assertIsDisplayed()
+        composeRule.onNodeWithText("Police 110").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Public Holiday").assertCountEquals(0)
+        composeRule.onAllNodesWithText("School Break").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Prices vs EU").assertCountEquals(0)
     }
 
     @Test
@@ -263,8 +310,8 @@ class LocalInfoSectionCardTest {
 
         composeRule.onAllNodesWithTag(LocalInfoPublicHolidayWarningChipTag).assertCountEquals(0)
         composeRule.onAllNodesWithTag(LocalInfoSchoolBreakWarningChipTag).assertCountEquals(0)
-        composeRule.onNodeWithText("Tomorrow").assertIsDisplayed()
-        composeRule.onNodeWithText("Next break: Summer Break").assertIsDisplayed()
+        composeRule.onNodeWithText("tomorrow", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Summer Break").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -307,7 +354,7 @@ class LocalInfoSectionCardTest {
 
         composeRule.onNodeWithTag(LocalInfoCardTag).assertIsDisplayed()
         composeRule.onNodeWithTag(LocalInfoPublicHolidayWarningChipTag).assertIsDisplayed()
-        composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).assertIsDisplayed()
+        composeRule.onNodeWithTag(LocalInfoSchoolBreakWarningChipTag).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Busy Today").assertIsDisplayed()
         composeRule.onNodeWithText("Busy Period").assertIsDisplayed()
     }
@@ -376,9 +423,77 @@ class LocalInfoSectionCardTest {
             }
         }
 
-        composeRule.onNodeWithText("Local Info is disabled. Enable it in Settings.").assertIsDisplayed()
-        composeRule.onNodeWithText("Open Settings").assertIsDisplayed()
-        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat · HUD USER · US Census Geocoder").assertIsDisplayed()
+        // A turned-off card is not on the dashboard; Customize Layout lists every card, including this one.
+        composeRule.onAllNodesWithTag(LocalInfoCardTag).assertCountEquals(0)
+        composeRule.onNodeWithTag(DashboardOverflowTag).performClick()
+        composeRule.onNodeWithTag(DashboardCustomizeToggleTag).performClick()
+
+        composeRule.onNodeWithText("Local Info is disabled. Enable it in Settings.").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("Open Settings") and hasAnyAncestor(hasTestTag(LocalInfoCardTag))).assertIsDisplayed()
+        composeRule.onNodeWithText("Sources: Nager.Date · OpenHolidays · Eurostat · HUD USER · US Census Geocoder")
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun localRhythmRowsShowThePeriodDatesAndVisitorGuidance() {
+        // Ramadan 2027 starts on 8 Feb (Umm al-Qura), so on 3 Feb it is five days away.
+        setLocalInfoCard(
+            now = Instant.parse("2027-02-03T12:00:00Z"),
+            snapshot = DashboardSnapshot(
+                travelContext = TravelContextSnapshot(deviceCountryCode = "MA"),
+                localInfo = LocalInfoSnapshot(status = LocalInfoStatus.READY, countryCode = "MA", countryName = "Morocco"),
+            ),
+        )
+
+        composeRule.onNodeWithText("Local rhythm").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Ramadan").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("In 5 days").assertIsDisplayed()
+        composeRule.onNodeWithText("(expected; may shift a day)", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Shops and offices keep shorter hours", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun noLocalRhythmSectionOutsideThePeriods() {
+        setLocalInfoCard(
+            now = Instant.parse("2026-10-12T12:00:00Z"),
+            snapshot = DashboardSnapshot(
+                travelContext = TravelContextSnapshot(deviceCountryCode = "ES"),
+                localInfo = LocalInfoSnapshot(status = LocalInfoStatus.READY, countryCode = "ES", countryName = "Spain"),
+            ),
+        )
+
+        composeRule.onAllNodesWithText("Local rhythm").assertCountEquals(0)
+    }
+
+    @Test
+    fun theEmergencyNumberFollowsTheDeviceCountryBeforeTheLocalInfoCountry() {
+        setLocalInfoCard(
+            now = Instant.parse("2026-10-12T12:00:00Z"),
+            snapshot = DashboardSnapshot(
+                travelContext = TravelContextSnapshot(deviceCountryCode = "JP"),
+                localInfo = LocalInfoSnapshot(status = LocalInfoStatus.READY, countryCode = "ES", countryName = "Spain"),
+            ),
+        )
+
+        composeRule.onNodeWithText("110").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Guardia Civil 062").assertCountEquals(0)
+    }
+
+    private fun setLocalInfoCard(now: Instant, snapshot: DashboardSnapshot) {
+        composeRule.setContent {
+            NomadTheme {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                ) {
+                    LocalInfoSectionCard(
+                        enabled = true,
+                        snapshot = snapshot,
+                        onOpenSettings = {},
+                        now = now,
+                    )
+                }
+            }
+        }
     }
 
     private fun dashboardUiState(
