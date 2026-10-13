@@ -156,10 +156,18 @@ Current behavior:
   `app/src/main/play/release-notes/en-US/default.txt`
 - creates a local `Release vX.Y.Z` commit and a local `vX.Y.Z` tag
 - does not push; push the release commit and tag manually when ready
-- release builds now request native symbol-table extraction for bundled `.so`
-  libraries via AGP so Play Console native crash symbolication is enabled where
-  dependency-provided native debug metadata is available, without changing
-  runtime behavior
+- release builds extract native symbol tables (`debugSymbolLevel =
+  "SYMBOL_TABLE"`) with the NDK pinned by `ndkVersion` in `app/build.gradle.kts`
+  and embed them in the AAB, which Google Play reads on upload; there is no
+  separate symbol upload step. Install that NDK once, e.g.
+  `sdkmanager "ndk;27.0.12077973"` (AGP does not install it for apps without
+  native sources)
+- `bundle-release.sh` checks the bundle after building: a native library with
+  symbols but no embedded debug symbols fails the release before upload.
+  The only native libraries today are AndroidX's `libandroidx.graphics.path.so`
+  and `libdatastore_shared_counter.so`, which ship already stripped, so there
+  are no symbols to embed and Play's "native code without debug symbols"
+  warning remains for them; it does not block publishing
 - Play publishing defaults the release status to `draft` for first-time
   internal testing on a draft Play app; override with
   `NOMAD_PLAY_RELEASE_STATUS=completed` after the app leaves draft state

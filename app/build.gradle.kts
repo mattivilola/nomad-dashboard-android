@@ -76,6 +76,12 @@ android {
         }
     }
 
+    // Native symbol tables for the bundled .so files are extracted with the NDK's llvm-objcopy and
+    // embedded in the AAB (BUNDLE-METADATA/com.android.tools.build.debugsymbols), which Google Play
+    // reads on upload. Without an installed NDK the extraction silently produces nothing. Pinned to
+    // AGP 8.7's default NDK, which AGP installs on first use when it is missing.
+    ndkVersion = "27.0.12077973"
+
     signingConfigs {
         if (env("NOMAD_KEYSTORE_PATH").isNotBlank()) {
             create("release") {
