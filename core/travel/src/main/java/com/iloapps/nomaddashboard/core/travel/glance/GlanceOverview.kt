@@ -22,14 +22,13 @@ data class GlanceRefresh(
 
 /**
  * A heads-up item as the glance list shows it. Severity is carried as a health level so the row reuses
- * the shared status colors: attention is coral and caution is sand. Info carries no status, so its
- * [level] is null and the row stays neutral (colour means status only; macOS tints info teal).
+ * the shared status colors: attention is coral, caution is sand and info is teal, as on macOS.
  */
 data class GlanceHeadsUpRow(
     val kind: HeadsUpKind,
     val title: String,
     val detail: String?,
-    val level: HealthLevel?,
+    val level: HealthLevel,
     /** The card that tapping the row expands and scrolls to. */
     val relatedCard: DashboardCardId,
 ) {
@@ -46,11 +45,11 @@ data class GlanceHeadsUpRow(
                 relatedCard = item.relatedCard,
             )
 
-        fun level(severity: HeadsUpSeverity): HealthLevel? =
+        fun level(severity: HeadsUpSeverity): HealthLevel =
             when (severity) {
                 HeadsUpSeverity.ATTENTION -> HealthLevel.ATTENTION
                 HeadsUpSeverity.CAUTION -> HealthLevel.CAUTION
-                HeadsUpSeverity.INFO -> null
+                HeadsUpSeverity.INFO -> HealthLevel.READY
             }
     }
 }

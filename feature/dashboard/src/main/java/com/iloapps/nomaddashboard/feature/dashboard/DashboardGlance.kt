@@ -500,7 +500,7 @@ private fun GlanceHeadsUpList(rows: List<GlanceHeadsUpRow>, onShowCard: (Dashboa
 
 @Composable
 private fun GlanceHeadsUpRowItem(row: GlanceHeadsUpRow, onClick: () -> Unit) {
-    val status = row.level?.glanceStatusColor() ?: nomadStatusColors().neutral
+    val status = row.level.glanceStatusColor() ?: nomadStatusColors().neutral
     Row(
         modifier = Modifier
             .testTag(glanceHeadsUpItemTag(row.kind))

@@ -474,7 +474,7 @@ class GlanceOverviewTest {
     fun `heads-up row tint follows the item severity and info stays neutral`() {
         assertThat(GlanceHeadsUpRow.level(HeadsUpSeverity.ATTENTION)).isEqualTo(HealthLevel.ATTENTION)
         assertThat(GlanceHeadsUpRow.level(HeadsUpSeverity.CAUTION)).isEqualTo(HealthLevel.CAUTION)
-        assertThat(GlanceHeadsUpRow.level(HeadsUpSeverity.INFO)).isNull()
+        assertThat(GlanceHeadsUpRow.level(HeadsUpSeverity.INFO)).isEqualTo(HealthLevel.READY)
     }
 
     @Test
