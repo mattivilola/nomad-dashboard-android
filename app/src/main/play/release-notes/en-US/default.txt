@@ -1,1 +1,1 @@
-New glance overview with a work-readiness verdict and ranked heads-up alerts. Travel profiles for nomads and road trips. Offline emergency numbers, your embassy and consular lines, and a Stays & Visas tracker for Schengen and visa days. Arrival briefings, sunrise/sunset, UV and air quality, and local holidays. Compact collapsible cards, reorganised Settings, a Quick Settings tile, home-screen widgets and shortcuts.
+Informational heads-up items now use the same teal tint as the macOS app.

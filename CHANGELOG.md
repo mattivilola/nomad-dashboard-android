@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.2] - 2026-10-13
+
+### Improved
+- Tint informational heads-up items teal, matching the macOS app.
+
 ## [0.10.1] - 2026-10-13
 
 ### Fixed
