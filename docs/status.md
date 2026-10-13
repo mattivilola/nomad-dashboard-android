@@ -1,8 +1,19 @@
 # Status
 
-Last updated: 2026-09-07
+Last updated: 2026-10-13
 
 ## Overall
+
+### macOS 0.17-0.18 parity (2026-10-13)
+
+The macOS feature brief (`docs/macos-parity-brief-2026-10-12.md`), updated to macOS v0.18.0, is implemented on `feature/macos-0.17-parity`: new pure `core:travel` rule module, glance overview and heads-up engine, compact collapsible cards, travel profiles, emergency numbers, Your Embassy, daylight, stays and visa days, arrival briefing, local rhythm, UV and air quality, eight-page Settings with deep links, Quick Settings status tile, three Glance widgets, deep links and launcher shortcuts. Feature-level detail is in `docs/features.md`; module and data flow in `docs/architecture.md`.
+
+Verification on 2026-10-13 (clean build, JDK 21 daemon, Pixel_8 AVD on Android 14):
+- `clean testDebugUnitTest :app:assembleDebug lintDebug`: 1,330 unit tests passed (app 7, core:data 212, core:datastore 19, core:model 42, core:network 1, core:travel 951, feature:companion 6, feature:dashboard 30, feature:settings 41, feature:visited 6, feature:widgets 15); lint 0 errors in all 17 modules.
+- `connectedDebugAndroidTest`: 204 passed, 0 failed (app 13, feature:dashboard 162, feature:settings 5, feature:companion 5, feature:widgets 11, feature:visited 5, feature:timetracking 1, core:database 2).
+- Manual on the emulator: deep links route to cards and Settings, the five shortcuts register, the Quick Settings tile shows and opens the dashboard, the three widget providers register. Not yet checked: placing widgets on a real launcher, Play-installed physical-device smoke, and the macrobenchmark module.
+
+Known gaps by design: no Data Guard on Android (VPN tile instead, no data-cap heads-up), no weather-alert provider, no Nomads.com "Explore cities" link, Siri-style spoken answers are surfaced as shortcuts to the relevant card. INFO heads-up items are neutral rather than teal, following the brief's "colour means status only" rule (macOS tints them teal).
 
 Performance and aligned nomad tools are implemented. The source review and delivered scope are documented in [Android performance and nomad feature review](performance-and-nomad-review-2026-09-07.md). All 134 unit tests and 37 connected UI/migration tests have passed on the Pixel_8 AVD using Android 14; lintDebug has passed. The source tree also includes cold-start/scroll Macrobenchmarks and Baseline Profile generation. Baseline Profile generation passed and produced 28,456 rules for startup/navigation/scrolling. The two performance measurement tests are intentionally skipped during profile generation; they still require a physical device. Version 0.9.0 (15), release commit `63bf56e`, passed signed APK/AAB generation, signature verification, and optimized APK launch/navigation/persistence checks. Google Play accepted and committed version 15 to the internal track as a draft on 2026-09-07; it still needs review/rollout in Play Console. Physical-device performance and battery improvements remain unmeasured.
 

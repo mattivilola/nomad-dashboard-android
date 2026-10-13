@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-04-30
+Last updated: 2026-10-13
 
 ## Local Setup
 
@@ -689,6 +689,26 @@ File:
 - [MainActivitySmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/MainActivitySmokeTest.kt)
 - [SettingsSmokeTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/app/src/androidTest/java/com/iloapps/nomaddashboard/SettingsSmokeTest.kt)
 - [EmergencyCareSectionCardTest.kt](/Users/matti/Development/ILOapps/nomad-dashboard-android/feature/dashboard/src/androidTest/java/com/iloapps/nomaddashboard/feature/dashboard/EmergencyCareSectionCardTest.kt)
+
+macOS parity coverage (2026-10):
+- `core:travel` (951 JVM tests): emergency numbers, consular contacts and the
+  bundled mission dataset, embassy ranking and EU/Nordic fallback, SolarDay
+  against USNO times, stays (Schengen, allowances, tax days), local rhythm
+  (ICU4J twin of the `android.icu` adapter), reference tables, AQI/UV bands, the
+  heads-up engine for both profiles, status line, health verdict, glance,
+  card summaries and card presentation, arrival briefing, quick answers, widget
+  snapshot, deep links and formatters
+- `core:data`: air-quality provider, hospital search request budget, latency
+  carry-over and jitter (deterministic clock), insights flow with a virtual
+  60 s ticker, widget snapshot store and publisher (privacy check)
+- Compose: glance overview, card chrome (collapse, turned-off row, Customize
+  Layout, packing, scroll-and-expand), every card, Embassy/Stays cards, eight
+  Settings pages and deep links, Companion safety block
+- `feature:widgets`: Glance widget content via `glance-appwidget-testing`
+
+Running many workers in one worktree at once corrupts KSP output and collides
+on the shared `*.test` packages on one emulator; verify serially from a clean
+build (`./gradlew --stop`, then `clean ... --no-build-cache`).
 
 Planned next:
 - storage migration tests
