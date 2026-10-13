@@ -638,4 +638,36 @@ class HeadsUpEngineTest {
     }
 
     // endregion
+
+    // region Stale place data
+
+    @Test
+    fun `advisories cached for another country never become heads-up items`() {
+        // Low Data or a failed refresh after crossing from Finland: the card still holds Finland's alerts.
+        val finlandAlerts = alerts(TravelAlertKind.ADVISORY to TravelAlertSeverity.CRITICAL)
+            .copy(primaryCountryCode = "FI", coverageCountryCodes = listOf("FI", "NO", "SE", "RU"))
+        val inFrance = rhythmLocation("FR")
+
+        assertThat(insights(snapshot(alerts = finlandAlerts, travelContext = inFrance))).isEmpty()
+        assertThat(insights(snapshot(alerts = finlandAlerts.copy(primaryCountryCode = "FR"), travelContext = inFrance)))
+            .isNotEmpty()
+    }
+
+    @Test
+    fun `advisories are kept when the current country is not known yet`() {
+        val alerts = alerts(TravelAlertKind.ADVISORY to TravelAlertSeverity.WARNING).copy(primaryCountryCode = "FI")
+
+        assertThat(insights(snapshot(alerts = alerts)).kinds()).containsExactly(HeadsUpKind.TRAVEL_ADVISORY)
+    }
+
+    @Test
+    fun `holidays cached for another country never become heads-up items`() {
+        val finnishHoliday = localInfo(holiday(0, "Itsenäisyyspäivä"), countryCode = "FI")
+
+        assertThat(insights(snapshot(localInfo = finnishHoliday, travelContext = rhythmLocation("FR")))).isEmpty()
+        assertThat(insights(snapshot(localInfo = finnishHoliday, travelContext = rhythmLocation("FI"))).kinds())
+            .containsExactly(HeadsUpKind.PUBLIC_HOLIDAY)
+    }
+
+    // endregion
 }

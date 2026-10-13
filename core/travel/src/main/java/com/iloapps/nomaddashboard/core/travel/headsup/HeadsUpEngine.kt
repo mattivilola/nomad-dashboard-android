@@ -60,6 +60,15 @@ class HeadsUpEngine(
             localInfoCountryCode = snapshot.localInfo.countryCode,
         )
         val daylightReference = daylightReference(snapshot, zone)
+        // Advisories and holidays are fetched for a place. Low Data mode or a failed refresh can leave the
+        // previous country's data on screen after a border crossing; it must never become a heads-up here.
+        val locatedCountry = CurrentCountry.code(
+            deviceCountryCode = travelContext.deviceCountryCode,
+            ipCountryCode = travelContext.countryCode,
+            localInfoCountryCode = null,
+        )
+        fun refersToHere(countryCode: String?): Boolean =
+            locatedCountry == null || countryCode == null || countryCode.equals(locatedCountry, ignoreCase = true)
 
         val items = mutableListOf<HeadsUpItem>()
         fun add(kind: HeadsUpKind, decision: HeadsUpDecision?, card: DashboardCardId) {
@@ -91,8 +100,10 @@ class HeadsUpEngine(
             StayHeadsUps.evaluate(stayInput, formats.stay).forEach { add(it.kind, it.decision, DashboardCardId.STAYS) }
         }
 
-        TravelAlertHeadsUps.evaluate(snapshot.travelAlerts)
-            .forEach { add(it.kind, it.decision, DashboardCardId.TRAVEL_ALERTS) }
+        if (refersToHere(snapshot.travelAlerts.primaryCountryCode)) {
+            TravelAlertHeadsUps.evaluate(snapshot.travelAlerts)
+                .forEach { add(it.kind, it.decision, DashboardCardId.TRAVEL_ALERTS) }
+        }
 
         add(HeadsUpKind.STRONG_WIND, WeatherHeadsUps.wind(snapshot.weather, now, deviceClock), DashboardCardId.WEATHER)
         add(HeadsUpKind.RAIN_SOON, WeatherHeadsUps.rain(snapshot.weather, now, deviceClock), DashboardCardId.WEATHER)
@@ -106,11 +117,13 @@ class HeadsUpEngine(
             )
         }
 
-        add(
-            HeadsUpKind.PUBLIC_HOLIDAY,
-            PublicHolidayHeadsUp.evaluate(snapshot.localInfo, today, formats.weekday),
-            DashboardCardId.LOCAL_INFO,
-        )
+        if (refersToHere(snapshot.localInfo.countryCode)) {
+            add(
+                HeadsUpKind.PUBLIC_HOLIDAY,
+                PublicHolidayHeadsUp.evaluate(snapshot.localInfo, today, formats.weekday),
+                DashboardCardId.LOCAL_INFO,
+            )
+        }
         add(
             HeadsUpKind.LOCAL_RHYTHM,
             LocalRhythmHeadsUp.evaluate(
