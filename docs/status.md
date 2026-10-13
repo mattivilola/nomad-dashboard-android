@@ -13,11 +13,17 @@ Verification on 2026-10-13 (clean build, JDK 21 daemon, Pixel_8 AVD on Android 1
 - `connectedDebugAndroidTest`: 204 passed, 0 failed (app 13, feature:dashboard 162, feature:settings 5, feature:companion 5, feature:widgets 11, feature:visited 5, feature:timetracking 1, core:database 2).
 - Manual on the emulator: deep links route to cards and Settings, the five shortcuts register, the Quick Settings tile shows and opens the dashboard, the three widget providers register. Not yet checked: placing widgets on a real launcher, Play-installed physical-device smoke, and the macrobenchmark module.
 
+Release 0.10.1 (17), commit `c3f0e08`, tag `v0.10.1`:
+- Google Play accepted and committed version 17 to the internal track as a draft on 2026-10-13 (`Updating [draft] release (com.iloapps.nomaddashboard:[17]) in track 'internal'`). It replaces the 0.10.0 (16) draft uploaded earlier the same day, which was never rolled out. Review/rollout in Play Console is still pending.
+- AAB: 13,028,581 bytes; SHA-256 `15c7a2f0722ad230e8811ea7cf74e163aa960d7c315b52b0837a25100c8eef2a`.
+- Signed R8 release APK smoke on the Pixel_8 AVD (built from `af0afe7`, the same code with 0.10.0 version metadata): launch, glance overview with live data, all five tabs and the eight Settings pages, no crashes in the crash buffer. That smoke found the stale-country advisory heads-up fixed in 0.10.1.
+- Not yet done: Play-installed physical-device smoke and placing widgets on a real launcher.
+
 Known gaps by design: no Data Guard on Android (VPN tile instead, no data-cap heads-up), no weather-alert provider, no Nomads.com "Explore cities" link, Siri-style spoken answers are surfaced as shortcuts to the relevant card. INFO heads-up items are neutral rather than teal, following the brief's "colour means status only" rule (macOS tints them teal).
 
 Performance and aligned nomad tools are implemented. The source review and delivered scope are documented in [Android performance and nomad feature review](performance-and-nomad-review-2026-09-07.md). All 134 unit tests and 37 connected UI/migration tests have passed on the Pixel_8 AVD using Android 14; lintDebug has passed. The source tree also includes cold-start/scroll Macrobenchmarks and Baseline Profile generation. Baseline Profile generation passed and produced 28,456 rules for startup/navigation/scrolling. The two performance measurement tests are intentionally skipped during profile generation; they still require a physical device. Version 0.9.0 (15), release commit `63bf56e`, passed signed APK/AAB generation, signature verification, and optimized APK launch/navigation/persistence checks. Google Play accepted and committed version 15 to the internal track as a draft on 2026-09-07; it still needs review/rollout in Play Console. Physical-device performance and battery improvements remain unmeasured.
 
-Current phase: `0.9.0 uploaded to Play internal as draft; ready for tester rollout`
+Current phase: `0.10.1 uploaded to Play internal as draft; ready for tester rollout`
 
 ### 0.9.0 release evidence
 
