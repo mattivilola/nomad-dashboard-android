@@ -1,5 +1,1 @@
-Dashboard cards now update independently and retain saved data.
-New Auto and Low Data modes reduce optional downloads.
-Add offline essentials, a workplace diary, timezone planning, and quiet alerts.
-Correct travel days, track stay reminders, export CSV reports, and save portable backups.
-Lighter timer updates and optimized release builds.
+New glance overview with a work-readiness verdict and ranked heads-up alerts. Travel profiles for nomads and road trips. Offline emergency numbers, your embassy and consular lines, and a Stays & Visas tracker for Schengen and visa days. Arrival briefings, sunrise/sunset, UV and air quality, and local holidays. Compact collapsible cards, reorganised Settings, a Quick Settings tile, home-screen widgets and shortcuts.

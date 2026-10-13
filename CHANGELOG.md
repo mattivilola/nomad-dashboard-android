@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-10-13
+
+### Added
+- Glance overview: location header, a "Ready to work" verdict, Here/Home clocks, four tappable vital tiles and up to three ranked heads-up items.
+- Travel profiles (Nomad, Road trip & RV) that set the card order and heads-up ranking.
+- Offline safety: bundled emergency numbers for 76 countries, a Your Embassy card with consular lines, and a safety block in Saved essentials.
+- Stays & Visas card and settings: Schengen 90/180, per-country stay allowances and tax-year days.
+- Arrival briefing, local rhythm periods, sunrise/sunset, and UV and air-quality heads-up items.
+- Quick Settings status tile, Glance/Safety/Daylight home-screen widgets, launcher shortcuts and deep links.
+
+### Improved
+- Compact, collapsible cards with sparklines, a turned-off row and Customize Layout.
+- Settings reorganised into eight pages with deep links from the dashboard.
+- Nearby hospitals list with public/private, in-app map previews, real jitter and steadier latency readings.
+
+### Build & Release
+- Pin the Gradle daemon to Java 21 so builds work with Android Studio's bundled Java 25.
+
 ## [0.9.0] - 2026-09-07
 
 ### Added
