@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-10-13
+
+### Fixed
+- Keep travel-advisory and holiday heads-up items to the country you are in, so alerts cached for a previous country are never shown as current.
+
 ## [0.10.0] - 2026-10-13
 
 ### Added
